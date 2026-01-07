@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { TopBar } from "@/components/dashboard/TopBar";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { StageOverview } from "@/components/dashboard/StageOverview";
 import { ActionQueue } from "@/components/dashboard/ActionQueue";
@@ -50,33 +49,24 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Sidebar */}
-      <Sidebar
-        collapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+      {/* Top Bar */}
+      <TopBar
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
+        sidebarCollapsed={sidebarCollapsed}
       />
+
+      {/* Sidebar */}
+      <Sidebar collapsed={sidebarCollapsed} />
 
       {/* Main Content */}
       <div
         className={cn(
-          "transition-all duration-300",
+          "transition-all duration-300 pt-0",
           sidebarCollapsed ? "ml-16" : "ml-56"
         )}
       >
-        {/* Global Search Bar */}
-        <header className="sticky top-0 z-30 bg-background/95 backdrop-blur-sm border-b">
-          <div className="px-6 py-4">
-            <div className="relative max-w-2xl">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search buyers, transactions, or properties..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 bg-secondary/50 border-0 focus-visible:ring-1"
-              />
-            </div>
-          </div>
-        </header>
 
         {/* Content Area */}
         <main className="p-6">
