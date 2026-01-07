@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { whiteLabelConfig } from "@/config/whiteLabel";
 
 interface TopBarProps {
   searchQuery: string;
@@ -38,11 +39,21 @@ export function TopBar({
         </Button>
         
         <div className="flex items-center gap-2">
-          <div className="h-7 w-7 rounded-md gradient-premium flex items-center justify-center">
-            <span className="text-xs font-bold text-primary-foreground">HG</span>
-          </div>
+          {whiteLabelConfig.brokerage.logoUrl ? (
+            <img 
+              src={whiteLabelConfig.brokerage.logoUrl} 
+              alt={whiteLabelConfig.brokerage.name} 
+              className="h-7 w-7 rounded-md object-contain"
+            />
+          ) : (
+            <div className="h-7 w-7 rounded-md gradient-premium flex items-center justify-center">
+              <span className="text-xs font-bold text-primary-foreground">
+                {whiteLabelConfig.brokerage.shortName}
+              </span>
+            </div>
+          )}
           <span className="font-display text-base font-semibold text-foreground hidden sm:block">
-            HomeGuide
+            {whiteLabelConfig.brokerage.name}
           </span>
         </div>
       </div>
