@@ -49,24 +49,23 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Top Bar */}
-      <TopBar
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
-        sidebarCollapsed={sidebarCollapsed}
-      />
-
       {/* Sidebar */}
       <Sidebar collapsed={sidebarCollapsed} />
 
       {/* Main Content */}
       <div
         className={cn(
-          "transition-all duration-300 pt-0",
-          sidebarCollapsed ? "ml-16" : "ml-56"
+          "transition-all duration-200 min-h-screen",
+          sidebarCollapsed ? "ml-[58px]" : "ml-[240px]"
         )}
       >
+        {/* Top Bar */}
+        <TopBar
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
+          sidebarCollapsed={sidebarCollapsed}
+        />
 
         {/* Content Area */}
         <main className="p-6">

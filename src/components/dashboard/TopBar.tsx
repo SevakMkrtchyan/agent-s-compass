@@ -26,9 +26,9 @@ export function TopBar({
   sidebarCollapsed 
 }: TopBarProps) {
   return (
-    <header className="sticky top-0 z-40 h-14 bg-card border-b border-border flex items-center px-4 gap-4">
-      {/* Left - Brokerage Branding + Sidebar Toggle */}
-      <div className="flex items-center gap-3 min-w-[200px]">
+    <header className="sticky top-0 z-30 h-14 bg-card border-b border-border flex items-center px-4 gap-4">
+      {/* Left - Toggle + Page Title */}
+      <div className="flex items-center gap-3">
         <Button
           variant="ghost"
           size="icon"
@@ -37,25 +37,7 @@ export function TopBar({
         >
           <PanelLeft className={cn("h-5 w-5 transition-transform", sidebarCollapsed && "rotate-180")} />
         </Button>
-        
-        <div className="flex items-center gap-2">
-          {whiteLabelConfig.brokerage.logoUrl ? (
-            <img 
-              src={whiteLabelConfig.brokerage.logoUrl} 
-              alt={whiteLabelConfig.brokerage.name} 
-              className="h-7 w-7 rounded-md object-contain"
-            />
-          ) : (
-            <div className="h-7 w-7 rounded-md gradient-premium flex items-center justify-center">
-              <span className="text-xs font-bold text-primary-foreground">
-                {whiteLabelConfig.brokerage.shortName}
-              </span>
-            </div>
-          )}
-          <span className="font-display text-base font-semibold text-foreground hidden sm:block">
-            {whiteLabelConfig.brokerage.name}
-          </span>
-        </div>
+        <h1 className="text-lg font-semibold text-foreground">Dashboard</h1>
       </div>
 
       {/* Center - Global Search */}
