@@ -2,11 +2,12 @@ import { NavLink } from "@/components/NavLink";
 import { 
   LayoutDashboard, 
   Briefcase, 
-  CheckSquare, 
-  Sparkles, 
-  Settings,
-  Home,
-  Search
+  FileText, 
+  Home as HomeIcon,
+  DollarSign,
+  BarChart3,
+  Search,
+  Settings
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { whiteLabelConfig } from "@/config/whiteLabel";
@@ -16,11 +17,12 @@ interface SidebarProps {
 }
 
 const navItems = [
-  { title: "Home", url: "/dashboard", icon: Home },
-  { title: "Workspaces", url: "/workspace", icon: Briefcase },
-  { title: "Tasks", url: "/tasks", icon: CheckSquare },
-  { title: "AI Insights", url: "/insights", icon: Sparkles },
-  { title: "Settings", url: "/settings", icon: Settings },
+  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
+  { title: "Workspace", url: "/workspace", icon: Briefcase },
+  { title: "Tasks & Docs", url: "/tasks", icon: FileText },
+  { title: "Properties", url: "/properties", icon: HomeIcon },
+  { title: "Offers", url: "/offers", icon: DollarSign },
+  { title: "Analytics", url: "/analytics", icon: BarChart3 },
 ];
 
 export function Sidebar({ collapsed }: SidebarProps) {

@@ -6,6 +6,10 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import Workspace from "./pages/Workspace";
+import GlobalTasks from "./pages/GlobalTasks";
+import GlobalProperties from "./pages/GlobalProperties";
+import GlobalOffers from "./pages/GlobalOffers";
+import Analytics from "./pages/Analytics";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -21,6 +25,10 @@ const App = () => (
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/workspace" element={<Navigate to="/workspace/ws-1" replace />} />
           <Route path="/workspace/:workspaceId" element={<Workspace />} />
+          <Route path="/tasks" element={<GlobalTasks />} />
+          <Route path="/properties" element={<GlobalProperties />} />
+          <Route path="/offers" element={<GlobalOffers />} />
+          <Route path="/analytics" element={<Analytics />} />
           {/* Legacy routes redirect to workspace */}
           <Route path="/buyers" element={<Navigate to="/workspace" replace />} />
           <Route path="/buyer/:buyerId" element={<Navigate to="/workspace" replace />} />
