@@ -1,15 +1,11 @@
 import { NavLink } from "@/components/NavLink";
 import { 
   LayoutDashboard, 
-  Users, 
-  FileText, 
+  Briefcase, 
   CheckSquare, 
   Sparkles, 
-  Settings,
-  ChevronLeft,
-  ChevronRight
+  Settings
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 interface SidebarProps {
@@ -18,8 +14,7 @@ interface SidebarProps {
 
 const navItems = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
-  { title: "Buyers", url: "/buyers", icon: Users },
-  { title: "Transactions", url: "/transactions", icon: FileText },
+  { title: "Workspace", url: "/workspace", icon: Briefcase },
   { title: "Tasks & Files", url: "/tasks", icon: CheckSquare },
   { title: "AI Insights", url: "/insights", icon: Sparkles },
   { title: "Settings", url: "/settings", icon: Settings },
