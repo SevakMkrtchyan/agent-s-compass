@@ -27,7 +27,7 @@ import { WorkspaceTimeline } from "@/components/workspace/WorkspaceTimeline";
 import { WorkspaceProperties } from "@/components/workspace/WorkspaceProperties";
 import { WorkspaceOffers } from "@/components/workspace/WorkspaceOffers";
 import { WorkspaceTasks } from "@/components/workspace/WorkspaceTasks";
-import { WorkspaceMessages } from "@/components/workspace/WorkspaceMessages";
+import { WorkspaceAIEducation } from "@/components/workspace/WorkspaceAIEducation";
 
 export default function Workspace() {
   const { workspaceId } = useParams();
@@ -148,10 +148,10 @@ export default function Workspace() {
                     <FileText className="h-4 w-4" />
                     Tasks & Documents
                   </TabsTrigger>
-                  <TabsTrigger value="messages" className="gap-2">
-                    <MessageSquare className="h-4 w-4" />
-                    Messages & AI
-                  </TabsTrigger>
+            <TabsTrigger value="messages" className="gap-2">
+              <MessageSquare className="h-4 w-4" />
+              Messages & AI Guidance
+            </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="overview" className="mt-0">
@@ -175,7 +175,7 @@ export default function Workspace() {
                 </TabsContent>
 
                 <TabsContent value="messages" className="mt-0">
-                  <WorkspaceMessages workspaceId={workspace.id} userRole={userRole} />
+                  <WorkspaceAIEducation buyer={buyer} />
                 </TabsContent>
               </Tabs>
             </main>

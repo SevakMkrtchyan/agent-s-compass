@@ -1,29 +1,22 @@
 import { useState, useRef, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  Bot,
   Send,
   Sparkles,
-  AlertCircle,
-  BookOpen,
-  Lock,
   CheckCircle2,
   Clock,
-  User,
-  ThumbsUp,
-  ThumbsDown,
+  MessageSquare,
+  FileText,
+  Mail,
+  AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import { Buyer } from "@/types";
-import { stageEducationalContent } from "@/data/mockData";
-import { 
-  CONTENT_TYPE_CONFIG, 
-  mockPendingApprovals,
-  type AIContentItem 
-} from "@/types/aiContent";
 import { cn } from "@/lib/utils";
 
 interface WorkspaceAIEducationProps {
@@ -31,316 +24,289 @@ interface WorkspaceAIEducationProps {
   isAgentView?: boolean;
 }
 
-interface ChatMessage {
+interface Message {
   id: string;
-  role: "user" | "assistant";
+  type: "incoming" | "outgoing" | "ai-draft";
   content: string;
   timestamp: Date;
-  contentType?: string;
-  requiresApproval?: boolean;
-  approved?: boolean;
+  status?: "sent" | "delivered" | "read" | "pending-approval";
+  sender: string;
 }
 
-export function WorkspaceAIEducation({ buyer, isAgentView = false }: WorkspaceAIEducationProps) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+interface AIDraft {
+  id: string;
+  type: "email" | "sms" | "update";
+  subject?: string;
+  content: string;
+  context: string;
+  createdAt: Date;
+  status: "pending" | "approved" | "rejected" | "edited";
+}
 
-  const stageContent = stageEducationalContent[buyer.currentStage as keyof typeof stageEducationalContent];
-  const buyerApprovals = mockPendingApprovals.filter((a) => a.buyerId === buyer.id);
+export function WorkspaceAIEducation({ buyer }: WorkspaceAIEducationProps) {
+  const [messages, setMessages] = useState<Message[]>([
+    { id: "1", type: "incoming", content: "Hi! I was wondering about the property on Oak Street. Is it still available?", timestamp: new Date(Date.now() - 3600000), sender: buyer.name, status: "read" },
+    { id: "2", type: "outgoing", content: "Yes, 123 Oak Street is still available! I'd love to schedule a showing for you. What times work best this week?", timestamp: new Date(Date.now() - 3000000), sender: "You", status: "delivered" },
+    { id: "3", type: "incoming", content: "Saturday afternoon would be great if possible.", timestamp: new Date(Date.now() - 1800000), sender: buyer.name, status: "read" },
+  ]);
+
+  const [aiDrafts, setAIDrafts] = useState<AIDraft[]>([
+    { 
+      id: "d1", 
+      type: "email", 
+      subject: "New Listings Matching Your Criteria",
+      content: `Hi ${buyer.name},\n\nI found 3 new properties that match your search criteria. I've added them to your workspace for review.\n\nHighlights:\n• 789 Pine Road - $425,000 - 4 bed, 2.5 bath\n• 321 Cedar Lane - $398,000 - 3 bed, 2 bath\n• 567 Birch Ave - $445,000 - 4 bed, 3 bath\n\nWould you like to schedule viewings for any of these properties?\n\nBest regards`,
+      context: "New properties added to workspace matching buyer criteria",
+      createdAt: new Date(Date.now() - 1200000),
+      status: "pending"
+    },
+    {
+      id: "d2",
+      type: "update",
+      content: `Price reduction alert: The property at 456 Maple Avenue has been reduced by $15,000. This is now within your stated budget range. Would you like to reconsider this property?`,
+      context: "Property price change detected",
+      createdAt: new Date(Date.now() - 600000),
+      status: "pending"
+    }
+  ]);
+
+  const [newMessage, setNewMessage] = useState("");
+  const [aiPrompt, setAIPrompt] = useState("");
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (input.trim() && !isLoading) {
-      const userMessage: ChatMessage = {
-        id: Date.now().toString(),
-        role: "user",
-        content: input.trim(),
-        timestamp: new Date(),
-      };
-      setMessages([...messages, userMessage]);
-      setInput("");
-      setIsLoading(true);
-
-      // Simulate AI response
-      setTimeout(() => {
-        const aiMessage: ChatMessage = {
-          id: (Date.now() + 1).toString(),
-          role: "assistant",
-          content: `Great question! Here's some educational information about "${input.trim()}":\n\nThe home buying process involves many considerations at each stage. Based on your current position in Stage ${buyer.currentStage} (${stageContent.title}), here are some key points to understand:\n\n• Your agent is the best resource for personalized guidance\n• Market conditions can vary significantly by neighborhood\n• Always review documents carefully before signing\n\nWould you like to learn more about any specific aspect?`,
-          timestamp: new Date(),
-          contentType: "general-education",
-          requiresApproval: false,
-          approved: true,
-        };
-        setMessages((prev) => [...prev, aiMessage]);
-        setIsLoading(false);
-      }, 1500);
-    }
+  const handleSendMessage = () => {
+    if (!newMessage.trim()) return;
+    const message: Message = {
+      id: Date.now().toString(),
+      type: "outgoing",
+      content: newMessage,
+      timestamp: new Date(),
+      sender: "You",
+      status: "sent"
+    };
+    setMessages([...messages, message]);
+    setNewMessage("");
   };
 
-  const quickQuestions = [
-    "What should I know about earnest money?",
-    "How do home inspections work?",
-    "What are common contingencies?",
-    "How is closing day structured?",
-  ];
+  const handleApproveDraft = (draftId: string) => {
+    setAIDrafts(drafts => 
+      drafts.map(d => d.id === draftId ? { ...d, status: "approved" as const } : d)
+    );
+  };
+
+  const handleRejectDraft = (draftId: string) => {
+    setAIDrafts(drafts => 
+      drafts.map(d => d.id === draftId ? { ...d, status: "rejected" as const } : d)
+    );
+  };
+
+  const handleGenerateAIDraft = () => {
+    if (!aiPrompt.trim()) return;
+    const newDraft: AIDraft = {
+      id: Date.now().toString(),
+      type: "email",
+      subject: "Generated Draft",
+      content: `Based on your request: "${aiPrompt}"\n\n[AI-generated content would appear here based on context and buyer data]`,
+      context: aiPrompt,
+      createdAt: new Date(),
+      status: "pending"
+    };
+    setAIDrafts([newDraft, ...aiDrafts]);
+    setAIPrompt("");
+  };
+
+  const pendingDrafts = aiDrafts.filter(d => d.status === "pending");
+  const processedDrafts = aiDrafts.filter(d => d.status !== "pending");
+
+  const formatTime = (date: Date) => {
+    return new Intl.DateTimeFormat("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(date);
+  };
 
   return (
-    <div className="space-y-6">
-      <Tabs defaultValue="chat" className="w-full">
-        <TabsList className="mb-4">
-          <TabsTrigger value="chat" className="gap-2">
-            <Bot className="h-4 w-4" />
-            AI Assistant
-          </TabsTrigger>
-          <TabsTrigger value="approved" className="gap-2">
-            <CheckCircle2 className="h-4 w-4" />
-            Approved Content
-            {buyerApprovals.filter((a) => a.approvalStatus === "approved").length > 0 && (
-              <Badge variant="secondary" className="ml-1 text-xs">
-                {buyerApprovals.filter((a) => a.approvalStatus === "approved").length}
-              </Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="library" className="gap-2">
-            <BookOpen className="h-4 w-4" />
-            Education Library
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="chat">
-          <Card className="h-[600px] flex flex-col">
-            <CardHeader className="pb-3 border-b">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-lg gradient-premium flex items-center justify-center">
-                    <Bot className="h-4 w-4 text-primary-foreground" />
-                  </div>
-                  AI Education Assistant
-                </CardTitle>
-                <Badge variant="outline" className="gap-1 text-info border-info/20 bg-info/10">
-                  <Sparkles className="h-3 w-3" />
-                  Educational Mode
-                </Badge>
-              </div>
-            </CardHeader>
-
-            <CardContent className="flex-1 overflow-y-auto py-4">
-              {messages.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-center px-4">
-                  <div className="h-16 w-16 rounded-2xl gradient-premium flex items-center justify-center mb-6">
-                    <Bot className="h-8 w-8 text-primary-foreground" />
-                  </div>
-                  <h3 className="font-display text-xl font-bold text-foreground mb-2">
-                    Ask Me Anything
-                  </h3>
-                  <p className="text-muted-foreground max-w-md mb-6">
-                    I can help you understand the home buying process with educational information.
-                  </p>
-
-                  {/* Educational Disclaimer */}
-                  <div className="flex items-start gap-3 p-4 rounded-xl bg-info/10 border border-info/20 text-sm mb-6 max-w-lg text-left">
-                    <AlertCircle className="h-5 w-5 text-info mt-0.5 flex-shrink-0" />
-                    <p className="text-muted-foreground">
-                      <strong className="text-foreground">Educational Only:</strong> AI responses are for learning purposes and do not constitute professional advice. Your agent reviews and approves any advice-sensitive content.
-                    </p>
-                  </div>
-
-                  {/* Quick Questions */}
-                  <div className="grid grid-cols-2 gap-2 w-full max-w-md">
-                    {quickQuestions.map((question) => (
-                      <button
-                        key={question}
-                        onClick={() => setInput(question)}
-                        className="p-3 rounded-lg border text-sm text-left hover:bg-secondary/50 transition-colors"
-                      >
-                        {question}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {messages.map((message) => (
-                    <div
-                      key={message.id}
-                      className={cn(
-                        "flex gap-3",
-                        message.role === "user" && "justify-end"
-                      )}
-                    >
-                      {message.role === "assistant" && (
-                        <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
-                          <Bot className="h-4 w-4 text-primary-foreground" />
-                        </div>
-                      )}
-                      <div
-                        className={cn(
-                          "rounded-xl px-4 py-3 max-w-[80%]",
-                          message.role === "assistant"
-                            ? "bg-secondary text-secondary-foreground"
-                            : "bg-primary text-primary-foreground"
-                        )}
-                      >
-                        <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                        {message.role === "assistant" && (
-                          <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border/50">
-                            <span className="text-xs opacity-70">Educational content</span>
-                            <div className="flex gap-1 ml-auto">
-                              <Button variant="ghost" size="icon" className="h-6 w-6">
-                                <ThumbsUp className="h-3 w-3" />
-                              </Button>
-                              <Button variant="ghost" size="icon" className="h-6 w-6">
-                                <ThumbsDown className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      {message.role === "user" && (
-                        <div className="h-8 w-8 rounded-lg bg-accent flex items-center justify-center flex-shrink-0">
-                          <User className="h-4 w-4 text-accent-foreground" />
-                        </div>
-                      )}
-                    </div>
-                  ))}
-
-                  {isLoading && (
-                    <div className="flex gap-3">
-                      <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
-                        <Bot className="h-4 w-4 text-primary-foreground" />
-                      </div>
-                      <div className="bg-secondary rounded-xl px-4 py-3">
-                        <div className="flex gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-muted-foreground/40 animate-pulse" />
-                          <span className="w-2 h-2 rounded-full bg-muted-foreground/40 animate-pulse [animation-delay:0.2s]" />
-                          <span className="w-2 h-2 rounded-full bg-muted-foreground/40 animate-pulse [animation-delay:0.4s]" />
-                        </div>
-                      </div>
-                    </div>
+    <div className="grid lg:grid-cols-[1fr_380px] gap-6">
+      {/* Messages Panel */}
+      <Card className="flex flex-col h-[700px]">
+        <CardHeader className="pb-3 border-b">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              <MessageSquare className="h-4 w-4" />
+              Messages with {buyer.name}
+            </CardTitle>
+            <Badge variant="outline" className="text-xs">
+              {messages.filter(m => m.type === "incoming" && m.status !== "read").length} unread
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="flex-1 flex flex-col p-0">
+          <ScrollArea className="flex-1 p-4">
+            <div className="space-y-4">
+              {messages.map((message) => (
+                <div 
+                  key={message.id}
+                  className={cn(
+                    "flex",
+                    message.type === "outgoing" ? "justify-end" : "justify-start"
                   )}
-
-                  <div ref={messagesEndRef} />
+                >
+                  <div className={cn(
+                    "max-w-[80%] rounded-lg p-3",
+                    message.type === "outgoing" 
+                      ? "bg-primary text-primary-foreground" 
+                      : "bg-muted"
+                  )}>
+                    <p className="text-sm">{message.content}</p>
+                    <div className={cn(
+                      "flex items-center gap-2 mt-1 text-xs",
+                      message.type === "outgoing" ? "text-primary-foreground/70" : "text-muted-foreground"
+                    )}>
+                      <span>{formatTime(message.timestamp)}</span>
+                      {message.type === "outgoing" && message.status && (
+                        <span className="capitalize">{message.status}</span>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              )}
-            </CardContent>
-
-            <div className="border-t p-4">
-              <form onSubmit={handleSubmit} className="flex gap-2">
-                <Input
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="Ask a question about home buying..."
-                  disabled={isLoading}
-                  className="flex-1"
-                />
-                <Button type="submit" disabled={!input.trim() || isLoading}>
-                  <Send className="h-4 w-4" />
-                </Button>
-              </form>
+              ))}
+              <div ref={messagesEndRef} />
             </div>
-          </Card>
-        </TabsContent>
+          </ScrollArea>
+          <div className="p-4 border-t">
+            <div className="flex gap-2">
+              <Input
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                placeholder="Type a message..."
+                onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
+                className="flex-1"
+              />
+              <Button onClick={handleSendMessage} size="icon">
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-        <TabsContent value="approved">
-          <div className="space-y-4">
-            {buyerApprovals.filter((a) => a.approvalStatus === "approved").length === 0 ? (
-              <Card>
-                <CardContent className="py-12 text-center">
-                  <Clock className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="font-semibold text-foreground mb-2">No Approved Content Yet</h3>
-                  <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                    Your agent will review and approve AI-generated content about pricing, comparables, and negotiation strategies.
+      {/* AI Drafts Panel */}
+      <div className="space-y-6">
+        {/* Generate AI Draft */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-primary" />
+              Generate AI Draft
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Textarea
+              value={aiPrompt}
+              onChange={(e) => setAIPrompt(e.target.value)}
+              placeholder="Describe what you want to communicate... e.g., 'Follow up about weekend showing'"
+              className="min-h-[80px] text-sm"
+            />
+            <Button onClick={handleGenerateAIDraft} className="w-full gap-2" disabled={!aiPrompt.trim()}>
+              <Sparkles className="h-4 w-4" />
+              Generate Draft
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Pending AI Drafts */}
+        {pendingDrafts.length > 0 && (
+          <Card className="border-yellow-500/30">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                Pending Approval
+                <Badge variant="secondary" className="ml-auto">{pendingDrafts.length}</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {pendingDrafts.map((draft) => (
+                <div key={draft.id} className="p-3 rounded-lg border bg-background">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Badge variant="outline" className="text-[10px] capitalize">{draft.type}</Badge>
+                    <span className="text-xs text-muted-foreground">{formatTime(draft.createdAt)}</span>
+                  </div>
+                  {draft.subject && (
+                    <p className="text-sm font-medium mb-1">{draft.subject}</p>
+                  )}
+                  <p className="text-xs text-muted-foreground line-clamp-3 whitespace-pre-line">
+                    {draft.content}
                   </p>
-                </CardContent>
-              </Card>
-            ) : (
-              buyerApprovals
-                .filter((a) => a.approvalStatus === "approved")
-                .map((content) => {
-                  const config = CONTENT_TYPE_CONFIG[content.type];
-                  return (
-                    <Card key={content.id}>
-                      <CardHeader className="pb-3">
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xl">{config.icon}</span>
-                            <div>
-                              <CardTitle className="text-base">{content.title}</CardTitle>
-                              <p className="text-xs text-muted-foreground">{config.label}</p>
-                            </div>
-                          </div>
-                          <Badge variant="outline" className="gap-1 bg-success/10 text-success border-success/20">
-                            <CheckCircle2 className="h-3 w-3" />
-                            Agent Approved
-                          </Badge>
-                        </div>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="prose prose-sm max-w-none text-muted-foreground whitespace-pre-wrap">
-                          {content.content}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })
-            )}
-
-            {/* Pending content notice for buyer */}
-            {buyerApprovals.filter((a) => a.approvalStatus === "pending").length > 0 && (
-              <Card className="border-warning/20 bg-warning/5">
-                <CardContent className="py-4">
-                  <div className="flex items-start gap-3">
-                    <Lock className="h-5 w-5 text-warning mt-0.5" />
-                    <div>
-                      <p className="font-medium text-foreground">
-                        {buyerApprovals.filter((a) => a.approvalStatus === "pending").length} item(s) pending approval
-                      </p>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Your agent is reviewing AI-generated content about pricing and market analysis. You'll be notified when it's ready.
-                      </p>
-                    </div>
+                  <div className="flex gap-2 mt-3">
+                    <Button size="sm" className="h-7 text-xs flex-1" onClick={() => handleApproveDraft(draft.id)}>
+                      <CheckCircle2 className="h-3 w-3 mr-1" />
+                      Approve & Send
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-7 text-xs">
+                      Edit
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => handleRejectDraft(draft.id)}>
+                      Reject
+                    </Button>
                   </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </TabsContent>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
 
-        <TabsContent value="library">
-          <div className="grid md:grid-cols-2 gap-4">
-            {Object.entries(CONTENT_TYPE_CONFIG).map(([type, config]) => (
-              <Card key={type} className="hover:shadow-elevated transition-all cursor-pointer">
-                <CardContent className="py-4">
-                  <div className="flex items-start gap-3">
-                    <span className="text-2xl">{config.icon}</span>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <h4 className="font-medium text-foreground">{config.label}</h4>
-                        {config.requiresApproval && (
-                          <Badge variant="outline" className="text-xs gap-1">
-                            <Lock className="h-3 w-3" />
-                            Agent Review
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {config.description}
-                      </p>
-                    </div>
+        {/* Quick Actions */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Quick Drafts</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <Button variant="outline" className="w-full justify-start text-sm h-9 gap-2">
+              <Mail className="h-4 w-4" />
+              Draft showing confirmation
+            </Button>
+            <Button variant="outline" className="w-full justify-start text-sm h-9 gap-2">
+              <FileText className="h-4 w-4" />
+              Draft offer summary
+            </Button>
+            <Button variant="outline" className="w-full justify-start text-sm h-9 gap-2">
+              <RefreshCw className="h-4 w-4" />
+              Draft status update
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Recent Drafts */}
+        {processedDrafts.length > 0 && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Recent Drafts</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {processedDrafts.slice(0, 3).map((draft) => (
+                <div key={draft.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/50">
+                  <div className="flex items-center gap-2">
+                    <Badge 
+                      variant={draft.status === "approved" ? "default" : "secondary"} 
+                      className="text-[10px]"
+                    >
+                      {draft.status}
+                    </Badge>
+                    <span className="text-xs truncate max-w-[180px]">
+                      {draft.subject || draft.content.slice(0, 30)}
+                    </span>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </TabsContent>
-      </Tabs>
+                  <span className="text-xs text-muted-foreground">{formatTime(draft.createdAt)}</span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
   );
 }
