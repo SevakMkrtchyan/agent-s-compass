@@ -2,11 +2,10 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
-import Buyers from "./pages/Buyers";
-import BuyerWorkspace from "./pages/BuyerWorkspace";
+import Workspace from "./pages/Workspace";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -20,9 +19,11 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/buyers" element={<Buyers />} />
-          <Route path="/workspace/:buyerId" element={<BuyerWorkspace />} />
-          <Route path="/buyer/:buyerId" element={<BuyerWorkspace />} />
+          <Route path="/workspace" element={<Navigate to="/workspace/ws-1" replace />} />
+          <Route path="/workspace/:workspaceId" element={<Workspace />} />
+          {/* Legacy routes redirect to workspace */}
+          <Route path="/buyers" element={<Navigate to="/workspace" replace />} />
+          <Route path="/buyer/:buyerId" element={<Navigate to="/workspace" replace />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
