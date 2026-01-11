@@ -3,7 +3,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Progress } from "@/components/ui/progress";
 import {
   CheckCircle2,
   Circle,
@@ -15,14 +14,16 @@ import {
   ChevronDown,
   ChevronRight,
   Bot,
-  User,
   AlertCircle,
-  Sparkles,
+  Filter,
+  FileCheck,
+  Send,
+  Eye,
+  MoreHorizontal,
 } from "lucide-react";
 import { Buyer, STAGES } from "@/types";
 import { cn } from "@/lib/utils";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { stageEducationalContent } from "@/data/mockData";
 
 interface WorkspaceTimelineProps {
   buyer: Buyer;
@@ -30,32 +31,35 @@ interface WorkspaceTimelineProps {
 
 interface TimelineEvent {
   id: string;
-  type: "task" | "document" | "offer" | "message" | "stage" | "property" | "ai";
+  type: "task" | "document" | "offer" | "message" | "stage" | "property" | "ai-draft" | "approval";
   title: string;
   description?: string;
   timestamp: Date;
   stage: number;
   actor: "agent" | "buyer" | "ai" | "system";
-  status?: "completed" | "pending" | "in-progress";
+  status?: "completed" | "pending" | "in-progress" | "approved" | "rejected";
 }
 
-// Mock timeline events
+// Mock timeline events - workflow-focused
 const mockTimelineEvents: TimelineEvent[] = [
-  { id: "1", type: "stage", title: "Workspace Created - Pre-Approval", timestamp: new Date("2024-01-10T09:00:00"), stage: 0, actor: "system", status: "completed" },
-  { id: "2", type: "document", title: "Pre-approval letter uploaded", description: "Lender: First National Bank", timestamp: new Date("2024-01-11T10:30:00"), stage: 0, actor: "buyer", status: "completed" },
-  { id: "3", type: "task", title: "Buyer criteria review completed", description: "Budget: $400-500K, 3+ bed, suburban", timestamp: new Date("2024-01-11T14:00:00"), stage: 0, actor: "agent", status: "completed" },
+  { id: "1", type: "stage", title: "Workspace created", timestamp: new Date("2024-01-10T09:00:00"), stage: 0, actor: "system", status: "completed" },
+  { id: "2", type: "document", title: "Pre-approval letter uploaded", description: "First National Bank - $500K limit", timestamp: new Date("2024-01-11T10:30:00"), stage: 0, actor: "buyer", status: "completed" },
+  { id: "3", type: "task", title: "Buyer criteria confirmed", description: "$400-500K, 3+ bed, suburban", timestamp: new Date("2024-01-11T14:00:00"), stage: 0, actor: "agent", status: "completed" },
   { id: "4", type: "stage", title: "Advanced to Home Search", timestamp: new Date("2024-01-12T09:00:00"), stage: 1, actor: "system", status: "completed" },
-  { id: "5", type: "property", title: "Added 123 Oak Street", description: "$425,000 - 4 bed, 2.5 bath", timestamp: new Date("2024-01-13T11:00:00"), stage: 1, actor: "agent" },
-  { id: "6", type: "property", title: "Added 456 Maple Avenue", description: "$398,000 - 3 bed, 2 bath", timestamp: new Date("2024-01-13T11:15:00"), stage: 1, actor: "agent" },
-  { id: "7", type: "ai", title: "Property comparison email drafted", description: "Awaiting agent approval", timestamp: new Date("2024-01-14T09:00:00"), stage: 1, actor: "ai", status: "pending" },
-  { id: "8", type: "message", title: "Buyer requested weekend showing", description: "Preferred: Saturday afternoon", timestamp: new Date("2024-01-14T16:30:00"), stage: 1, actor: "buyer" },
+  { id: "5", type: "property", title: "123 Oak Street added", description: "$425,000 - 4 bed, 2.5 bath", timestamp: new Date("2024-01-13T11:00:00"), stage: 1, actor: "agent", status: "completed" },
+  { id: "6", type: "property", title: "456 Maple Avenue added", description: "$398,000 - 3 bed, 2 bath", timestamp: new Date("2024-01-13T11:15:00"), stage: 1, actor: "agent", status: "completed" },
+  { id: "7", type: "ai-draft", title: "Property comparison email", description: "Draft awaiting approval", timestamp: new Date("2024-01-14T09:00:00"), stage: 1, actor: "ai", status: "pending" },
+  { id: "8", type: "message", title: "Buyer message received", description: "Requested weekend showing", timestamp: new Date("2024-01-14T16:30:00"), stage: 1, actor: "buyer", status: "completed" },
   { id: "9", type: "task", title: "Property tours scheduled", description: "Saturday 2-5pm confirmed", timestamp: new Date("2024-01-15T10:00:00"), stage: 1, actor: "agent", status: "completed" },
+  { id: "10", type: "ai-draft", title: "Follow-up SMS draft", description: "Tour reminder for Saturday", timestamp: new Date("2024-01-15T14:00:00"), stage: 1, actor: "ai", status: "pending" },
+  { id: "11", type: "document", title: "MLS listing sheet", description: "123 Oak Street details", timestamp: new Date("2024-01-15T15:00:00"), stage: 1, actor: "agent", status: "completed" },
 ];
+
+type FilterType = "all" | "tasks" | "documents" | "ai" | "messages";
 
 export function WorkspaceTimeline({ buyer }: WorkspaceTimelineProps) {
   const [expandedStages, setExpandedStages] = useState<number[]>([buyer.currentStage]);
-  const stageContent = stageEducationalContent[buyer.currentStage as keyof typeof stageEducationalContent];
-  const progress = ((buyer.currentStage + 1) / STAGES.length) * 100;
+  const [activeFilter, setActiveFilter] = useState<FilterType>("all");
 
   const toggleStage = (stage: number) => {
     setExpandedStages(prev => 
@@ -65,13 +69,14 @@ export function WorkspaceTimeline({ buyer }: WorkspaceTimelineProps) {
 
   const getEventIcon = (type: TimelineEvent["type"]) => {
     switch (type) {
-      case "task": return FileText;
+      case "task": return FileCheck;
       case "document": return FileText;
       case "offer": return DollarSign;
       case "message": return MessageSquare;
       case "stage": return CheckCircle2;
       case "property": return Home;
-      case "ai": return Bot;
+      case "ai-draft": return Bot;
+      case "approval": return CheckCircle2;
       default: return Circle;
     }
   };
@@ -94,6 +99,16 @@ export function WorkspaceTimeline({ buyer }: WorkspaceTimelineProps) {
     }).format(date);
   };
 
+  // Filter events based on active filter
+  const filterEvents = (events: TimelineEvent[]) => {
+    if (activeFilter === "all") return events;
+    if (activeFilter === "tasks") return events.filter(e => e.type === "task");
+    if (activeFilter === "documents") return events.filter(e => e.type === "document");
+    if (activeFilter === "ai") return events.filter(e => e.type === "ai-draft" || e.type === "approval");
+    if (activeFilter === "messages") return events.filter(e => e.type === "message");
+    return events;
+  };
+
   // Group events by stage
   const eventsByStage = useMemo(() => {
     const grouped: Record<number, TimelineEvent[]> = {};
@@ -104,150 +119,122 @@ export function WorkspaceTimeline({ buyer }: WorkspaceTimelineProps) {
     return grouped;
   }, []);
 
+  // Count pending items
+  const pendingCount = useMemo(() => {
+    return mockTimelineEvents.filter(e => e.status === "pending").length;
+  }, []);
+
   return (
-    <div className="grid lg:grid-cols-[320px_1fr] gap-6">
-      {/* Left: Stage Navigation & Education */}
-      <div className="space-y-6">
-        {/* Journey Progress */}
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">Journey Progress</CardTitle>
-              <span className="text-sm text-muted-foreground">{Math.round(progress)}%</span>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <Progress value={progress} className="h-2 mb-4" />
-            <div className="space-y-1">
-              {STAGES.map((stage, index) => {
-                const isCompleted = index < buyer.currentStage;
-                const isCurrent = index === buyer.currentStage;
-                const isLocked = index > buyer.currentStage;
-                const hasEvents = eventsByStage[index]?.length > 0;
-
-                return (
-                  <button
-                    key={stage.stage}
-                    onClick={() => !isLocked && toggleStage(index)}
-                    disabled={isLocked}
-                    className={cn(
-                      "w-full flex items-center gap-3 p-2.5 rounded-lg text-left transition-colors",
-                      isCurrent && "bg-primary/10 border border-primary/30",
-                      isCompleted && !isCurrent && "hover:bg-muted",
-                      isLocked && "opacity-50 cursor-not-allowed"
-                    )}
-                  >
-                    <div className={cn(
-                      "h-7 w-7 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0",
-                      isCompleted && "bg-primary text-primary-foreground",
-                      isCurrent && "bg-primary text-primary-foreground",
-                      isLocked && "bg-muted text-muted-foreground"
-                    )}>
-                      {isCompleted ? <CheckCircle2 className="h-3.5 w-3.5" /> : stage.stage}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className={cn(
-                        "text-sm font-medium truncate",
-                        isLocked && "text-muted-foreground"
-                      )}>
-                        {stage.title}
-                      </p>
-                      {hasEvents && !isLocked && (
-                        <p className="text-xs text-muted-foreground">{eventsByStage[index].length} events</p>
-                      )}
-                    </div>
-                    {isCurrent && <Badge variant="default" className="text-[10px]">Current</Badge>}
-                  </button>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Current Stage Details - Education lives here */}
-        <Card className="border-primary/20">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <span className="text-xl">{STAGES[buyer.currentStage].icon}</span>
-              {STAGES[buyer.currentStage].title}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">{stageContent.content}</p>
-            
-            {/* Agent Tasks for this Stage */}
-            <div className="p-3 rounded-lg border bg-muted/30">
-              <h4 className="font-medium text-xs text-muted-foreground mb-2 uppercase tracking-wide flex items-center gap-1.5">
-                <User className="h-3 w-3" />
-                Agent Tasks
-              </h4>
-              <ul className="space-y-1.5">
-                {STAGES[buyer.currentStage].agentTasks.map((task, index) => (
-                  <li key={index} className="flex items-start gap-2 text-sm">
-                    <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
-                    {task}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Buyer Tasks for this Stage */}
-            <div className="p-3 rounded-lg border bg-muted/30">
-              <h4 className="font-medium text-xs text-muted-foreground mb-2 uppercase tracking-wide flex items-center gap-1.5">
-                <User className="h-3 w-3" />
-                Buyer Actions
-              </h4>
-              <ul className="space-y-1.5">
-                {STAGES[buyer.currentStage].buyerTasks.map((task, index) => (
-                  <li key={index} className="flex items-start gap-2 text-sm">
-                    <div className="h-1.5 w-1.5 rounded-full bg-accent mt-1.5 flex-shrink-0" />
-                    {task}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Stage Tips */}
-            <div className="p-3 rounded-lg border border-primary/20 bg-primary/5">
-              <h4 className="font-medium text-xs text-primary mb-2 uppercase tracking-wide flex items-center gap-1.5">
-                <Sparkles className="h-3 w-3" />
-                Stage Tips
-              </h4>
-              <ul className="space-y-1.5">
-                {stageContent.tips.slice(0, 3).map((tip, index) => (
-                  <li key={index} className="flex items-start gap-2 text-sm text-muted-foreground">
-                    <span className="text-primary font-medium">{index + 1}.</span>
-                    {tip}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Right: Activity Timeline */}
+    <div className="grid lg:grid-cols-[240px_1fr] gap-6">
+      {/* Left: Stage Rail - Minimal */}
       <Card>
-        <CardHeader className="pb-3 border-b">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+            Stages
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-2">
+          <div className="space-y-0.5">
+            {STAGES.map((stage, index) => {
+              const isCompleted = index < buyer.currentStage;
+              const isCurrent = index === buyer.currentStage;
+              const isLocked = index > buyer.currentStage;
+              const eventCount = eventsByStage[index]?.length || 0;
+
+              return (
+                <button
+                  key={stage.stage}
+                  onClick={() => !isLocked && toggleStage(index)}
+                  disabled={isLocked}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-left transition-colors",
+                    isCurrent && "bg-primary/10",
+                    !isCurrent && !isLocked && "hover:bg-muted",
+                    isLocked && "opacity-40 cursor-not-allowed"
+                  )}
+                >
+                  {/* Status indicator */}
+                  <div className={cn(
+                    "h-6 w-6 rounded-full flex items-center justify-center text-xs flex-shrink-0 border-2",
+                    isCompleted && "bg-primary border-primary text-primary-foreground",
+                    isCurrent && "border-primary bg-background text-primary",
+                    isLocked && "border-muted-foreground/30 bg-transparent text-muted-foreground"
+                  )}>
+                    {isCompleted ? (
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                    ) : (
+                      <span className="text-[10px] font-medium">{index}</span>
+                    )}
+                  </div>
+                  
+                  {/* Stage name only */}
+                  <div className="flex-1 min-w-0">
+                    <p className={cn(
+                      "text-sm font-medium truncate",
+                      isCurrent && "text-primary",
+                      isLocked && "text-muted-foreground"
+                    )}>
+                      {stage.title}
+                    </p>
+                  </div>
+                  
+                  {/* Current indicator */}
+                  {isCurrent && (
+                    <div className="h-2 w-2 rounded-full bg-primary flex-shrink-0" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Right: Workflow Timeline */}
+      <Card className="flex flex-col">
+        <CardHeader className="pb-3 border-b flex-shrink-0">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Clock className="h-4 w-4" />
-              Activity Timeline
-            </CardTitle>
-            <div className="flex gap-2">
-              <Badge variant="outline" className="text-xs cursor-pointer hover:bg-muted">All</Badge>
-              <Badge variant="outline" className="text-xs cursor-pointer hover:bg-muted">Tasks</Badge>
-              <Badge variant="outline" className="text-xs cursor-pointer hover:bg-muted">Docs</Badge>
+            <div className="flex items-center gap-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Clock className="h-4 w-4" />
+                Workflow Timeline
+              </CardTitle>
+              {pendingCount > 0 && (
+                <Badge variant="secondary" className="bg-yellow-500/10 text-yellow-600 border-yellow-500/30">
+                  {pendingCount} pending
+                </Badge>
+              )}
+            </div>
+            
+            {/* Filter tabs */}
+            <div className="flex items-center gap-1">
+              <Filter className="h-3.5 w-3.5 text-muted-foreground mr-1" />
+              {(["all", "tasks", "documents", "ai", "messages"] as FilterType[]).map((filter) => (
+                <Badge 
+                  key={filter}
+                  variant={activeFilter === filter ? "default" : "outline"} 
+                  className={cn(
+                    "text-xs cursor-pointer capitalize",
+                    activeFilter !== filter && "hover:bg-muted"
+                  )}
+                  onClick={() => setActiveFilter(filter)}
+                >
+                  {filter === "ai" ? "AI Drafts" : filter}
+                </Badge>
+              ))}
             </div>
           </div>
         </CardHeader>
-        <CardContent className="p-0">
-          <ScrollArea className="h-[650px]">
-            <div className="p-4 space-y-4">
+        
+        <CardContent className="p-0 flex-1">
+          <ScrollArea className="h-[620px]">
+            <div className="p-4 space-y-3">
               {STAGES.slice(0, buyer.currentStage + 1).reverse().map((stage) => {
-                const stageEvents = eventsByStage[stage.stage] || [];
+                const stageEvents = filterEvents(eventsByStage[stage.stage] || []);
                 const isExpanded = expandedStages.includes(stage.stage);
                 const isCurrent = stage.stage === buyer.currentStage;
+                const pendingInStage = stageEvents.filter(e => e.status === "pending").length;
+
+                if (stageEvents.length === 0 && activeFilter !== "all") return null;
 
                 return (
                   <Collapsible 
@@ -257,14 +244,28 @@ export function WorkspaceTimeline({ buyer }: WorkspaceTimelineProps) {
                   >
                     <CollapsibleTrigger className="w-full">
                       <div className={cn(
-                        "flex items-center gap-3 p-3 rounded-lg transition-colors",
-                        isCurrent ? "bg-primary/10 border border-primary/30" : "bg-muted/50 hover:bg-muted"
+                        "flex items-center gap-3 px-4 py-3 rounded-lg transition-colors",
+                        isCurrent ? "bg-primary/5 border border-primary/20" : "bg-muted/30 hover:bg-muted/50"
                       )}>
-                        <span className="text-xl">{stage.icon}</span>
+                        <div className={cn(
+                          "h-6 w-6 rounded-full flex items-center justify-center text-xs flex-shrink-0",
+                          isCurrent ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                        )}>
+                          {stage.stage < buyer.currentStage ? (
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                          ) : (
+                            stage.stage
+                          )}
+                        </div>
                         <div className="flex-1 text-left">
                           <div className="flex items-center gap-2">
-                            <p className="font-medium text-sm">Stage {stage.stage}: {stage.title}</p>
-                            {isCurrent && <Badge variant="default" className="text-[10px]">Active</Badge>}
+                            <p className="font-medium text-sm">{stage.title}</p>
+                            {isCurrent && <Badge className="text-[10px] h-4">Active</Badge>}
+                            {pendingInStage > 0 && (
+                              <Badge variant="outline" className="text-[10px] h-4 border-yellow-500/50 text-yellow-600">
+                                {pendingInStage} pending
+                              </Badge>
+                            )}
                           </div>
                           <p className="text-xs text-muted-foreground">{stageEvents.length} events</p>
                         </div>
@@ -274,29 +275,37 @@ export function WorkspaceTimeline({ buyer }: WorkspaceTimelineProps) {
                         }
                       </div>
                     </CollapsibleTrigger>
+                    
                     <CollapsibleContent>
-                      <div className="ml-6 mt-2 space-y-1 border-l-2 border-muted pl-4 pb-2">
+                      <div className="ml-5 mt-2 space-y-1 border-l-2 border-muted pl-4 pb-2">
                         {stageEvents.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()).map((event) => {
                           const Icon = getEventIcon(event.type);
+                          const isPending = event.status === "pending";
+                          const isAIDraft = event.type === "ai-draft";
+                          
                           return (
                             <div 
                               key={event.id} 
-                              className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors"
+                              className={cn(
+                                "flex items-start gap-3 p-3 rounded-lg transition-colors",
+                                isPending ? "bg-yellow-500/5 border border-yellow-500/20" : "hover:bg-muted/50"
+                              )}
                             >
                               <div className={cn(
                                 "h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0",
                                 event.status === "completed" && "bg-primary/10 text-primary",
-                                event.status === "pending" && "bg-yellow-500/10 text-yellow-600",
+                                isPending && "bg-yellow-500/10 text-yellow-600",
                                 event.status === "in-progress" && "bg-blue-500/10 text-blue-600",
                                 !event.status && "bg-muted text-muted-foreground"
                               )}>
                                 <Icon className="h-4 w-4" />
                               </div>
+                              
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <p className="font-medium text-sm">{event.title}</p>
                                   {getActorBadge(event.actor)}
-                                  {event.status === "pending" && (
+                                  {isPending && (
                                     <Badge variant="outline" className="text-[10px] border-yellow-500/50 text-yellow-600">
                                       <AlertCircle className="h-2.5 w-2.5 mr-1" />
                                       Pending
@@ -311,11 +320,29 @@ export function WorkspaceTimeline({ buyer }: WorkspaceTimelineProps) {
                                   {formatTime(event.timestamp)}
                                 </p>
                               </div>
-                              {event.status === "pending" && event.actor === "ai" && (
-                                <div className="flex gap-1">
-                                  <Button size="sm" variant="default" className="h-6 text-[10px] px-2">Approve</Button>
-                                  <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2">View</Button>
+                              
+                              {/* Actions for AI drafts */}
+                              {isAIDraft && isPending && (
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                  <Button size="sm" variant="default" className="h-7 text-xs px-2.5 gap-1">
+                                    <CheckCircle2 className="h-3 w-3" />
+                                    Approve
+                                  </Button>
+                                  <Button size="sm" variant="ghost" className="h-7 text-xs px-2">
+                                    <Eye className="h-3 w-3" />
+                                  </Button>
+                                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0">
+                                    <MoreHorizontal className="h-3.5 w-3.5" />
+                                  </Button>
                                 </div>
+                              )}
+                              
+                              {/* Actions for documents */}
+                              {event.type === "document" && (
+                                <Button size="sm" variant="ghost" className="h-7 text-xs px-2 flex-shrink-0">
+                                  <Eye className="h-3 w-3 mr-1" />
+                                  View
+                                </Button>
                               )}
                             </div>
                           );
