@@ -1,6 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import {
   Calendar,
@@ -16,6 +15,8 @@ import {
   ArrowRight,
   AlertTriangle,
   CheckSquare,
+  TrendingUp,
+  Eye,
 } from "lucide-react";
 import { Buyer, STAGES } from "@/types";
 
@@ -25,7 +26,6 @@ interface WorkspaceOverviewProps {
 
 export function WorkspaceOverview({ buyer }: WorkspaceOverviewProps) {
   const stage = STAGES[buyer.currentStage];
-  const progress = ((buyer.currentStage + 1) / 6) * 100;
 
   const formatDate = (date: Date) => {
     return new Intl.DateTimeFormat("en-US", {
@@ -36,16 +36,11 @@ export function WorkspaceOverview({ buyer }: WorkspaceOverviewProps) {
 
   const getBuyerTypeLabel = (type?: string) => {
     switch (type) {
-      case "first-time":
-        return "First-Time";
-      case "move-up":
-        return "Move-Up";
-      case "investor":
-        return "Investor";
-      case "downsizing":
-        return "Downsizing";
-      default:
-        return "Standard";
+      case "first-time": return "First-Time";
+      case "move-up": return "Move-Up";
+      case "investor": return "Investor";
+      case "downsizing": return "Downsizing";
+      default: return "Standard";
     }
   };
 
@@ -56,15 +51,15 @@ export function WorkspaceOverview({ buyer }: WorkspaceOverviewProps) {
   ];
 
   const openTasks = [
-    { id: 1, title: "Schedule property tour - 123 Oak St", dueDate: new Date(), priority: "high" },
-    { id: 2, title: "Follow up on inspection report", dueDate: new Date(Date.now() + 86400000), priority: "medium" },
-    { id: 3, title: "Review offer terms with buyer", dueDate: new Date(Date.now() + 172800000), priority: "low" },
+    { id: 1, title: "Schedule property tour - 123 Oak St", dueDate: new Date(), priority: "high", category: "showing" },
+    { id: 2, title: "Follow up on inspection report", dueDate: new Date(Date.now() + 86400000), priority: "medium", category: "document" },
+    { id: 3, title: "Review offer terms with buyer", dueDate: new Date(Date.now() + 172800000), priority: "low", category: "offer" },
   ];
 
   const recentActivity = [
-    { action: "Viewed property", detail: "456 Maple Ave", time: "2 hours ago" },
-    { action: "Sent message", detail: "Question about closing costs", time: "5 hours ago" },
-    { action: "Document uploaded", detail: "Bank statement", time: "Yesterday" },
+    { action: "Viewed property", detail: "456 Maple Ave", time: "2 hours ago", type: "property" },
+    { action: "Sent message", detail: "Question about closing costs", time: "5 hours ago", type: "message" },
+    { action: "Document uploaded", detail: "Bank statement", time: "Yesterday", type: "document" },
   ];
 
   const keyMetrics = {
@@ -78,67 +73,85 @@ export function WorkspaceOverview({ buyer }: WorkspaceOverviewProps) {
     <div className="space-y-6">
       {/* Key Metrics Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
+        <Card className="hover:shadow-md transition-shadow">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-2xl font-bold">{keyMetrics.propertiesViewed}</p>
                 <p className="text-xs text-muted-foreground">Properties Viewed</p>
               </div>
-              <Home className="h-8 w-8 text-muted-foreground/30" />
+              <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
+                <Eye className="h-5 w-5 text-muted-foreground" />
+              </div>
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="hover:shadow-md transition-shadow">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-2xl font-bold">{keyMetrics.propertiesSaved}</p>
                 <p className="text-xs text-muted-foreground">Saved Properties</p>
               </div>
-              <CheckSquare className="h-8 w-8 text-muted-foreground/30" />
+              <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
+                <Home className="h-5 w-5 text-muted-foreground" />
+              </div>
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="hover:shadow-md transition-shadow">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-2xl font-bold">{keyMetrics.offersSubmitted}</p>
-                <p className="text-xs text-muted-foreground">Offers Submitted</p>
+                <p className="text-xs text-muted-foreground">Active Offers</p>
               </div>
-              <DollarSign className="h-8 w-8 text-muted-foreground/30" />
+              <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
+                <DollarSign className="h-5 w-5 text-muted-foreground" />
+              </div>
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="hover:shadow-md transition-shadow">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-2xl font-bold">{keyMetrics.daysActive}</p>
                 <p className="text-xs text-muted-foreground">Days Active</p>
               </div>
-              <Calendar className="h-8 w-8 text-muted-foreground/30" />
+              <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
+                <TrendingUp className="h-5 w-5 text-muted-foreground" />
+              </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
-        {/* Left Column - Buyer Summary & Stage */}
+        {/* Left Column */}
         <div className="lg:col-span-2 space-y-6">
           {/* Buyer Quick Info */}
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">Buyer Profile</CardTitle>
-                <Badge variant="outline" className="text-xs">
-                  {getBuyerTypeLabel(buyer.buyerType)}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-xs">
+                    {getBuyerTypeLabel(buyer.buyerType)}
+                  </Badge>
+                  <Badge variant={buyer.financingConfirmed ? "default" : "secondary"} className="text-xs gap-1">
+                    {buyer.financingConfirmed ? (
+                      <CheckCircle2 className="h-3 w-3" />
+                    ) : (
+                      <AlertCircle className="h-3 w-3" />
+                    )}
+                    {buyer.financingConfirmed ? "Pre-Approved" : "Pending"}
+                  </Badge>
+                </div>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-wrap gap-4 text-sm">
+              <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
                 <div className="flex items-center gap-2">
                   <Mail className="h-4 w-4 text-muted-foreground" />
                   <span>{buyer.email}</span>
@@ -155,65 +168,15 @@ export function WorkspaceOverview({ buyer }: WorkspaceOverviewProps) {
                 </div>
                 <div className="flex items-center gap-2">
                   <Clock className="h-4 w-4 text-muted-foreground" />
-                  <span>Last active {formatDate(buyer.lastActivity)}</span>
+                  <span>Active {formatDate(buyer.lastActivity)}</span>
                 </div>
               </div>
               {buyer.marketContext && (
                 <div className="mt-4 p-3 rounded-lg bg-muted/50 text-sm">
-                  <span className="font-medium">Search Focus: </span>
+                  <span className="font-medium">Search Criteria: </span>
                   <span className="text-muted-foreground">{buyer.marketContext}</span>
                 </div>
               )}
-              <div className="mt-4 flex items-center gap-2">
-                <Badge variant={buyer.financingConfirmed ? "default" : "secondary"} className="gap-1">
-                  {buyer.financingConfirmed ? (
-                    <CheckCircle2 className="h-3 w-3" />
-                  ) : (
-                    <AlertCircle className="h-3 w-3" />
-                  )}
-                  {buyer.financingConfirmed ? "Financing Confirmed" : "Pending Financing"}
-                </Badge>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Current Stage Progress */}
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <span>{stage.icon}</span>
-                  Stage {buyer.currentStage}: {stage.title}
-                </CardTitle>
-                <span className="text-sm text-muted-foreground">{Math.round(progress)}%</span>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <Progress value={progress} className="h-2 mb-4" />
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="p-3 rounded-lg border">
-                  <h4 className="font-medium text-xs text-muted-foreground mb-2 uppercase tracking-wide">Your Tasks</h4>
-                  <ul className="space-y-1.5">
-                    {stage.agentTasks.slice(0, 3).map((task, index) => (
-                      <li key={index} className="flex items-center gap-2 text-sm">
-                        <div className="h-1.5 w-1.5 rounded-full bg-primary" />
-                        {task}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <div className="p-3 rounded-lg border">
-                  <h4 className="font-medium text-xs text-muted-foreground mb-2 uppercase tracking-wide">Buyer Tasks</h4>
-                  <ul className="space-y-1.5">
-                    {stage.buyerTasks.slice(0, 3).map((task, index) => (
-                      <li key={index} className="flex items-center gap-2 text-sm">
-                        <div className="h-1.5 w-1.5 rounded-full bg-accent" />
-                        {task}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
             </CardContent>
           </Card>
 
@@ -222,8 +185,9 @@ export function WorkspaceOverview({ buyer }: WorkspaceOverviewProps) {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
+                  <CheckSquare className="h-4 w-4" />
                   Open Tasks
+                  <Badge variant="secondary" className="ml-1">{openTasks.length}</Badge>
                 </CardTitle>
                 <Button variant="ghost" size="sm" className="text-xs gap-1">
                   View All <ArrowRight className="h-3 w-3" />
@@ -232,75 +196,86 @@ export function WorkspaceOverview({ buyer }: WorkspaceOverviewProps) {
             </CardHeader>
             <CardContent className="space-y-2">
               {openTasks.map((task) => (
-                <div key={task.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors">
+                <div key={task.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer">
                   <div className="flex items-center gap-3">
-                    <div className={`h-2 w-2 rounded-full ${
+                    <div className={`h-2 w-2 rounded-full flex-shrink-0 ${
                       task.priority === "high" ? "bg-destructive" : 
                       task.priority === "medium" ? "bg-yellow-500" : "bg-muted-foreground"
                     }`} />
-                    <span className="text-sm font-medium">{task.title}</span>
+                    <span className="text-sm">{task.title}</span>
                   </div>
-                  <span className="text-xs text-muted-foreground">
-                    {formatDate(task.dueDate)}
-                  </span>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Right Column - Actions & Activity */}
-        <div className="space-y-6">
-          {/* Pending Approvals */}
-          <Card className="border-yellow-500/30 bg-yellow-500/5">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-yellow-600" />
-                Pending Approvals
-                <Badge variant="secondary" className="ml-auto">{pendingApprovals.length}</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {pendingApprovals.map((item) => (
-                <div key={item.id} className="p-3 rounded-lg bg-background border">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Badge variant="outline" className="text-[10px]">{item.type}</Badge>
-                    {item.priority === "high" && (
-                      <Badge variant="destructive" className="text-[10px]">Urgent</Badge>
-                    )}
-                  </div>
-                  <p className="text-sm font-medium">{item.title}</p>
-                  <div className="flex gap-2 mt-2">
-                    <Button size="sm" variant="default" className="h-7 text-xs flex-1">Approve</Button>
-                    <Button size="sm" variant="outline" className="h-7 text-xs flex-1">Review</Button>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-[10px] capitalize">{task.category}</Badge>
+                    <span className="text-xs text-muted-foreground">{formatDate(task.dueDate)}</span>
                   </div>
                 </div>
               ))}
             </CardContent>
           </Card>
 
-          {/* AI Summary */}
-          <Card className="border-primary/30 bg-primary/5">
+          {/* AI Status Summary */}
+          <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <Sparkles className="h-4 w-4 text-primary" />
-                AI Status Summary
+                AI Workspace Summary
               </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                {buyer.name} is actively searching in the <strong>{buyer.marketContext || "target market"}</strong> area. 
-                They have {keyMetrics.propertiesSaved} saved properties and {keyMetrics.offersSubmitted} active offer(s). 
+                <strong className="text-foreground">{buyer.name}</strong> is currently in{" "}
+                <strong className="text-foreground">Stage {buyer.currentStage}: {stage.title}</strong>.{" "}
+                {buyer.marketContext && <>They're actively searching for <strong className="text-foreground">{buyer.marketContext.toLowerCase()}</strong>. </>}
+                With {keyMetrics.propertiesSaved} saved properties and {keyMetrics.offersSubmitted} active offer(s),{" "}
                 {buyer.financingConfirmed 
-                  ? " Pre-approval is confirmed. Ready to move quickly on attractive listings."
-                  : " Pre-approval still pending. Consider following up on financing status."}
+                  ? "they're pre-approved and ready to move quickly on attractive listings."
+                  : "pre-approval is still pending—consider following up on financing status."}
               </p>
-              <Button variant="outline" size="sm" className="mt-3 w-full text-xs gap-1">
-                <Sparkles className="h-3 w-3" />
-                Generate Detailed Analysis
-              </Button>
+              <div className="flex gap-2 mt-4">
+                <Button variant="outline" size="sm" className="text-xs gap-1 flex-1">
+                  <Sparkles className="h-3 w-3" />
+                  Generate Analysis
+                </Button>
+                <Button variant="outline" size="sm" className="text-xs gap-1 flex-1">
+                  <FileText className="h-3 w-3" />
+                  Draft Update
+                </Button>
+              </div>
             </CardContent>
           </Card>
+        </div>
+
+        {/* Right Column */}
+        <div className="space-y-6">
+          {/* Pending Approvals */}
+          {pendingApprovals.length > 0 && (
+            <Card className="border-yellow-500/30 bg-yellow-500/5">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                  Pending Approvals
+                  <Badge variant="secondary" className="ml-auto">{pendingApprovals.length}</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {pendingApprovals.map((item) => (
+                  <div key={item.id} className="p-3 rounded-lg bg-background border">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <Badge variant="outline" className="text-[10px]">{item.type}</Badge>
+                      {item.priority === "high" && (
+                        <Badge variant="destructive" className="text-[10px]">Urgent</Badge>
+                      )}
+                    </div>
+                    <p className="text-sm font-medium mb-2">{item.title}</p>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="default" className="h-7 text-xs flex-1">Approve</Button>
+                      <Button size="sm" variant="outline" className="h-7 text-xs flex-1">Review</Button>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Recent Activity */}
           <Card>
@@ -313,7 +288,7 @@ export function WorkspaceOverview({ buyer }: WorkspaceOverviewProps) {
             <CardContent className="space-y-3">
               {recentActivity.map((activity, index) => (
                 <div key={index} className="flex items-start gap-3">
-                  <div className="h-2 w-2 rounded-full bg-primary mt-2" />
+                  <div className="h-2 w-2 rounded-full bg-primary mt-2 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium">{activity.action}</p>
                     <p className="text-xs text-muted-foreground truncate">{activity.detail}</p>
@@ -321,6 +296,30 @@ export function WorkspaceOverview({ buyer }: WorkspaceOverviewProps) {
                   <span className="text-xs text-muted-foreground whitespace-nowrap">{activity.time}</span>
                 </div>
               ))}
+              <Button variant="ghost" size="sm" className="w-full text-xs mt-2">
+                View Full Activity Log
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Quick Actions */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Quick Actions</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Button variant="outline" className="w-full justify-start text-sm h-9 gap-2">
+                <Home className="h-4 w-4" />
+                Add Property
+              </Button>
+              <Button variant="outline" className="w-full justify-start text-sm h-9 gap-2">
+                <DollarSign className="h-4 w-4" />
+                Create Offer
+              </Button>
+              <Button variant="outline" className="w-full justify-start text-sm h-9 gap-2">
+                <FileText className="h-4 w-4" />
+                Upload Document
+              </Button>
             </CardContent>
           </Card>
         </div>
