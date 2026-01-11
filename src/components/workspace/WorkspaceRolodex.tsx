@@ -5,12 +5,9 @@ import {
   Pin, 
   Clock, 
   ChevronRight, 
-  Home,
-  FileText,
-  CheckSquare,
-  Settings,
   Filter,
-  X
+  X,
+  ChevronLeft
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -28,11 +25,12 @@ import { mockWorkspaces, currentUser } from "@/data/workspaceData";
 import { STAGES } from "@/types";
 import { WORKSPACE_STATUS_CONFIG, type WorkspaceStatus, type Workspace } from "@/types/workspace";
 
-interface WorkspaceSidebarProps {
+interface WorkspaceRolodexProps {
   collapsed: boolean;
+  onToggle: () => void;
 }
 
-export function WorkspaceSidebar({ collapsed }: WorkspaceSidebarProps) {
+export function WorkspaceRolodex({ collapsed, onToggle }: WorkspaceRolodexProps) {
   const navigate = useNavigate();
   const { workspaceId } = useParams();
   const [searchQuery, setSearchQuery] = useState("");
@@ -44,9 +42,8 @@ export function WorkspaceSidebar({ collapsed }: WorkspaceSidebarProps) {
   // Filter workspaces based on role
   const accessibleWorkspaces = useMemo(() => {
     if (isBroker) {
-      return mockWorkspaces; // Brokers see all
+      return mockWorkspaces;
     }
-    // Agents see only their assigned workspaces
     return mockWorkspaces.filter((ws) =>
       ws.assignedAgents.some((agent) => agent.id === currentUser.id)
     );
@@ -99,15 +96,14 @@ export function WorkspaceSidebar({ collapsed }: WorkspaceSidebarProps) {
         className={cn(
           "w-full text-left p-3 rounded-lg transition-all group",
           isActive
-            ? "bg-sidebar-accent text-sidebar-accent-foreground"
-            : "hover:bg-sidebar-accent/50 text-sidebar-foreground/80"
+            ? "bg-accent text-accent-foreground"
+            : "hover:bg-muted text-foreground/80"
         )}
       >
         <div className="flex items-start gap-3">
-          {/* Avatar */}
           <div className={cn(
-            "h-10 w-10 rounded-lg flex items-center justify-center flex-shrink-0 text-sm font-semibold",
-            isActive ? "bg-sidebar-primary text-sidebar-primary-foreground" : "bg-sidebar-accent text-sidebar-foreground"
+            "h-9 w-9 rounded-lg flex items-center justify-center flex-shrink-0 text-xs font-semibold",
+            isActive ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
           )}>
             {workspace.buyerName.split(" ").map((n) => n[0]).join("")}
           </div>
@@ -117,25 +113,25 @@ export function WorkspaceSidebar({ collapsed }: WorkspaceSidebarProps) {
               <div className="flex items-center gap-2">
                 <span className="font-medium text-sm truncate">{workspace.buyerName}</span>
                 {workspace.isPinned && (
-                  <Pin className="h-3 w-3 text-sidebar-primary flex-shrink-0" />
+                  <Pin className="h-3 w-3 text-primary flex-shrink-0" />
                 )}
               </div>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-xs opacity-70 truncate">
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="text-xs text-muted-foreground truncate">
                   {stage.icon} Stage {workspace.currentStage}
                 </span>
-                <span className="text-xs opacity-50">•</span>
-                <span className="text-xs opacity-70">{formatLastActivity(workspace.lastActivity)}</span>
+                <span className="text-xs text-muted-foreground">•</span>
+                <span className="text-xs text-muted-foreground">{formatLastActivity(workspace.lastActivity)}</span>
               </div>
               <div className="flex items-center gap-2 mt-1.5">
                 <Badge 
                   variant="outline" 
-                  className={cn("text-[10px] px-1.5 py-0 h-4 border", statusConfig.color)}
+                  className={cn("text-[10px] px-1.5 py-0 h-4", statusConfig.color)}
                 >
                   {statusConfig.label}
                 </Badge>
                 {workspace.openTasks > 0 && (
-                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-sidebar-accent">
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
                     {workspace.openTasks} tasks
                   </Badge>
                 )}
@@ -148,31 +144,43 @@ export function WorkspaceSidebar({ collapsed }: WorkspaceSidebarProps) {
   };
 
   return (
-    <aside
+    <div
       className={cn(
-        "fixed left-0 top-14 h-[calc(100vh-3.5rem)] bg-sidebar text-sidebar-foreground flex flex-col transition-all duration-300 z-40 border-r border-sidebar-border",
+        "h-full bg-card border-r border-border flex flex-col transition-all duration-200",
         collapsed ? "w-16" : "w-72"
       )}
     >
       {/* Header */}
+      <div className="p-3 border-b border-border flex items-center justify-between">
+        {!collapsed && (
+          <h2 className="text-sm font-semibold text-foreground">Buyers</h2>
+        )}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onToggle}
+          className="h-7 w-7 text-muted-foreground hover:text-foreground ml-auto"
+        >
+          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+        </Button>
+      </div>
+
+      {/* Search & Filters */}
       {!collapsed && (
-        <div className="p-4 border-b border-sidebar-border">
-          <h2 className="text-sm font-semibold text-sidebar-foreground mb-3">Workspaces</h2>
-          
-          {/* Search */}
-          <div className="relative mb-3">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-sidebar-foreground/50" />
+        <div className="p-3 border-b border-border">
+          <div className="relative mb-2">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search buyers..."
-              className="pl-9 h-9 bg-sidebar-accent border-sidebar-border text-sidebar-foreground placeholder:text-sidebar-foreground/50"
+              className="pl-8 h-8 text-sm bg-muted/50 border-0"
             />
             {searchQuery && (
               <Button
                 variant="ghost"
                 size="icon"
-                className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 text-sidebar-foreground/50 hover:text-sidebar-foreground"
+                className="absolute right-1 top-1/2 -translate-y-1/2 h-5 w-5"
                 onClick={() => setSearchQuery("")}
               >
                 <X className="h-3 w-3" />
@@ -180,25 +188,23 @@ export function WorkspaceSidebar({ collapsed }: WorkspaceSidebarProps) {
             )}
           </div>
 
-          {/* Filter Toggle */}
           <Button
             variant="ghost"
             size="sm"
-            className="w-full justify-between text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+            className="w-full justify-between h-7 text-xs text-muted-foreground hover:text-foreground"
             onClick={() => setShowFilters(!showFilters)}
           >
-            <span className="flex items-center gap-2">
+            <span className="flex items-center gap-1.5">
               <Filter className="h-3 w-3" />
               Filter
             </span>
             <ChevronRight className={cn("h-3 w-3 transition-transform", showFilters && "rotate-90")} />
           </Button>
 
-          {/* Filters */}
           {showFilters && (
-            <div className="mt-3 pt-3 border-t border-sidebar-border">
+            <div className="mt-2 pt-2 border-t border-border">
               <Select value={statusFilter} onValueChange={(val) => setStatusFilter(val as WorkspaceStatus | "all")}>
-                <SelectTrigger className="h-8 bg-sidebar-accent border-sidebar-border text-sidebar-foreground text-xs">
+                <SelectTrigger className="h-7 text-xs">
                   <SelectValue placeholder="All statuses" />
                 </SelectTrigger>
                 <SelectContent>
@@ -219,12 +225,12 @@ export function WorkspaceSidebar({ collapsed }: WorkspaceSidebarProps) {
         <div className="p-2">
           {/* Pinned Section */}
           {pinnedWorkspaces.length > 0 && !collapsed && (
-            <div className="mb-4">
-              <div className="flex items-center gap-2 px-2 py-1.5 text-xs font-medium text-sidebar-foreground/60 uppercase tracking-wider">
+            <div className="mb-3">
+              <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
                 <Pin className="h-3 w-3" />
                 Pinned
               </div>
-              <div className="space-y-1">
+              <div className="space-y-0.5">
                 {pinnedWorkspaces.map((ws) => (
                   <WorkspaceItem key={ws.id} workspace={ws} />
                 ))}
@@ -236,12 +242,12 @@ export function WorkspaceSidebar({ collapsed }: WorkspaceSidebarProps) {
           {recentWorkspaces.length > 0 && (
             <div>
               {!collapsed && (
-                <div className="flex items-center gap-2 px-2 py-1.5 text-xs font-medium text-sidebar-foreground/60 uppercase tracking-wider">
+                <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
                   <Clock className="h-3 w-3" />
                   Recent
                 </div>
               )}
-              <div className="space-y-1">
+              <div className="space-y-0.5">
                 {recentWorkspaces.map((ws) => (
                   <WorkspaceItem key={ws.id} workspace={ws} />
                 ))}
@@ -249,55 +255,22 @@ export function WorkspaceSidebar({ collapsed }: WorkspaceSidebarProps) {
             </div>
           )}
 
-          {/* Collapsed view - just avatars */}
+          {/* Collapsed view */}
           {collapsed && (
-            <div className="space-y-2 p-1">
+            <div className="space-y-1">
               {sortedWorkspaces.map((ws) => (
                 <WorkspaceItem key={ws.id} workspace={ws} />
               ))}
             </div>
           )}
 
-          {/* Empty state */}
           {sortedWorkspaces.length === 0 && !collapsed && (
-            <div className="p-4 text-center text-sidebar-foreground/50 text-sm">
+            <div className="p-4 text-center text-muted-foreground text-sm">
               No workspaces found
             </div>
           )}
         </div>
       </ScrollArea>
-
-      {/* Bottom Navigation */}
-      {!collapsed && (
-        <div className="border-t border-sidebar-border p-2">
-          <nav className="space-y-1">
-            <Button
-              variant="ghost"
-              className="w-full justify-start gap-3 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
-              onClick={() => navigate("/dashboard")}
-            >
-              <Home className="h-4 w-4" />
-              Dashboard
-            </Button>
-            <Button
-              variant="ghost"
-              className="w-full justify-start gap-3 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
-              onClick={() => navigate("/tasks")}
-            >
-              <CheckSquare className="h-4 w-4" />
-              All Tasks
-            </Button>
-            <Button
-              variant="ghost"
-              className="w-full justify-start gap-3 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
-              onClick={() => navigate("/settings")}
-            >
-              <Settings className="h-4 w-4" />
-              Settings
-            </Button>
-          </nav>
-        </div>
-      )}
-    </aside>
+    </div>
   );
 }
