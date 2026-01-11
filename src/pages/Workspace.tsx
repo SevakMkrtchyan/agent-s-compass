@@ -8,10 +8,8 @@ import {
   FileText, 
   MessageSquare
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { STAGES } from "@/types";
 import { mockWorkspaces, currentUser } from "@/data/workspaceData";
 import { mockBuyers } from "@/data/mockData";
 
@@ -28,6 +26,15 @@ import { WorkspaceProperties } from "@/components/workspace/WorkspaceProperties"
 import { WorkspaceOffers } from "@/components/workspace/WorkspaceOffers";
 import { WorkspaceTasks } from "@/components/workspace/WorkspaceTasks";
 import { WorkspaceAIEducation } from "@/components/workspace/WorkspaceAIEducation";
+
+const WORKSPACE_TABS = [
+  { id: "overview", label: "Overview", icon: LayoutDashboard },
+  { id: "timeline", label: "Timeline", icon: Clock },
+  { id: "properties", label: "Properties & Comps", icon: Home },
+  { id: "offers", label: "Offers", icon: DollarSign },
+  { id: "tasks", label: "Tasks & Documents", icon: FileText },
+  { id: "messages", label: "Messages & AI Guidance", icon: MessageSquare },
+] as const;
 
 export default function Workspace() {
   const { workspaceId } = useParams();
@@ -119,66 +126,68 @@ export default function Workspace() {
             onToggle={() => setRolodexCollapsed(!rolodexCollapsed)} 
           />
 
-          {/* Workspace Content */}
-          <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Workspace Header */}
+          {/* Workspace Content Shell */}
+          <div className="flex-1 flex flex-col overflow-hidden bg-muted/30">
+            {/* Workspace Header - Compact */}
             <WorkspaceHeader workspace={workspace} userRole={userRole} />
 
-            {/* Tabbed Content */}
-            <main className="flex-1 overflow-auto p-6">
-              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="mb-6 bg-muted/50">
-                  <TabsTrigger value="overview" className="gap-2">
-                    <LayoutDashboard className="h-4 w-4" />
-                    Overview
-                  </TabsTrigger>
-                  <TabsTrigger value="timeline" className="gap-2">
-                    <Clock className="h-4 w-4" />
-                    Timeline
-                  </TabsTrigger>
-                  <TabsTrigger value="properties" className="gap-2">
-                    <Home className="h-4 w-4" />
-                    Properties & Comps
-                  </TabsTrigger>
-                  <TabsTrigger value="offers" className="gap-2">
-                    <DollarSign className="h-4 w-4" />
-                    Offers
-                  </TabsTrigger>
-                  <TabsTrigger value="tasks" className="gap-2">
-                    <FileText className="h-4 w-4" />
-                    Tasks & Documents
-                  </TabsTrigger>
-            <TabsTrigger value="messages" className="gap-2">
-              <MessageSquare className="h-4 w-4" />
-              Messages & AI Guidance
-            </TabsTrigger>
-                </TabsList>
+            {/* Tab-based Workspace Interface */}
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
+              {/* Prominent Tab Navigation Bar - Always visible */}
+              <div className="bg-card border-b flex-shrink-0">
+                <div className="px-6">
+                  <TabsList className="h-11 w-full justify-start gap-0 bg-transparent p-0 rounded-none border-0">
+                    {WORKSPACE_TABS.map((tab) => {
+                      const Icon = tab.icon;
+                      const isActive = activeTab === tab.id;
+                      return (
+                        <TabsTrigger
+                          key={tab.id}
+                          value={tab.id}
+                          className={cn(
+                            "h-11 px-4 gap-2 rounded-none border-b-2 border-transparent relative",
+                            "data-[state=active]:border-primary data-[state=active]:bg-transparent",
+                            "data-[state=active]:text-foreground data-[state=active]:shadow-none",
+                            "text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors",
+                            "font-medium text-sm"
+                          )}
+                        >
+                          <Icon className="h-4 w-4" />
+                          <span>{tab.label}</span>
+                        </TabsTrigger>
+                      );
+                    })}
+                  </TabsList>
+                </div>
+              </div>
 
-                <TabsContent value="overview" className="mt-0">
+              {/* Tab Content Area - Scrollable */}
+              <div className="flex-1 overflow-auto">
+                <TabsContent value="overview" className="m-0 p-6 min-h-full">
                   <WorkspaceOverview buyer={buyer} />
                 </TabsContent>
 
-                <TabsContent value="timeline" className="mt-0">
+                <TabsContent value="timeline" className="m-0 p-6 min-h-full">
                   <WorkspaceTimeline buyer={buyer} />
                 </TabsContent>
 
-                <TabsContent value="properties" className="mt-0">
+                <TabsContent value="properties" className="m-0 p-6 min-h-full">
                   <WorkspaceProperties buyerId={workspace.buyerId} />
                 </TabsContent>
 
-                <TabsContent value="offers" className="mt-0">
+                <TabsContent value="offers" className="m-0 p-6 min-h-full">
                   <WorkspaceOffers buyerId={workspace.buyerId} />
                 </TabsContent>
 
-                <TabsContent value="tasks" className="mt-0">
+                <TabsContent value="tasks" className="m-0 p-6 min-h-full">
                   <WorkspaceTasks buyer={buyer} />
                 </TabsContent>
 
-                <TabsContent value="messages" className="mt-0">
+                <TabsContent value="messages" className="m-0 p-6 min-h-full">
                   <WorkspaceAIEducation buyer={buyer} />
                 </TabsContent>
-              </Tabs>
-            </main>
+              </div>
+            </Tabs>
           </div>
         </div>
       </div>
