@@ -1,4 +1,3 @@
-import { useNavigate } from "react-router-dom";
 import { 
   ArrowRight, 
   Send, 
@@ -26,28 +25,27 @@ interface WorkspaceHeaderProps {
 }
 
 export function WorkspaceHeader({ workspace, userRole }: WorkspaceHeaderProps) {
-  const navigate = useNavigate();
   const stage = STAGES[workspace.currentStage];
   const statusConfig = WORKSPACE_STATUS_CONFIG[workspace.status];
   const isBroker = userRole === "broker";
 
   return (
-    <header className="sticky top-14 z-30 bg-card border-b">
-      <div className="px-6 py-4">
+    <header className="bg-card border-b flex-shrink-0">
+      <div className="px-6 py-3">
         <div className="flex items-center justify-between">
           {/* Left: Buyer Info */}
           <div className="flex items-center gap-4">
             {/* Avatar */}
-            <div className="h-12 w-12 rounded-xl bg-primary flex items-center justify-center">
-              <span className="text-lg font-bold text-primary-foreground">
+            <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
+              <span className="text-sm font-bold text-primary-foreground">
                 {workspace.buyerName.split(" ").map((n) => n[0]).join("")}
               </span>
             </div>
 
             {/* Buyer Details */}
             <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-xl font-display font-bold text-foreground">
+              <div className="flex items-center gap-2">
+                <h1 className="text-lg font-display font-bold text-foreground">
                   {workspace.buyerName}
                 </h1>
                 <Badge variant="outline" className={cn("text-xs", statusConfig.color)}>
@@ -60,8 +58,8 @@ export function WorkspaceHeader({ workspace, userRole }: WorkspaceHeaderProps) {
                   </Badge>
                 )}
               </div>
-              <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1.5">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1">
                   {stage.icon} Stage {workspace.currentStage}: {stage.title}
                 </span>
                 <span className="text-muted-foreground/50">•</span>
@@ -74,23 +72,23 @@ export function WorkspaceHeader({ workspace, userRole }: WorkspaceHeaderProps) {
           </div>
 
           {/* Right: Quick Actions */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {!isBroker && (
               <>
-                <Button variant="outline" size="sm" className="gap-2">
-                  <Send className="h-4 w-4" />
+                <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs">
+                  <Send className="h-3.5 w-3.5" />
                   Send Update
                 </Button>
 
-                <Button variant="outline" size="sm" className="gap-2">
-                  <Shield className="h-4 w-4" />
+                <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs">
+                  <Shield className="h-3.5 w-3.5" />
                   Request Approval
                 </Button>
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button size="sm" className="gap-2">
-                      <ArrowRight className="h-4 w-4" />
+                    <Button size="sm" className="gap-1.5 h-8 text-xs">
+                      <ArrowRight className="h-3.5 w-3.5" />
                       Advance Stage
                       <ChevronDown className="h-3 w-3 opacity-70" />
                     </Button>
