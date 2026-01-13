@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
+import AgentGPT from "./pages/AgentGPT";
 import Workspace from "./pages/Workspace";
 import GlobalTasks from "./pages/GlobalTasks";
 import GlobalProperties from "./pages/GlobalProperties";
@@ -21,17 +22,19 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
+          {/* AgentGPT is the default landing page */}
+          <Route path="/" element={<Navigate to="/agentgpt" replace />} />
+          <Route path="/agentgpt" element={<AgentGPT />} />
           <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/workspace" element={<Navigate to="/workspace/ws-1" replace />} />
+          <Route path="/workspace" element={<Navigate to="/agentgpt" replace />} />
           <Route path="/workspace/:workspaceId" element={<Workspace />} />
           <Route path="/tasks" element={<GlobalTasks />} />
           <Route path="/properties" element={<GlobalProperties />} />
           <Route path="/offers" element={<GlobalOffers />} />
           <Route path="/analytics" element={<Analytics />} />
-          {/* Legacy routes redirect to workspace */}
-          <Route path="/buyers" element={<Navigate to="/workspace" replace />} />
-          <Route path="/buyer/:buyerId" element={<Navigate to="/workspace" replace />} />
+          {/* Legacy routes redirect to agentgpt */}
+          <Route path="/buyers" element={<Navigate to="/agentgpt" replace />} />
+          <Route path="/buyer/:buyerId" element={<Navigate to="/agentgpt" replace />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
