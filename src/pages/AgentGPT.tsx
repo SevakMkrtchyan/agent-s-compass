@@ -1,18 +1,14 @@
 import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
-  Bot, 
   Sparkles, 
   Users, 
-  ArrowRight, 
+  Send, 
   Search,
   ChevronRight,
   TrendingUp,
   Clock,
-  AlertTriangle,
-  CheckCircle,
-  Home,
-  DollarSign,
+  AlertCircle,
   FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -20,7 +16,6 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { TopBar } from "@/components/dashboard/TopBar";
 import { cn } from "@/lib/utils";
@@ -30,7 +25,7 @@ import { STAGES } from "@/types";
 // Quick action suggestions for no-buyer context
 const globalQuickActions = [
   { id: "1", label: "Create new buyer workspace", icon: Users, command: "Create a new buyer workspace" },
-  { id: "2", label: "Review pending approvals", icon: AlertTriangle, command: "Show all pending approvals across buyers" },
+  { id: "2", label: "Review pending approvals", icon: AlertCircle, command: "Show all pending approvals across buyers" },
   { id: "3", label: "Generate weekly summary", icon: FileText, command: "Generate weekly activity summary" },
   { id: "4", label: "View pipeline analytics", icon: TrendingUp, command: "Show pipeline health metrics" },
 ];
@@ -93,122 +88,94 @@ export default function AgentGPT() {
 
         {/* Main Content Area */}
         <ScrollArea className="h-[calc(100vh-56px)]">
-          <div className="max-w-4xl mx-auto px-6 py-8">
+          <div className="max-w-2xl mx-auto px-6 py-12">
             {/* Welcome Header */}
-            <div className="mb-8 text-center">
-              <div className="inline-flex items-center justify-center h-16 w-16 rounded-2xl bg-gradient-to-br from-primary to-primary/60 mb-4">
-                <Bot className="h-8 w-8 text-primary-foreground" />
-              </div>
-              <h1 className="text-2xl font-semibold mb-2">AgentGPT</h1>
-              <p className="text-muted-foreground">
-                Your AI-powered assistant for managing buyer transactions
+            <div className="mb-10 text-center">
+              <h1 className="text-2xl font-semibold mb-2 text-foreground">What can I help you with?</h1>
+              <p className="text-muted-foreground text-sm">
+                Manage transactions, review approvals, and track your pipeline
               </p>
             </div>
 
-            {/* System Guardrails */}
-            <Alert className="mb-6 border-muted bg-muted/30">
-              <Sparkles className="h-4 w-4 text-muted-foreground" />
-              <AlertDescription className="text-xs text-muted-foreground">
-                AgentGPT provides educational explanations. Licensed agents make final decisions.
-              </AlertDescription>
-            </Alert>
-
-            {/* Command Input - Spotlight Style */}
-            <Card className="mb-8 border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
-              <CardContent className="p-6">
-                <div className="relative">
-                  <Input
-                    placeholder="Tell AgentGPT what you want to do…"
-                    value={commandInput}
-                    onChange={(e) => setCommandInput(e.target.value)}
-                    className="h-14 text-base pl-12 pr-12 rounded-xl border-2 border-muted focus:border-primary/50 bg-background"
-                  />
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                  <Button
-                    size="icon"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-lg"
-                    disabled={!commandInput.trim()}
-                  >
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground mt-3 text-center">
-                  Start typing or select a buyer to begin
-                </p>
-              </CardContent>
-            </Card>
+            {/* Command Input - Clean Spotlight Style */}
+            <div className="mb-10">
+              <div className="relative">
+                <Input
+                  placeholder="Ask anything or describe what you need…"
+                  value={commandInput}
+                  onChange={(e) => setCommandInput(e.target.value)}
+                  className="h-12 text-sm pl-4 pr-12 rounded-lg bg-muted/40 border-0 focus:bg-background focus:ring-1 focus:ring-accent/30"
+                />
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 h-9 w-9 rounded-md text-muted-foreground hover:text-accent disabled:opacity-30"
+                  disabled={!commandInput.trim()}
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground/60 mt-2 text-center">
+                or select an action below
+              </p>
+            </div>
 
             {/* Quick Actions */}
-            <Card className="mb-6">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-primary" />
-                  What should happen next?
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="grid grid-cols-2 gap-2">
-                  {globalQuickActions.map((action) => {
-                    const Icon = action.icon;
-                    return (
-                      <button
-                        key={action.id}
-                        onClick={() => handleQuickAction(action.command)}
-                        className="flex items-center gap-3 p-3 rounded-xl text-left bg-muted/30 hover:bg-muted/50 transition-colors group"
-                      >
-                        <div className="h-9 w-9 rounded-lg bg-background flex items-center justify-center">
-                          <Icon className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                        </div>
-                        <span className="text-sm font-medium group-hover:text-primary transition-colors">
-                          {action.label}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
+            <div className="mb-8">
+              <p className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wide">Quick actions</p>
+              <div className="grid grid-cols-2 gap-2">
+                {globalQuickActions.map((action) => {
+                  const Icon = action.icon;
+                  return (
+                    <button
+                      key={action.id}
+                      onClick={() => handleQuickAction(action.command)}
+                      className="flex items-center gap-3 p-3 rounded-lg text-left hover:bg-muted/50 transition-colors group"
+                    >
+                      <div className="h-8 w-8 rounded-lg bg-muted/50 flex items-center justify-center">
+                        <Icon className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                      <span className="text-sm font-medium text-foreground">
+                        {action.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
             {/* Buyers Needing Attention */}
             {buyersNeedingAttention.length > 0 && (
-              <Card className="mb-6 border-warning/30">
-                <CardHeader className="pb-3">
+              <Card className="mb-6 border-border/60 shadow-sm">
+                <CardHeader className="pb-2 pt-4">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <AlertTriangle className="h-4 w-4 text-warning" />
-                      Needs Attention
+                    <CardTitle className="text-sm font-medium flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4 text-warning" />
+                      Needs attention
                     </CardTitle>
-                    <Badge variant="secondary" className="text-[10px]">
+                    <Badge variant="secondary" className="text-[10px] bg-muted">
                       {buyersNeedingAttention.length}
                     </Badge>
                   </div>
                 </CardHeader>
-                <CardContent className="pt-0 space-y-1">
+                <CardContent className="pt-0 pb-4 space-y-0.5">
                   {buyersNeedingAttention.map((ws) => {
-                    const stage = STAGES[ws.currentStage];
                     return (
                       <button
                         key={ws.id}
                         onClick={() => handleSelectBuyer(ws.id)}
-                        className="w-full flex items-center gap-3 p-3 rounded-xl text-left hover:bg-muted/50 transition-colors group"
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left hover:bg-muted/50 transition-colors group"
                       >
-                        <div className="h-10 w-10 rounded-lg bg-warning/10 flex items-center justify-center text-sm font-semibold text-warning">
+                        <div className="h-9 w-9 rounded-lg bg-warning/10 flex items-center justify-center text-xs font-semibold text-warning">
                           {ws.buyerName.split(" ").map(n => n[0]).join("")}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-sm">{ws.buyerName}</span>
-                            <Badge variant="outline" className="text-[10px]">
-                              Stage {ws.currentStage}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-                            {ws.openTasks > 0 && (
-                              <span>{ws.openTasks} open tasks</span>
-                            )}
-                          </div>
+                          <span className="font-medium text-sm text-foreground">{ws.buyerName}</span>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {ws.openTasks} open tasks · Stage {ws.currentStage}
+                          </p>
                         </div>
-                        <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
                       </button>
                     );
                   })}
@@ -217,37 +184,32 @@ export default function AgentGPT() {
             )}
 
             {/* Recent Activity */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <Clock className="h-4 w-4" />
-                  Recent Buyers
+            <Card className="border-border/60 shadow-sm">
+              <CardHeader className="pb-2 pt-4">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                  Recent buyers
                 </CardTitle>
               </CardHeader>
-              <CardContent className="pt-0 space-y-1">
+              <CardContent className="pt-0 pb-4 space-y-0.5">
                 {recentActivity.map((ws) => {
                   const stage = STAGES[ws.currentStage];
                   return (
                     <button
                       key={ws.id}
                       onClick={() => handleSelectBuyer(ws.id)}
-                      className="w-full flex items-center gap-3 p-3 rounded-xl text-left hover:bg-muted/50 transition-colors group"
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left hover:bg-muted/50 transition-colors group"
                     >
-                      <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center text-sm font-semibold text-muted-foreground">
+                      <div className="h-9 w-9 rounded-lg bg-muted flex items-center justify-center text-xs font-semibold text-muted-foreground">
                         {ws.buyerName.split(" ").map(n => n[0]).join("")}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm">{ws.buyerName}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {stage.icon} {stage.title}
-                          </span>
-                        </div>
+                        <span className="font-medium text-sm text-foreground">{ws.buyerName}</span>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          Last active {formatLastActivity(ws.lastActivity)}
+                          {stage.title} · {formatLastActivity(ws.lastActivity)}
                         </p>
                       </div>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
                     </button>
                   );
                 })}

@@ -1,14 +1,12 @@
 import { NavLink } from "@/components/NavLink";
 import { 
   LayoutDashboard, 
-  Briefcase, 
   FileText, 
   Home as HomeIcon,
   DollarSign,
   BarChart3,
   Search,
-  Bot,
-  ChevronLeft,
+  Sparkles,
   ArrowLeft,
   Pin,
   Clock,
@@ -46,9 +44,9 @@ interface SidebarProps {
 
 // Global navigation items (when no buyer selected)
 const globalNavItems = [
-  { title: "AgentGPT", url: "/agentgpt", icon: Bot, primary: true },
+  { title: "Agent", url: "/agentgpt", icon: Sparkles, primary: true },
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
-  { title: "Tasks & Documents", url: "/tasks", icon: FileText },
+  { title: "Tasks", url: "/tasks", icon: FileText },
   { title: "Properties", url: "/properties", icon: HomeIcon },
   { title: "Offers", url: "/offers", icon: DollarSign },
   { title: "Analytics", url: "/analytics", icon: BarChart3 },

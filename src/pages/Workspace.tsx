@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { 
   Home, 
   DollarSign, 
-  Bot,
+  Sparkles,
   CheckSquare,
   Info,
   LayoutGrid,
@@ -36,11 +36,11 @@ import { WorkspaceTasks } from "@/components/workspace/WorkspaceTasks";
 type WorkspaceTab = "agentgpt" | "progress" | "properties" | "offers" | "tasks";
 
 const WORKSPACE_TABS: { id: WorkspaceTab; label: string; icon: React.ElementType }[] = [
-  { id: "agentgpt", label: "AgentGPT", icon: Bot },
+  { id: "agentgpt", label: "Agent", icon: Sparkles },
   { id: "progress", label: "Progress", icon: LayoutGrid },
-  { id: "properties", label: "Properties & Comps", icon: Home },
+  { id: "properties", label: "Properties", icon: Home },
   { id: "offers", label: "Offers", icon: DollarSign },
-  { id: "tasks", label: "Tasks & Documents", icon: CheckSquare },
+  { id: "tasks", label: "Tasks", icon: CheckSquare },
 ];
 
 export default function Workspace() {
@@ -259,30 +259,29 @@ export default function Workspace() {
             </div>
           </div>
 
-          {/* Internal Tab Navigation - Mode-like */}
+          {/* Internal Tab Navigation - Prominent Mode Switcher */}
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as WorkspaceTab)} className="flex-1 flex flex-col overflow-hidden">
-            <div className="bg-card border-b flex-shrink-0">
-              <div className="px-4">
-                <TabsList className="h-12 w-full justify-start gap-1 bg-transparent p-0 rounded-none border-0">
+            <div className="bg-background border-b flex-shrink-0">
+              <div className="px-6 py-3">
+                <TabsList className="h-10 w-auto inline-flex gap-1 bg-muted/50 p-1 rounded-lg">
                   {WORKSPACE_TABS.map((tab) => {
                     const Icon = tab.icon;
-                    const isAgentGPT = tab.id === "agentgpt";
+                    const isAgent = tab.id === "agentgpt";
                     return (
                       <TabsTrigger
                         key={tab.id}
                         value={tab.id}
                         className={cn(
-                          "h-12 px-4 gap-2 rounded-none border-b-2 border-transparent relative",
-                          "data-[state=active]:border-primary data-[state=active]:bg-transparent",
-                          "data-[state=active]:text-foreground data-[state=active]:shadow-none",
-                          "text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors",
-                          "font-medium text-sm",
-                          isAgentGPT && "data-[state=active]:text-primary data-[state=active]:border-primary"
+                          "h-8 px-4 gap-2 rounded-md font-medium text-sm transition-all",
+                          "data-[state=active]:bg-background data-[state=active]:shadow-sm",
+                          "data-[state=active]:text-foreground",
+                          "text-muted-foreground hover:text-foreground",
+                          isAgent && "data-[state=active]:text-accent"
                         )}
                       >
                         <Icon className={cn(
                           "h-4 w-4",
-                          isAgentGPT && "text-primary"
+                          isAgent && "text-accent"
                         )} />
                         {tab.label}
                       </TabsTrigger>
