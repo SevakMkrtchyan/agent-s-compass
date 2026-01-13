@@ -215,20 +215,18 @@ export function GuidedAgentGPT({
           {/* STATE A: Guided Mode - Recommended Actions */}
           {mode === "guided" && (
             <Card className="border-2 border-primary/20 bg-gradient-to-br from-primary/5 via-background to-transparent shadow-lg">
-              <CardHeader className="pb-4 pt-6 text-center">
-                <div className="flex items-center justify-center gap-2 mb-2">
+              <CardHeader className="pb-3 pt-6">
+                <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center">
                     <Bot className="h-5 w-5 text-primary-foreground" />
                   </div>
+                  <h2 className="text-lg font-semibold">Next actions</h2>
                 </div>
-                <h2 className="text-lg font-semibold">AgentGPT</h2>
-                <p className="text-sm text-muted-foreground">
-                  Here's what I recommend next for this transaction.
-                </p>
               </CardHeader>
               <CardContent className="pb-6">
-                <div className="space-y-2">
-                  {recommendedActions.map((action) => {
+                <div className="space-y-1.5">
+                  {/* Primary actions - first 3 only */}
+                  {recommendedActions.slice(0, 3).map((action) => {
                     const Icon = action.icon;
                     return (
                       <button
@@ -241,31 +239,39 @@ export function GuidedAgentGPT({
                         )}
                       >
                         <div className={cn(
-                          "h-10 w-10 rounded-xl flex items-center justify-center shrink-0 transition-colors",
+                          "h-9 w-9 rounded-lg flex items-center justify-center shrink-0 transition-colors",
                           action.type === "artifact" 
                             ? "bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground"
                             : "bg-muted text-muted-foreground group-hover:bg-muted-foreground/20"
                         )}>
-                          <Icon className="h-5 w-5" />
+                          <Icon className="h-4 w-4" />
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm group-hover:text-primary transition-colors">
-                            {action.label}
-                          </p>
-                          <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
-                            {action.description}
-                          </p>
-                        </div>
+                        <p className="font-medium text-sm group-hover:text-primary transition-colors flex-1">
+                          {action.label}
+                        </p>
                         <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-1" />
                       </button>
                     );
                   })}
-                </div>
-
-                <div className="mt-6 text-center">
-                  <p className="text-xs text-muted-foreground">
-                    What should happen next?
-                  </p>
+                  
+                  {/* Escape hatch - Something else */}
+                  <button
+                    onClick={() => {
+                      const input = document.querySelector('textarea');
+                      if (input) input.focus();
+                    }}
+                    className={cn(
+                      "w-full flex items-center gap-4 p-4 rounded-xl text-left transition-all group",
+                      "hover:bg-muted/50 border border-dashed border-muted-foreground/20"
+                    )}
+                  >
+                    <div className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0 bg-muted/50 text-muted-foreground">
+                      <Sparkles className="h-4 w-4" />
+                    </div>
+                    <p className="text-sm text-muted-foreground group-hover:text-foreground transition-colors flex-1">
+                      Something else…
+                    </p>
+                  </button>
                 </div>
               </CardContent>
             </Card>
@@ -328,158 +334,142 @@ export function GuidedAgentGPT({
             </Card>
           )}
 
-          {/* STATE C: Thinking Mode - Internal Explanation */}
+          {/* STATE C: Thinking Mode - Internal Explanation (Visually Demoted) */}
           {mode === "thinking" && thinkingResponse && (
-            <Card className="border-2 border-dashed border-muted shadow-lg overflow-hidden">
-              <CardHeader className="bg-muted/20 pb-4 pt-6">
-                <div className="flex items-start gap-3">
-                  <div className="h-10 w-10 rounded-xl bg-muted flex items-center justify-center shrink-0">
-                    <Brain className="h-5 w-5 text-muted-foreground" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm font-semibold">🧠 AgentGPT — Internal Explanation</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Agent-only • Not visible to client
-                    </p>
-                  </div>
-                  <Badge variant="secondary" className="text-xs">
-                    Internal Only
+            <Card className="border border-dashed border-muted/60 shadow-sm overflow-hidden bg-muted/5">
+              <CardHeader className="pb-3 pt-4">
+                <div className="flex items-center gap-2">
+                  <Brain className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-xs font-medium text-muted-foreground">🧠 Internal Explanation</span>
+                  <Badge variant="outline" className="text-[10px] ml-auto border-muted-foreground/30 text-muted-foreground">
+                    Agent only
                   </Badge>
                 </div>
               </CardHeader>
-              <CardContent className="pt-4 pb-6">
-                <div className="bg-background rounded-xl p-4 mb-6 border">
+              <CardContent className="pt-0 pb-4">
+                <div className="bg-background/50 rounded-lg p-3 mb-4 border border-muted/40">
                   <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-wrap">
                     {thinkingResponse.content}
                   </p>
                 </div>
 
                 <Button 
-                  variant="outline" 
-                  className="w-full gap-2 h-11"
+                  variant="ghost" 
+                  size="sm"
+                  className="w-full gap-2 text-muted-foreground hover:text-foreground"
                   onClick={handleDismissThinking}
                 >
-                  <ArrowRight className="h-4 w-4" />
-                  Continue to Next Action
+                  <ArrowRight className="h-3 w-3" />
+                  Continue
                 </Button>
               </CardContent>
             </Card>
           )}
 
-          {/* Command Input - Always Visible */}
-          <div className="relative">
-            <Textarea
-              placeholder="Tell AgentGPT what you want to do…"
-              value={commandInput}
-              onChange={(e) => setCommandInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              className={cn(
-                "min-h-[64px] max-h-[140px] resize-none pr-14 text-base",
-                "bg-background border-2 border-muted focus:border-primary/50",
-                "rounded-2xl shadow-sm",
-                "placeholder:text-muted-foreground/60"
-              )}
-              rows={1}
-            />
-            <Button 
-              onClick={handleSend} 
-              disabled={!commandInput.trim()} 
-              size="icon" 
-              className="absolute right-3 bottom-3 h-10 w-10 rounded-xl"
-            >
-              <Send className="h-4 w-4" />
-            </Button>
+          {/* Command Input - Secondary to Action Card */}
+          <div className="space-y-2">
+            <div className="relative">
+              <Textarea
+                placeholder="Tell AgentGPT what you want to do…"
+                value={commandInput}
+                onChange={(e) => setCommandInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                className={cn(
+                  "min-h-[56px] max-h-[120px] resize-none pr-14 text-sm",
+                  "bg-background border border-muted focus:border-primary/50",
+                  "rounded-xl shadow-sm",
+                  "placeholder:text-muted-foreground/50"
+                )}
+                rows={1}
+              />
+              <Button 
+                onClick={handleSend} 
+                disabled={!commandInput.trim()} 
+                size="icon" 
+                className="absolute right-2 bottom-2 h-9 w-9 rounded-lg"
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
+            {mode === "guided" && (
+              <p className="text-[11px] text-muted-foreground/60 text-center">
+                Or select one of the actions above
+              </p>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Context Layer - Collapsed by Default */}
-      <div className="border-t bg-card/50">
-        <div className="max-w-2xl mx-auto px-6">
-          {/* Transaction Summary */}
+      {/* Context Layer - Fully Collapsed & Subordinate */}
+      <div className="border-t border-muted/50 bg-muted/10">
+        <div className="max-w-2xl mx-auto px-6 py-2 flex items-center justify-center gap-4">
+          {/* Transaction Context - Single Collapsed Trigger */}
           <Collapsible open={contextExpanded} onOpenChange={setContextExpanded}>
             <CollapsibleTrigger asChild>
-              <button className="w-full flex items-center justify-between py-3 text-sm text-muted-foreground hover:text-foreground transition-colors">
-                <span className="flex items-center gap-2">
-                  <Zap className="h-4 w-4 text-primary" />
-                  <span>Transaction Summary</span>
-                  <Badge variant="outline" className="text-[10px] ml-1">
-                    Stage {currentStage} · {currentStageData.title}
-                  </Badge>
-                </span>
+              <button className="flex items-center gap-1.5 text-xs text-muted-foreground/70 hover:text-muted-foreground transition-colors">
                 {contextExpanded ? (
-                  <ChevronUp className="h-4 w-4" />
+                  <ChevronUp className="h-3 w-3" />
                 ) : (
-                  <ChevronDown className="h-4 w-4" />
+                  <ChevronDown className="h-3 w-3" />
                 )}
+                <span>View transaction context</span>
               </button>
             </CollapsibleTrigger>
-            <CollapsibleContent>
-              <div className="pb-4 space-y-3">
-                <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/30">
-                  <div className="text-2xl">{currentStageData.icon}</div>
+            <CollapsibleContent className="absolute left-0 right-0 bottom-full mb-1 mx-auto max-w-2xl px-6">
+              <div className="bg-card border border-muted rounded-lg p-4 shadow-lg space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="text-lg">{currentStageData.icon}</div>
                   <div>
                     <p className="text-sm font-medium">Stage {currentStage}: {currentStageData.title}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Working with {buyerName}
-                    </p>
+                    <p className="text-xs text-muted-foreground">{buyerName}</p>
                   </div>
                 </div>
                 <Button 
-                  variant="ghost" 
+                  variant="outline" 
                   size="sm" 
-                  className="w-full justify-start gap-2 text-muted-foreground"
+                  className="w-full text-xs"
                   onClick={onOpenDetails}
                 >
-                  <FileText className="h-4 w-4" />
-                  View full details
+                  Open full details
                 </Button>
               </div>
             </CollapsibleContent>
           </Collapsible>
 
-          {/* Activity Log */}
+          <span className="text-muted-foreground/30">·</span>
+
+          {/* Activity Log Trigger */}
           <Collapsible open={activityLogOpen} onOpenChange={setActivityLogOpen}>
             <CollapsibleTrigger asChild>
-              <button className="w-full flex items-center justify-between py-3 border-t text-sm text-muted-foreground hover:text-foreground transition-colors">
-                <span className="flex items-center gap-2">
-                  <Clock className="h-4 w-4" />
-                  <span>View recent activity</span>
-                  {activityLog.length > 0 && (
-                    <Badge variant="secondary" className="text-[10px]">
-                      {activityLog.length}
-                    </Badge>
-                  )}
-                </span>
-                {activityLogOpen ? (
-                  <ChevronUp className="h-4 w-4" />
-                ) : (
-                  <ChevronDown className="h-4 w-4" />
+              <button className="flex items-center gap-1.5 text-xs text-muted-foreground/70 hover:text-muted-foreground transition-colors">
+                <Clock className="h-3 w-3" />
+                <span>Recent activity</span>
+                {activityLog.length > 0 && (
+                  <span className="text-[10px]">({activityLog.length})</span>
                 )}
               </button>
             </CollapsibleTrigger>
-            <CollapsibleContent>
-              <div className="pb-4 space-y-1">
+            <CollapsibleContent className="absolute left-0 right-0 bottom-full mb-1 mx-auto max-w-2xl px-6">
+              <div className="bg-card border border-muted rounded-lg p-3 shadow-lg">
                 {activityLog.length === 0 ? (
-                  <p className="text-xs text-muted-foreground py-2">No recent activity</p>
+                  <p className="text-xs text-muted-foreground py-1">No recent activity</p>
                 ) : (
-                  activityLog.map((item) => (
-                    <div 
-                      key={item.id}
-                      className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-muted/30 transition-colors cursor-pointer group"
-                    >
-                      <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground" />
-                      <span className="text-xs flex-1">
-                        {item.type === "system-event" ? item.title : "Approved artifact"}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground">
-                        {formatTime(item.timestamp)}
-                      </span>
-                      <ChevronRight className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </div>
-                  ))
+                  <div className="space-y-1 max-h-48 overflow-y-auto">
+                    {activityLog.map((item) => (
+                      <div 
+                        key={item.id}
+                        className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-muted/30 transition-colors cursor-pointer text-xs"
+                      >
+                        <div className="h-1 w-1 rounded-full bg-muted-foreground shrink-0" />
+                        <span className="flex-1 truncate">
+                          {item.type === "system-event" ? item.title : "Approved artifact"}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground shrink-0">
+                          {formatTime(item.timestamp)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             </CollapsibleContent>
@@ -568,42 +558,40 @@ ${command}
 This draft is ready for your review. You can edit before publishing or discard if not needed.`;
 }
 
-// Get recommended actions based on stage context
+// Get recommended actions based on stage context (max 3 primary actions)
 function getRecommendedActions(stage: Stage, buyerName: string): RecommendedAction[] {
+  const firstName = buyerName.split(' ')[0];
+  
   const baseActions: Record<Stage, RecommendedAction[]> = {
     0: [
-      { id: "1", label: "Set buyer expectations", description: "Generate educational overview for buyer", command: "Draft buyer introduction and set expectations for the home buying journey", icon: MessageSquare, type: "artifact" },
-      { id: "2", label: "Confirm financing status", description: "Request pre-approval documentation", command: "Create task to confirm financing and pre-approval status", icon: FileText, type: "artifact" },
-      { id: "3", label: "Explain market conditions", description: "Educate buyer on current market", command: "Why is understanding market conditions important for buyers?", icon: Brain, type: "thinking" },
-      { id: "4", label: "What should I watch for?", description: "Internal guidance on buyer readiness", command: "What should I watch for when onboarding a new buyer?", icon: Brain, type: "thinking" },
+      { id: "1", label: "Set buyer expectations", description: "", command: "Draft buyer introduction and set expectations for the home buying journey", icon: MessageSquare, type: "artifact" },
+      { id: "2", label: "Confirm financing status", description: "", command: "Create task to confirm financing and pre-approval status", icon: FileText, type: "artifact" },
+      { id: "3", label: "Explain market conditions", description: "", command: "Why is understanding market conditions important for buyers?", icon: Brain, type: "thinking" },
     ],
     1: [
-      { id: "1", label: `Draft update for ${buyerName.split(' ')[0]}`, description: "Summarize new listing opportunities", command: `Draft buyer update about new listings matching ${buyerName}'s criteria`, icon: MessageSquare, type: "artifact" },
-      { id: "2", label: "Generate property comps", description: "Compare properties under consideration", command: "Generate comparable sales analysis for saved properties", icon: BarChart3, type: "artifact" },
-      { id: "3", label: "Explain days on market", description: "Educate buyer on DOM significance", command: `Explain "days on market" concept to ${buyerName}`, icon: MessageSquare, type: "artifact" },
-      { id: "4", label: "What are the risks?", description: "Internal risk assessment", command: "What are the risks I should consider for this buyer's search?", icon: Brain, type: "thinking" },
+      { id: "1", label: `Draft update for ${firstName}`, description: "", command: `Draft buyer update about new listings matching ${buyerName}'s criteria`, icon: MessageSquare, type: "artifact" },
+      { id: "2", label: "Generate property comps", description: "", command: "Generate comparable sales analysis for saved properties", icon: BarChart3, type: "artifact" },
+      { id: "3", label: "Explain days on market", description: "", command: `Explain "days on market" concept to ${buyerName}`, icon: MessageSquare, type: "artifact" },
     ],
     2: [
-      { id: "1", label: "Prepare offer strategy", description: "Draft competitive offer approach", command: "Prepare offer strategy summary for buyer review", icon: DollarSign, type: "artifact" },
-      { id: "2", label: "Generate offer scenarios", description: "Compare pricing strategies", command: "Generate offer scenarios with different price points", icon: BarChart3, type: "artifact" },
-      { id: "3", label: "Explain contingencies", description: "Educate on offer protections", command: "Draft explanation of key contingencies for buyer", icon: MessageSquare, type: "artifact" },
-      { id: "4", label: "Why is escalation risky?", description: "Internal strategy guidance", command: "Why is an escalation clause risky in this market?", icon: Brain, type: "thinking" },
+      { id: "1", label: "Prepare offer strategy", description: "", command: "Prepare offer strategy summary for buyer review", icon: DollarSign, type: "artifact" },
+      { id: "2", label: "Generate offer scenarios", description: "", command: "Generate offer scenarios with different price points", icon: BarChart3, type: "artifact" },
+      { id: "3", label: "Explain contingencies", description: "", command: "Draft explanation of key contingencies for buyer", icon: MessageSquare, type: "artifact" },
     ],
     3: [
-      { id: "1", label: "Inspection summary", description: "Explain inspection findings", command: "Draft inspection findings summary for buyer", icon: FileText, type: "artifact" },
-      { id: "2", label: "Create repair request", description: "Prepare negotiation items", command: "Generate repair request list based on inspection", icon: FileText, type: "artifact" },
-      { id: "3", label: "Timeline update", description: "Confirm closing milestones", command: "Create closing timeline update for buyer", icon: MessageSquare, type: "artifact" },
-      { id: "4", label: "What are common issues?", description: "Internal inspection guidance", command: "What are common inspection issues I should watch for?", icon: Brain, type: "thinking" },
+      { id: "1", label: "Inspection summary", description: "", command: "Draft inspection findings summary for buyer", icon: FileText, type: "artifact" },
+      { id: "2", label: "Create repair request", description: "", command: "Generate repair request list based on inspection", icon: FileText, type: "artifact" },
+      { id: "3", label: "Timeline update", description: "", command: "Create closing timeline update for buyer", icon: MessageSquare, type: "artifact" },
     ],
     4: [
-      { id: "1", label: "Final walkthrough prep", description: "Prepare walkthrough checklist", command: "Generate final walkthrough checklist", icon: Home, type: "artifact" },
-      { id: "2", label: "Closing cost breakdown", description: "Explain buyer costs", command: "Draft closing costs explanation for buyer", icon: DollarSign, type: "artifact" },
-      { id: "3", label: "What to verify at closing?", description: "Internal closing guidance", command: "What should I verify before closing?", icon: Brain, type: "thinking" },
+      { id: "1", label: "Final walkthrough prep", description: "", command: "Generate final walkthrough checklist", icon: Home, type: "artifact" },
+      { id: "2", label: "Closing cost breakdown", description: "", command: "Draft closing costs explanation for buyer", icon: DollarSign, type: "artifact" },
+      { id: "3", label: "What to verify at closing?", description: "", command: "What should I verify before closing?", icon: Brain, type: "thinking" },
     ],
     5: [
-      { id: "1", label: "Post-closing resources", description: "Provide homeowner information", command: "Generate post-closing resources and next steps", icon: Home, type: "artifact" },
-      { id: "2", label: "Request review", description: "Ask for testimonial", command: "Create task to request buyer review and referrals", icon: MessageSquare, type: "artifact" },
-      { id: "3", label: "What's next for retention?", description: "Internal follow-up guidance", command: "What's the best approach for client retention?", icon: Brain, type: "thinking" },
+      { id: "1", label: "Post-closing resources", description: "", command: "Generate post-closing resources and next steps", icon: Home, type: "artifact" },
+      { id: "2", label: "Request review", description: "", command: "Create task to request buyer review and referrals", icon: MessageSquare, type: "artifact" },
+      { id: "3", label: "What's next for retention?", description: "", command: "What's the best approach for client retention?", icon: Brain, type: "thinking" },
     ],
   };
 
