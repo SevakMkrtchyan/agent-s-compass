@@ -1,19 +1,16 @@
 import { useState, useEffect } from "react";
 import { 
   ArrowRight, 
-  Bot,
-  Brain,
   ChevronDown,
   ChevronUp,
   CheckCircle,
   Edit3,
   FileText,
   Home,
-  Lightbulb,
+  Info,
   Send,
   Sparkles,
   Trash2,
-  Zap,
   BarChart3,
   MessageSquare,
   DollarSign,
@@ -24,7 +21,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Collapsible,
   CollapsibleContent,
@@ -198,33 +194,26 @@ export function GuidedAgentGPT({
 
   return (
     <div className="flex flex-col h-full bg-background">
-      {/* System Guardrails Banner */}
+      {/* System Guardrails - Subtle */}
       <div className="px-6 pt-4">
-        <Alert className="border-muted bg-muted/30 py-2">
-          <Lightbulb className="h-3.5 w-3.5 text-muted-foreground" />
-          <AlertDescription className="text-xs text-muted-foreground">
-            AgentGPT provides educational explanations. Licensed agents make final decisions.
-          </AlertDescription>
-        </Alert>
+        <p className="text-xs text-muted-foreground/70 flex items-center gap-1.5">
+          <Info className="h-3 w-3" />
+          AI-assisted recommendations. You make the final decisions.
+        </p>
       </div>
 
       {/* Main Content - Centered Decision Card */}
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-8">
-        <div className="w-full max-w-2xl space-y-6">
+        <div className="w-full max-w-xl space-y-6">
           
           {/* STATE A: Guided Mode - Recommended Actions */}
           {mode === "guided" && (
-            <Card className="border-2 border-primary/20 bg-gradient-to-br from-primary/5 via-background to-transparent shadow-lg">
-              <CardHeader className="pb-3 pt-6">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center">
-                    <Bot className="h-5 w-5 text-primary-foreground" />
-                  </div>
-                  <h2 className="text-lg font-semibold">Next actions</h2>
-                </div>
+            <Card className="border border-border/60 shadow-sm bg-card">
+              <CardHeader className="pb-2 pt-5">
+                <h2 className="text-base font-semibold text-foreground">Next actions</h2>
               </CardHeader>
-              <CardContent className="pb-6">
-                <div className="space-y-1.5">
+              <CardContent className="pb-5">
+                <div className="space-y-1">
                   {/* Primary actions - first 3 only */}
                   {recommendedActions.slice(0, 3).map((action) => {
                     const Icon = action.icon;
@@ -233,23 +222,22 @@ export function GuidedAgentGPT({
                         key={action.id}
                         onClick={() => handleRecommendationClick(action)}
                         className={cn(
-                          "w-full flex items-center gap-4 p-4 rounded-xl text-left transition-all group",
-                          "bg-background/80 hover:bg-primary/5 border border-transparent hover:border-primary/20",
-                          "hover:shadow-md"
+                          "w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left transition-all group",
+                          "hover:bg-muted/60"
                         )}
                       >
                         <div className={cn(
-                          "h-9 w-9 rounded-lg flex items-center justify-center shrink-0 transition-colors",
+                          "h-8 w-8 rounded-lg flex items-center justify-center shrink-0 transition-colors",
                           action.type === "artifact" 
-                            ? "bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground"
-                            : "bg-muted text-muted-foreground group-hover:bg-muted-foreground/20"
+                            ? "bg-accent/10 text-accent"
+                            : "bg-muted text-muted-foreground"
                         )}>
                           <Icon className="h-4 w-4" />
                         </div>
-                        <p className="font-medium text-sm group-hover:text-primary transition-colors flex-1">
+                        <p className="font-medium text-sm text-foreground flex-1">
                           {action.label}
                         </p>
-                        <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-1" />
+                        <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
                       </button>
                     );
                   })}
@@ -261,11 +249,11 @@ export function GuidedAgentGPT({
                       if (input) input.focus();
                     }}
                     className={cn(
-                      "w-full flex items-center gap-4 p-4 rounded-xl text-left transition-all group",
-                      "hover:bg-muted/50 border border-dashed border-muted-foreground/20"
+                      "w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left transition-all group",
+                      "hover:bg-muted/40"
                     )}
                   >
-                    <div className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0 bg-muted/50 text-muted-foreground">
+                    <div className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 bg-transparent text-muted-foreground/50">
                       <Sparkles className="h-4 w-4" />
                     </div>
                     <p className="text-sm text-muted-foreground group-hover:text-foreground transition-colors flex-1">
@@ -279,55 +267,52 @@ export function GuidedAgentGPT({
 
           {/* STATE B: Artifact Mode - Single Structured Card */}
           {mode === "artifact" && pendingArtifact && (
-            <Card className="border-2 border-warning/30 shadow-lg overflow-hidden">
-              <CardHeader className="bg-gradient-to-br from-warning/10 via-background to-transparent pb-4 pt-6">
-                <div className="flex items-start gap-3">
-                  <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shrink-0">
-                    <Bot className="h-5 w-5 text-primary-foreground" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm font-semibold">🤖 AI-Generated Client Artifact</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Drafted for Stage: {pendingArtifact.stageTitle}
+            <Card className="border border-warning/40 shadow-sm overflow-hidden">
+              <CardHeader className="bg-warning/5 pb-3 pt-5">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">Draft for review</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Stage: {pendingArtifact.stageTitle}
                     </p>
                   </div>
-                  <Badge className="bg-warning/20 text-warning border-warning/30 text-xs">
-                    Draft – Pending Approval
+                  <Badge variant="outline" className="text-warning border-warning/40 text-xs font-medium">
+                    Pending
                   </Badge>
                 </div>
               </CardHeader>
-              <CardContent className="pt-4 pb-6">
-                <div className="bg-muted/30 rounded-xl p-4 mb-6">
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap">
+              <CardContent className="pt-4 pb-5">
+                <div className="bg-muted/40 rounded-lg p-4 mb-5">
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground">
                     {pendingArtifact.content}
                   </p>
                 </div>
 
-                <div className="flex gap-3">
+                <div className="flex gap-2">
                   <Button 
                     variant="outline" 
-                    className="flex-1 gap-2 h-11"
+                    size="sm"
+                    className="flex-1 gap-2"
                     onClick={() => {/* Would open edit modal */}}
                   >
-                    <Edit3 className="h-4 w-4" />
+                    <Edit3 className="h-3.5 w-3.5" />
                     Edit
                   </Button>
                   <Button 
-                    className="flex-1 gap-2 h-11"
+                    size="sm"
+                    className="flex-1 gap-2"
                     onClick={handleApproveArtifact}
                   >
-                    <CheckCircle className="h-4 w-4" />
-                    Approve & Publish
+                    <CheckCircle className="h-3.5 w-3.5" />
+                    Approve
                   </Button>
                   <Button 
                     variant="ghost" 
-                    className="gap-2 h-11 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    size="sm"
+                    className="text-muted-foreground hover:text-destructive"
                     onClick={handleDiscardArtifact}
                   >
-                    <Trash2 className="h-4 w-4" />
-                    Discard
+                    <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>
               </CardContent>
@@ -336,18 +321,17 @@ export function GuidedAgentGPT({
 
           {/* STATE C: Thinking Mode - Internal Explanation (Visually Demoted) */}
           {mode === "thinking" && thinkingResponse && (
-            <Card className="border border-dashed border-muted/60 shadow-sm overflow-hidden bg-muted/5">
-              <CardHeader className="pb-3 pt-4">
+            <Card className="border border-muted/50 shadow-sm overflow-hidden bg-muted/20">
+              <CardHeader className="pb-2 pt-4">
                 <div className="flex items-center gap-2">
-                  <Brain className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-xs font-medium text-muted-foreground">🧠 Internal Explanation</span>
-                  <Badge variant="outline" className="text-[10px] ml-auto border-muted-foreground/30 text-muted-foreground">
-                    Agent only
+                  <span className="text-xs font-medium text-muted-foreground">Internal note</span>
+                  <Badge variant="outline" className="text-[10px] ml-auto text-muted-foreground/70">
+                    Private
                   </Badge>
                 </div>
               </CardHeader>
               <CardContent className="pt-0 pb-4">
-                <div className="bg-background/50 rounded-lg p-3 mb-4 border border-muted/40">
+                <div className="bg-background/60 rounded-lg p-3 mb-3">
                   <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-wrap">
                     {thinkingResponse.content}
                   </p>
@@ -356,28 +340,27 @@ export function GuidedAgentGPT({
                 <Button 
                   variant="ghost" 
                   size="sm"
-                  className="w-full gap-2 text-muted-foreground hover:text-foreground"
+                  className="w-full text-muted-foreground hover:text-foreground"
                   onClick={handleDismissThinking}
                 >
-                  <ArrowRight className="h-3 w-3" />
                   Continue
                 </Button>
               </CardContent>
             </Card>
           )}
 
-          {/* Command Input - Secondary to Action Card */}
-          <div className="space-y-2">
+          {/* Command Input - Clean & Minimal */}
+          <div className="space-y-1.5">
             <div className="relative">
               <Textarea
-                placeholder="Tell AgentGPT what you want to do…"
+                placeholder="Tell the agent what you want to do…"
                 value={commandInput}
                 onChange={(e) => setCommandInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 className={cn(
-                  "min-h-[56px] max-h-[120px] resize-none pr-14 text-sm",
-                  "bg-background border border-muted focus:border-primary/50",
-                  "rounded-xl shadow-sm",
+                  "min-h-[48px] max-h-[100px] resize-none pr-12 text-sm",
+                  "bg-muted/30 border-0 focus:bg-background focus:ring-1 focus:ring-accent/30",
+                  "rounded-lg",
                   "placeholder:text-muted-foreground/50"
                 )}
                 rows={1}
@@ -386,27 +369,28 @@ export function GuidedAgentGPT({
                 onClick={handleSend} 
                 disabled={!commandInput.trim()} 
                 size="icon" 
-                className="absolute right-2 bottom-2 h-9 w-9 rounded-lg"
+                variant="ghost"
+                className="absolute right-1.5 bottom-1.5 h-8 w-8 rounded-md text-muted-foreground hover:text-accent disabled:opacity-30"
               >
                 <Send className="h-4 w-4" />
               </Button>
             </div>
             {mode === "guided" && (
-              <p className="text-[11px] text-muted-foreground/60 text-center">
-                Or select one of the actions above
+              <p className="text-[11px] text-muted-foreground/50 text-center">
+                or select an action above
               </p>
             )}
           </div>
         </div>
       </div>
 
-      {/* Context Layer - Fully Collapsed & Subordinate */}
-      <div className="border-t border-muted/50 bg-muted/10">
-        <div className="max-w-2xl mx-auto px-6 py-2 flex items-center justify-center gap-4">
+      {/* Context Layer - Minimal Footer */}
+      <div className="border-t border-border/50 bg-muted/20">
+        <div className="max-w-xl mx-auto px-6 py-2 flex items-center justify-center gap-4">
           {/* Transaction Context - Single Collapsed Trigger */}
           <Collapsible open={contextExpanded} onOpenChange={setContextExpanded}>
             <CollapsibleTrigger asChild>
-              <button className="flex items-center gap-1.5 text-xs text-muted-foreground/70 hover:text-muted-foreground transition-colors">
+              <button className="flex items-center gap-1.5 text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors">
                 {contextExpanded ? (
                   <ChevronUp className="h-3 w-3" />
                 ) : (
@@ -566,7 +550,7 @@ function getRecommendedActions(stage: Stage, buyerName: string): RecommendedActi
     0: [
       { id: "1", label: "Set buyer expectations", description: "", command: "Draft buyer introduction and set expectations for the home buying journey", icon: MessageSquare, type: "artifact" },
       { id: "2", label: "Confirm financing status", description: "", command: "Create task to confirm financing and pre-approval status", icon: FileText, type: "artifact" },
-      { id: "3", label: "Explain market conditions", description: "", command: "Why is understanding market conditions important for buyers?", icon: Brain, type: "thinking" },
+      { id: "3", label: "Explain market conditions", description: "", command: "Why is understanding market conditions important for buyers?", icon: Info, type: "thinking" },
     ],
     1: [
       { id: "1", label: `Draft update for ${firstName}`, description: "", command: `Draft buyer update about new listings matching ${buyerName}'s criteria`, icon: MessageSquare, type: "artifact" },
@@ -586,12 +570,12 @@ function getRecommendedActions(stage: Stage, buyerName: string): RecommendedActi
     4: [
       { id: "1", label: "Final walkthrough prep", description: "", command: "Generate final walkthrough checklist", icon: Home, type: "artifact" },
       { id: "2", label: "Closing cost breakdown", description: "", command: "Draft closing costs explanation for buyer", icon: DollarSign, type: "artifact" },
-      { id: "3", label: "What to verify at closing?", description: "", command: "What should I verify before closing?", icon: Brain, type: "thinking" },
+      { id: "3", label: "What to verify at closing?", description: "", command: "What should I verify before closing?", icon: Info, type: "thinking" },
     ],
     5: [
       { id: "1", label: "Post-closing resources", description: "", command: "Generate post-closing resources and next steps", icon: Home, type: "artifact" },
       { id: "2", label: "Request review", description: "", command: "Create task to request buyer review and referrals", icon: MessageSquare, type: "artifact" },
-      { id: "3", label: "What's next for retention?", description: "", command: "What's the best approach for client retention?", icon: Brain, type: "thinking" },
+      { id: "3", label: "What's next for retention?", description: "", command: "What's the best approach for client retention?", icon: Info, type: "thinking" },
     ],
   };
 
