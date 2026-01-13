@@ -1,16 +1,16 @@
 import { useState, useMemo, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { 
-  Clock, 
   Home, 
   DollarSign, 
-  FileText, 
   Bot,
   CheckSquare,
   Info,
   LayoutGrid,
+  ArrowRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { mockWorkspaces, currentUser } from "@/data/workspaceData";
@@ -18,13 +18,11 @@ import { mockBuyers } from "@/data/mockData";
 import { generateMockConversation } from "@/data/conversationData";
 import type { StageGroup } from "@/types/conversation";
 import type { Stage } from "@/types";
+import { STAGES } from "@/types";
 
 // Layout Components
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { TopBar } from "@/components/dashboard/TopBar";
-
-// Workspace Components
-import { WorkspaceHeader } from "@/components/workspace/WorkspaceHeader";
 import { GuidedAgentGPT } from "@/components/workspace/GuidedAgentGPT";
 import { ProgressTab } from "@/components/workspace/ProgressTab";
 import { DetailsInspector } from "@/components/workspace/DetailsInspector";
@@ -216,18 +214,49 @@ export default function Workspace() {
 
         {/* Workspace Layout */}
         <div className="h-[calc(100vh-56px)] flex flex-col">
-          {/* Compact Header with Details Button */}
-          <div className="flex items-center justify-between px-4 py-2 border-b bg-card">
-            <WorkspaceHeader workspace={workspace} userRole={userRole} />
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2"
-              onClick={() => setDetailsOpen(true)}
-            >
-              <Info className="h-4 w-4" />
-              Details
-            </Button>
+          {/* Admin Header - Buyer Context Only */}
+          <div className="flex items-center justify-between px-6 py-3 border-b bg-card">
+            <div className="flex items-center gap-4">
+              {/* Buyer Avatar */}
+              <div className="h-11 w-11 rounded-xl bg-primary flex items-center justify-center">
+                <span className="text-sm font-bold text-primary-foreground">
+                  {workspace.buyerName.split(" ").map((n) => n[0]).join("")}
+                </span>
+              </div>
+              
+              {/* Buyer Info */}
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-lg font-semibold">{workspace.buyerName}</h1>
+                  <Badge variant={workspace.status === "active" ? "default" : "secondary"} className="text-xs">
+                    {workspace.status === "active" ? "Active" : workspace.status === "under-contract" ? "Under Contract" : "Closed"}
+                  </Badge>
+                </div>
+                <p className="text-sm text-muted-foreground flex items-center gap-1">
+                  {STAGES[workspace.currentStage].icon} Stage {workspace.currentStage} · {STAGES[workspace.currentStage].title}
+                </p>
+              </div>
+            </div>
+            
+            {/* Header Actions */}
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => setDetailsOpen(true)}
+              >
+                <Info className="h-4 w-4" />
+                Details
+              </Button>
+              <Button
+                size="sm"
+                className="gap-2"
+              >
+                <ArrowRight className="h-4 w-4" />
+                Advance Stage
+              </Button>
+            </div>
           </div>
 
           {/* Internal Tab Navigation - Mode-like */}

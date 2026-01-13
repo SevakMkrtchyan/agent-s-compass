@@ -1,35 +1,28 @@
-import { useState, useRef } from "react";
+import { useState, useEffect } from "react";
 import { 
-  ChevronDown, 
-  ChevronRight, 
-  Check, 
-  Lock, 
-  Edit3, 
+  ArrowRight, 
+  Bot,
+  Brain,
+  ChevronDown,
+  ChevronUp,
+  CheckCircle,
+  Edit3,
+  FileText,
+  Home,
+  Lightbulb,
   Send,
   Sparkles,
-  Home,
-  FileText,
-  DollarSign,
-  CheckSquare,
-  User,
-  Bot,
-  MoreHorizontal,
-  CheckCircle,
   Trash2,
-  AlertTriangle,
-  Brain,
-  ArrowRight,
+  Zap,
   BarChart3,
   MessageSquare,
-  Lightbulb,
-  Zap,
-  ChevronUp,
-  Eye,
+  DollarSign,
+  Clock,
+  ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -37,22 +30,8 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import type { 
-  StageGroup, 
-  ConversationItem, 
-  HumanMessage, 
-  AIExplanation, 
-  SystemEvent, 
-  ComponentBlock,
-} from "@/types/conversation";
+import type { StageGroup, AIExplanation } from "@/types/conversation";
 import type { Stage } from "@/types";
 import { STAGES } from "@/types";
 
@@ -66,6 +45,22 @@ interface RecommendedAction {
   type: "artifact" | "thinking";
 }
 
+// Current UI state
+type AgentGPTMode = "guided" | "artifact" | "thinking";
+
+interface PendingArtifact {
+  id: string;
+  content: string;
+  stageTitle: string;
+  timestamp: Date;
+}
+
+interface ThinkingResponse {
+  id: string;
+  content: string;
+  timestamp: Date;
+}
+
 interface GuidedAgentGPTProps {
   stages: StageGroup[];
   currentStage: Stage;
@@ -77,37 +72,75 @@ interface GuidedAgentGPTProps {
   onExpandBlock: (itemId: string) => void;
   onOpenDetails: () => void;
   onPrefillFromProgress?: (command: string) => void;
+  prefillCommand?: string;
 }
 
 export function GuidedAgentGPT({
   stages,
   currentStage,
   buyerName,
-  onExpandStage,
   onSendCommand,
   onApprove,
-  onReject,
-  onExpandBlock,
   onOpenDetails,
-  onPrefillFromProgress,
+  prefillCommand,
 }: GuidedAgentGPTProps) {
   const [commandInput, setCommandInput] = useState("");
-  const [showFullJourney, setShowFullJourney] = useState(false);
-  const [internalExplanationsCollapsed, setInternalExplanationsCollapsed] = useState<Set<string>>(new Set());
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [mode, setMode] = useState<AgentGPTMode>("guided");
+  const [pendingArtifact, setPendingArtifact] = useState<PendingArtifact | null>(null);
+  const [thinkingResponse, setThinkingResponse] = useState<ThinkingResponse | null>(null);
+  const [contextExpanded, setContextExpanded] = useState(false);
+  const [activityLogOpen, setActivityLogOpen] = useState(false);
 
   // Get current stage info
   const currentStageData = STAGES[currentStage];
-  const currentStageGroup = stages.find(s => s.stageId === currentStage);
 
   // Generate recommended actions based on stage and context
   const recommendedActions: RecommendedAction[] = getRecommendedActions(currentStage, buyerName);
 
-  const handleSend = () => {
-    if (commandInput.trim()) {
-      onSendCommand(commandInput.trim());
-      setCommandInput("");
+  // Handle prefill from external sources
+  useEffect(() => {
+    if (prefillCommand) {
+      setCommandInput(prefillCommand);
     }
+  }, [prefillCommand]);
+
+  // Determine intent from command
+  const determineIntent = (command: string): "artifact" | "thinking" => {
+    const lowerCommand = command.toLowerCase();
+    const thinkingPatterns = [
+      "why", "what does", "what are the", "explain to me", 
+      "help me understand", "what should i", "risks", "mean"
+    ];
+    
+    return thinkingPatterns.some(p => lowerCommand.includes(p)) ? "thinking" : "artifact";
+  };
+
+  const handleSend = () => {
+    if (!commandInput.trim()) return;
+
+    const intent = determineIntent(commandInput);
+    onSendCommand(commandInput.trim());
+
+    if (intent === "thinking") {
+      // Generate thinking response
+      setThinkingResponse({
+        id: `think-${Date.now()}`,
+        content: generateThinkingResponse(commandInput),
+        timestamp: new Date(),
+      });
+      setMode("thinking");
+    } else {
+      // Generate artifact
+      setPendingArtifact({
+        id: `artifact-${Date.now()}`,
+        content: generateArtifactContent(commandInput, buyerName),
+        stageTitle: currentStageData.title,
+        timestamp: new Date(),
+      });
+      setMode("artifact");
+    }
+
+    setCommandInput("");
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -118,201 +151,224 @@ export function GuidedAgentGPT({
   };
 
   const handleRecommendationClick = (action: RecommendedAction) => {
-    setCommandInput(action.command);
-  };
-
-  const formatTime = (date: Date) => {
-    return new Intl.DateTimeFormat("en-US", {
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    }).format(date);
-  };
-
-  const getStageIcon = (stageId: Stage) => {
-    const icons = ["🎯", "🏠", "📝", "📋", "✅", "🎉"];
-    return icons[stageId] || "📌";
-  };
-
-  // Filter stages for display
-  const visibleStages = showFullJourney 
-    ? stages 
-    : stages.filter(s => s.status === "current");
-
-  // Render individual conversation items
-  const renderItem = (item: ConversationItem, stageTitle: string) => {
-    switch (item.type) {
-      case "human-message":
-        return <HumanMessageBubble key={item.id} message={item} formatTime={formatTime} />;
-      case "ai-explanation":
-        return (
-          <AIOutputBlock 
-            key={item.id} 
-            explanation={item} 
-            stageTitle={stageTitle}
-            formatTime={formatTime}
-            onApprove={() => onApprove(item.id)}
-            onReject={() => onReject(item.id)}
-            isInternalCollapsed={internalExplanationsCollapsed.has(item.id)}
-            onToggleCollapse={() => {
-              const newSet = new Set(internalExplanationsCollapsed);
-              if (newSet.has(item.id)) {
-                newSet.delete(item.id);
-              } else {
-                newSet.add(item.id);
-              }
-              setInternalExplanationsCollapsed(newSet);
-            }}
-          />
-        );
-      case "system-event":
-        return <SystemEventItem key={item.id} event={item} formatTime={formatTime} />;
-      case "component-block":
-        return (
-          <ComponentBlockItem 
-            key={item.id} 
-            block={item} 
-            stageTitle={stageTitle}
-            onExpand={() => onExpandBlock(item.id)}
-            onOpenDetails={onOpenDetails}
-          />
-        );
-      default:
-        return null;
+    if (action.type === "thinking") {
+      setThinkingResponse({
+        id: `think-${Date.now()}`,
+        content: generateThinkingResponse(action.command),
+        timestamp: new Date(),
+      });
+      setMode("thinking");
+    } else {
+      setPendingArtifact({
+        id: `artifact-${Date.now()}`,
+        content: generateArtifactContent(action.command, buyerName),
+        stageTitle: currentStageData.title,
+        timestamp: new Date(),
+      });
+      setMode("artifact");
     }
   };
+
+  const handleApproveArtifact = () => {
+    if (pendingArtifact) {
+      onApprove(pendingArtifact.id);
+      setPendingArtifact(null);
+      setMode("guided");
+    }
+  };
+
+  const handleDiscardArtifact = () => {
+    setPendingArtifact(null);
+    setMode("guided");
+  };
+
+  const handleDismissThinking = () => {
+    setThinkingResponse(null);
+    setMode("guided");
+  };
+
+  // Get activity log from stages
+  const activityLog = stages
+    .flatMap(s => s.items.filter(item => 
+      item.type === "system-event" || 
+      (item.type === "ai-explanation" && (item as AIExplanation).approvalStatus === "approved")
+    ))
+    .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+    .slice(0, 10);
 
   return (
     <div className="flex flex-col h-full bg-background">
       {/* System Guardrails Banner */}
-      <Alert className="mx-6 mt-6 mb-4 border-muted bg-muted/30">
-        <Lightbulb className="h-4 w-4 text-muted-foreground" />
-        <AlertDescription className="text-xs text-muted-foreground">
-          AgentGPT provides educational explanations. Licensed agents make final decisions.
-        </AlertDescription>
-      </Alert>
+      <div className="px-6 pt-4">
+        <Alert className="border-muted bg-muted/30 py-2">
+          <Lightbulb className="h-3.5 w-3.5 text-muted-foreground" />
+          <AlertDescription className="text-xs text-muted-foreground">
+            AgentGPT provides educational explanations. Licensed agents make final decisions.
+          </AlertDescription>
+        </Alert>
+      </div>
 
-      {/* Main Content Area */}
-      <ScrollArea className="flex-1 px-6" ref={scrollRef}>
-        <div className="py-4 max-w-3xl mx-auto">
+      {/* Main Content - Centered Decision Card */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 py-8">
+        <div className="w-full max-w-2xl space-y-6">
           
-          {/* Current Stage Header */}
-          <div className="mb-6">
-            <div className="flex items-center gap-3 mb-2">
-              <span className="text-3xl">{getStageIcon(currentStage)}</span>
-              <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide">Current Stage</p>
-                <h2 className="text-xl font-semibold">{currentStageData.title}</h2>
-              </div>
-              <Badge className="ml-auto">Active</Badge>
-            </div>
-          </div>
+          {/* STATE A: Guided Mode - Recommended Actions */}
+          {mode === "guided" && (
+            <Card className="border-2 border-primary/20 bg-gradient-to-br from-primary/5 via-background to-transparent shadow-lg">
+              <CardHeader className="pb-4 pt-6 text-center">
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center">
+                    <Bot className="h-5 w-5 text-primary-foreground" />
+                  </div>
+                </div>
+                <h2 className="text-lg font-semibold">AgentGPT</h2>
+                <p className="text-sm text-muted-foreground">
+                  Here's what I recommend next for this transaction.
+                </p>
+              </CardHeader>
+              <CardContent className="pb-6">
+                <div className="space-y-2">
+                  {recommendedActions.map((action) => {
+                    const Icon = action.icon;
+                    return (
+                      <button
+                        key={action.id}
+                        onClick={() => handleRecommendationClick(action)}
+                        className={cn(
+                          "w-full flex items-center gap-4 p-4 rounded-xl text-left transition-all group",
+                          "bg-background/80 hover:bg-primary/5 border border-transparent hover:border-primary/20",
+                          "hover:shadow-md"
+                        )}
+                      >
+                        <div className={cn(
+                          "h-10 w-10 rounded-xl flex items-center justify-center shrink-0 transition-colors",
+                          action.type === "artifact" 
+                            ? "bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground"
+                            : "bg-muted text-muted-foreground group-hover:bg-muted-foreground/20"
+                        )}>
+                          <Icon className="h-5 w-5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm group-hover:text-primary transition-colors">
+                            {action.label}
+                          </p>
+                          <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+                            {action.description}
+                          </p>
+                        </div>
+                        <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-1" />
+                      </button>
+                    );
+                  })}
+                </div>
 
-          {/* Recommended Actions - Lemonade Style */}
-          <Card className="mb-6 border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
-            <CardHeader className="pb-3">
-              <div className="flex items-center gap-2">
-                <Zap className="h-4 w-4 text-primary" />
-                <h3 className="font-semibold text-sm">What should happen next?</h3>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="grid gap-2">
-                {recommendedActions.map((action) => {
-                  const Icon = action.icon;
-                  return (
-                    <button
-                      key={action.id}
-                      onClick={() => handleRecommendationClick(action)}
-                      className={cn(
-                        "flex items-center gap-3 p-3 rounded-xl text-left transition-all group",
-                        "bg-background hover:bg-primary/5 border border-transparent hover:border-primary/20",
-                        "hover:shadow-sm"
-                      )}
-                    >
-                      <div className={cn(
-                        "h-9 w-9 rounded-lg flex items-center justify-center shrink-0",
-                        action.type === "artifact" 
-                          ? "bg-primary/10 text-primary"
-                          : "bg-muted text-muted-foreground"
-                      )}>
-                        <Icon className="h-4 w-4" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm group-hover:text-primary transition-colors">
-                          {action.label}
-                        </p>
-                        <p className="text-xs text-muted-foreground line-clamp-1">
-                          {action.description}
-                        </p>
-                      </div>
-                      <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </button>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Stage Record */}
-          {currentStageGroup && currentStageGroup.items.length > 0 && (
-            <div className="space-y-4 mb-6">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-medium text-muted-foreground">Stage Activity</h4>
-                <Badge variant="secondary" className="text-[10px]">
-                  {currentStageGroup.items.length} items
-                </Badge>
-              </div>
-              <div className="space-y-4">
-                {currentStageGroup.items.map((item) => 
-                  renderItem(item, currentStageGroup.title)
-                )}
-              </div>
-            </div>
+                <div className="mt-6 text-center">
+                  <p className="text-xs text-muted-foreground">
+                    What should happen next?
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
           )}
 
-          {/* View Full Journey Toggle */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowFullJourney(!showFullJourney)}
-            className="w-full mb-4 text-muted-foreground hover:text-foreground"
-          >
-            {showFullJourney ? (
-              <>
-                <ChevronUp className="h-4 w-4 mr-2" />
-                Hide full journey
-              </>
-            ) : (
-              <>
-                <Eye className="h-4 w-4 mr-2" />
-                View full journey
-              </>
-            )}
-          </Button>
+          {/* STATE B: Artifact Mode - Single Structured Card */}
+          {mode === "artifact" && pendingArtifact && (
+            <Card className="border-2 border-warning/30 shadow-lg overflow-hidden">
+              <CardHeader className="bg-gradient-to-br from-warning/10 via-background to-transparent pb-4 pt-6">
+                <div className="flex items-start gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shrink-0">
+                    <Bot className="h-5 w-5 text-primary-foreground" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-sm font-semibold">🤖 AI-Generated Client Artifact</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Drafted for Stage: {pendingArtifact.stageTitle}
+                    </p>
+                  </div>
+                  <Badge className="bg-warning/20 text-warning border-warning/30 text-xs">
+                    Draft – Pending Approval
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-4 pb-6">
+                <div className="bg-muted/30 rounded-xl p-4 mb-6">
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                    {pendingArtifact.content}
+                  </p>
+                </div>
 
-          {/* Full Journey (Past/Future Stages) */}
-          {showFullJourney && (
-            <div className="space-y-3 mb-6">
-              {stages.filter(s => s.status !== "current").map((stage) => (
-                <StageGroupSection
-                  key={stage.stageId}
-                  stage={stage}
-                  currentStage={currentStage}
-                  onExpand={() => onExpandStage(stage.stageId)}
-                  renderItem={(item) => renderItem(item, stage.title)}
-                  getStageIcon={getStageIcon}
-                />
-              ))}
-            </div>
+                <div className="flex gap-3">
+                  <Button 
+                    variant="outline" 
+                    className="flex-1 gap-2 h-11"
+                    onClick={() => {/* Would open edit modal */}}
+                  >
+                    <Edit3 className="h-4 w-4" />
+                    Edit
+                  </Button>
+                  <Button 
+                    className="flex-1 gap-2 h-11"
+                    onClick={handleApproveArtifact}
+                  >
+                    <CheckCircle className="h-4 w-4" />
+                    Approve & Publish
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    className="gap-2 h-11 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={handleDiscardArtifact}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Discard
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           )}
-        </div>
-      </ScrollArea>
 
-      {/* AgentGPT Command Input - Spotlight Style */}
-      <div className="border-t bg-card p-6">
-        <div className="max-w-2xl mx-auto">
+          {/* STATE C: Thinking Mode - Internal Explanation */}
+          {mode === "thinking" && thinkingResponse && (
+            <Card className="border-2 border-dashed border-muted shadow-lg overflow-hidden">
+              <CardHeader className="bg-muted/20 pb-4 pt-6">
+                <div className="flex items-start gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-muted flex items-center justify-center shrink-0">
+                    <Brain className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-sm font-semibold">🧠 AgentGPT — Internal Explanation</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Agent-only • Not visible to client
+                    </p>
+                  </div>
+                  <Badge variant="secondary" className="text-xs">
+                    Internal Only
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-4 pb-6">
+                <div className="bg-background rounded-xl p-4 mb-6 border">
+                  <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-wrap">
+                    {thinkingResponse.content}
+                  </p>
+                </div>
+
+                <Button 
+                  variant="outline" 
+                  className="w-full gap-2 h-11"
+                  onClick={handleDismissThinking}
+                >
+                  <ArrowRight className="h-4 w-4" />
+                  Continue to Next Action
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Command Input - Always Visible */}
           <div className="relative">
             <Textarea
               placeholder="Tell AgentGPT what you want to do…"
@@ -320,36 +376,196 @@ export function GuidedAgentGPT({
               onChange={(e) => setCommandInput(e.target.value)}
               onKeyDown={handleKeyDown}
               className={cn(
-                "min-h-[56px] max-h-[140px] resize-none pr-28 text-base",
+                "min-h-[64px] max-h-[140px] resize-none pr-14 text-base",
                 "bg-background border-2 border-muted focus:border-primary/50",
                 "rounded-2xl shadow-sm",
                 "placeholder:text-muted-foreground/60"
               )}
               rows={1}
             />
-            <div className="absolute right-3 bottom-3 flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 rounded-full"
-                title="Generate with AI"
-              >
-                <Sparkles className="h-4 w-4 text-primary" />
-              </Button>
-              <Button 
-                onClick={handleSend} 
-                disabled={!commandInput.trim()} 
-                size="icon" 
-                className="h-9 w-9 rounded-full"
-              >
-                <Send className="h-4 w-4" />
-              </Button>
-            </div>
+            <Button 
+              onClick={handleSend} 
+              disabled={!commandInput.trim()} 
+              size="icon" 
+              className="absolute right-3 bottom-3 h-10 w-10 rounded-xl"
+            >
+              <Send className="h-4 w-4" />
+            </Button>
           </div>
+        </div>
+      </div>
+
+      {/* Context Layer - Collapsed by Default */}
+      <div className="border-t bg-card/50">
+        <div className="max-w-2xl mx-auto px-6">
+          {/* Transaction Summary */}
+          <Collapsible open={contextExpanded} onOpenChange={setContextExpanded}>
+            <CollapsibleTrigger asChild>
+              <button className="w-full flex items-center justify-between py-3 text-sm text-muted-foreground hover:text-foreground transition-colors">
+                <span className="flex items-center gap-2">
+                  <Zap className="h-4 w-4 text-primary" />
+                  <span>Transaction Summary</span>
+                  <Badge variant="outline" className="text-[10px] ml-1">
+                    Stage {currentStage} · {currentStageData.title}
+                  </Badge>
+                </span>
+                {contextExpanded ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="pb-4 space-y-3">
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/30">
+                  <div className="text-2xl">{currentStageData.icon}</div>
+                  <div>
+                    <p className="text-sm font-medium">Stage {currentStage}: {currentStageData.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Working with {buyerName}
+                    </p>
+                  </div>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="w-full justify-start gap-2 text-muted-foreground"
+                  onClick={onOpenDetails}
+                >
+                  <FileText className="h-4 w-4" />
+                  View full details
+                </Button>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+
+          {/* Activity Log */}
+          <Collapsible open={activityLogOpen} onOpenChange={setActivityLogOpen}>
+            <CollapsibleTrigger asChild>
+              <button className="w-full flex items-center justify-between py-3 border-t text-sm text-muted-foreground hover:text-foreground transition-colors">
+                <span className="flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  <span>View recent activity</span>
+                  {activityLog.length > 0 && (
+                    <Badge variant="secondary" className="text-[10px]">
+                      {activityLog.length}
+                    </Badge>
+                  )}
+                </span>
+                {activityLogOpen ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="pb-4 space-y-1">
+                {activityLog.length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-2">No recent activity</p>
+                ) : (
+                  activityLog.map((item) => (
+                    <div 
+                      key={item.id}
+                      className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-muted/30 transition-colors cursor-pointer group"
+                    >
+                      <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground" />
+                      <span className="text-xs flex-1">
+                        {item.type === "system-event" ? item.title : "Approved artifact"}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {formatTime(item.timestamp)}
+                      </span>
+                      <ChevronRight className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                  ))
+                )}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
         </div>
       </div>
     </div>
   );
+}
+
+// Helper function to format time
+function formatTime(date: Date): string {
+  const now = new Date();
+  const diff = now.getTime() - date.getTime();
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const minutes = Math.floor(diff / (1000 * 60));
+
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(date);
+}
+
+// Generate thinking response (mock)
+function generateThinkingResponse(command: string): string {
+  const responses: Record<string, string> = {
+    default: `Based on my analysis of the current market conditions and this buyer's profile, here's what you should consider:
+
+1. **Market Context**: Current inventory levels are low, which means buyers face increased competition for desirable properties.
+
+2. **Strategy Consideration**: Given the buyer's pre-approval status and timeline, a more aggressive offer strategy may be warranted for properties that meet their criteria.
+
+3. **Risk Assessment**: The main risks to watch for include appraisal gaps in competitive bidding situations and potential inspection issues with older properties.
+
+This is for your reference only and will not be shared with the client.`,
+  };
+
+  return responses.default;
+}
+
+// Generate artifact content (mock)
+function generateArtifactContent(command: string, buyerName: string): string {
+  if (command.toLowerCase().includes("comp") || command.toLowerCase().includes("comparable")) {
+    return `**Comparable Sales Analysis**
+
+Hi ${buyerName.split(" ")[0]},
+
+I've prepared an analysis of recent comparable sales for 123 Oak Street to help inform our offer strategy:
+
+📊 **Market Overview**
+• Median sale price (last 90 days): $485,000
+• Average days on market: 18 days
+• Price per sq ft range: $285-$315
+
+📍 **Comparable Properties**
+1. 145 Maple Ave - Sold $479,000 (15 days on market)
+2. 89 Pine Street - Sold $492,000 (12 days on market)  
+3. 201 Cedar Lane - Sold $468,000 (22 days on market)
+
+💡 **Key Takeaway**
+Based on these comps, a competitive offer range would be $475,000-$495,000.
+
+Let me know if you have any questions about this analysis.`;
+  }
+
+  if (command.toLowerCase().includes("update") || command.toLowerCase().includes("draft")) {
+    return `**Market Update for ${buyerName.split(" ")[0]}**
+
+Great news! I've identified some new listings that match your search criteria:
+
+🏠 **New Listings This Week**
+• 456 Oak Drive - 4 bed/2.5 bath, $525,000
+• 789 Elm Court - 3 bed/2 bath, $475,000
+
+Both properties are in your preferred neighborhood and within budget. I recommend scheduling viewings soon as they're likely to receive strong interest.
+
+Would you like to tour these properties this weekend?`;
+  }
+
+  return `**Update for ${buyerName.split(" ")[0]}**
+
+I've prepared the following update based on our current transaction status:
+
+${command}
+
+This draft is ready for your review. You can edit before publishing or discard if not needed.`;
 }
 
 // Get recommended actions based on stage context
@@ -359,464 +575,37 @@ function getRecommendedActions(stage: Stage, buyerName: string): RecommendedActi
       { id: "1", label: "Set buyer expectations", description: "Generate educational overview for buyer", command: "Draft buyer introduction and set expectations for the home buying journey", icon: MessageSquare, type: "artifact" },
       { id: "2", label: "Confirm financing status", description: "Request pre-approval documentation", command: "Create task to confirm financing and pre-approval status", icon: FileText, type: "artifact" },
       { id: "3", label: "Explain market conditions", description: "Educate buyer on current market", command: "Why is understanding market conditions important for buyers?", icon: Brain, type: "thinking" },
+      { id: "4", label: "What should I watch for?", description: "Internal guidance on buyer readiness", command: "What should I watch for when onboarding a new buyer?", icon: Brain, type: "thinking" },
     ],
     1: [
       { id: "1", label: `Draft update for ${buyerName.split(' ')[0]}`, description: "Summarize new listing opportunities", command: `Draft buyer update about new listings matching ${buyerName}'s criteria`, icon: MessageSquare, type: "artifact" },
       { id: "2", label: "Generate property comps", description: "Compare properties under consideration", command: "Generate comparable sales analysis for saved properties", icon: BarChart3, type: "artifact" },
-      { id: "3", label: "Explain days on market", description: "Educate buyer on DOM significance", command: `Explain "days on market" concept to ${buyerName}`, icon: Brain, type: "thinking" },
-      { id: "4", label: "Schedule showings", description: "Coordinate property viewings", command: "Create task to schedule viewings for top properties", icon: Home, type: "artifact" },
+      { id: "3", label: "Explain days on market", description: "Educate buyer on DOM significance", command: `Explain "days on market" concept to ${buyerName}`, icon: MessageSquare, type: "artifact" },
+      { id: "4", label: "What are the risks?", description: "Internal risk assessment", command: "What are the risks I should consider for this buyer's search?", icon: Brain, type: "thinking" },
     ],
     2: [
       { id: "1", label: "Prepare offer strategy", description: "Draft competitive offer approach", command: "Prepare offer strategy summary for buyer review", icon: DollarSign, type: "artifact" },
       { id: "2", label: "Generate offer scenarios", description: "Compare pricing strategies", command: "Generate offer scenarios with different price points", icon: BarChart3, type: "artifact" },
-      { id: "3", label: "Explain contingencies", description: "Educate on offer protections", command: "What are the key contingencies buyers should consider?", icon: Brain, type: "thinking" },
+      { id: "3", label: "Explain contingencies", description: "Educate on offer protections", command: "Draft explanation of key contingencies for buyer", icon: MessageSquare, type: "artifact" },
+      { id: "4", label: "Why is escalation risky?", description: "Internal strategy guidance", command: "Why is an escalation clause risky in this market?", icon: Brain, type: "thinking" },
     ],
     3: [
       { id: "1", label: "Inspection summary", description: "Explain inspection findings", command: "Draft inspection findings summary for buyer", icon: FileText, type: "artifact" },
-      { id: "2", label: "Create repair request", description: "Prepare negotiation items", command: "Generate repair request list based on inspection", icon: CheckSquare, type: "artifact" },
+      { id: "2", label: "Create repair request", description: "Prepare negotiation items", command: "Generate repair request list based on inspection", icon: FileText, type: "artifact" },
       { id: "3", label: "Timeline update", description: "Confirm closing milestones", command: "Create closing timeline update for buyer", icon: MessageSquare, type: "artifact" },
+      { id: "4", label: "What are common issues?", description: "Internal inspection guidance", command: "What are common inspection issues I should watch for?", icon: Brain, type: "thinking" },
     ],
     4: [
-      { id: "1", label: "Final walkthrough prep", description: "Prepare walkthrough checklist", command: "Generate final walkthrough checklist", icon: CheckSquare, type: "artifact" },
+      { id: "1", label: "Final walkthrough prep", description: "Prepare walkthrough checklist", command: "Generate final walkthrough checklist", icon: Home, type: "artifact" },
       { id: "2", label: "Closing cost breakdown", description: "Explain buyer costs", command: "Draft closing costs explanation for buyer", icon: DollarSign, type: "artifact" },
+      { id: "3", label: "What to verify at closing?", description: "Internal closing guidance", command: "What should I verify before closing?", icon: Brain, type: "thinking" },
     ],
     5: [
       { id: "1", label: "Post-closing resources", description: "Provide homeowner information", command: "Generate post-closing resources and next steps", icon: Home, type: "artifact" },
       { id: "2", label: "Request review", description: "Ask for testimonial", command: "Create task to request buyer review and referrals", icon: MessageSquare, type: "artifact" },
+      { id: "3", label: "What's next for retention?", description: "Internal follow-up guidance", command: "What's the best approach for client retention?", icon: Brain, type: "thinking" },
     ],
   };
 
   return baseActions[stage] || baseActions[1];
-}
-
-// Stage Group Section Component
-function StageGroupSection({
-  stage,
-  currentStage,
-  onExpand,
-  renderItem,
-  getStageIcon,
-}: {
-  stage: StageGroup;
-  currentStage: Stage;
-  onExpand: () => void;
-  renderItem: (item: ConversationItem) => React.ReactNode;
-  getStageIcon: (stageId: Stage) => string;
-}) {
-  const isLocked = stage.status === "locked";
-  const isCompleted = stage.status === "completed";
-
-  return (
-    <Collapsible open={stage.isExpanded && !isLocked} onOpenChange={onExpand}>
-      <CollapsibleTrigger asChild disabled={isLocked}>
-        <div
-          className={cn(
-            "flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all",
-            isCompleted && "bg-muted/30 hover:bg-muted/50 border border-transparent",
-            isLocked && "opacity-50 cursor-not-allowed bg-muted/20 border border-dashed border-muted-foreground/20"
-          )}
-        >
-          {isLocked ? (
-            <Lock className="h-4 w-4 text-muted-foreground" />
-          ) : stage.isExpanded ? (
-            <ChevronDown className="h-5 w-5" />
-          ) : (
-            <ChevronRight className="h-5 w-5" />
-          )}
-
-          <span className="text-xl">{getStageIcon(stage.stageId)}</span>
-
-          <div className="flex-1">
-            <span className="font-medium text-sm">
-              Stage {stage.stageId}: {stage.title}
-            </span>
-          </div>
-
-          {isCompleted && (
-            <Badge variant="outline" className="text-xs gap-1 bg-success/10 text-success border-success/20">
-              <Check className="h-3 w-3" />
-              Complete
-            </Badge>
-          )}
-          {isLocked && (
-            <Badge variant="secondary" className="text-xs">Locked</Badge>
-          )}
-        </div>
-      </CollapsibleTrigger>
-
-      <CollapsibleContent>
-        <div className="pl-12 pr-3 py-3 space-y-4 border-l-2 border-muted ml-6 mt-1">
-          {stage.items.map(renderItem)}
-        </div>
-      </CollapsibleContent>
-    </Collapsible>
-  );
-}
-
-// Human Message Bubble
-function HumanMessageBubble({ 
-  message, 
-  formatTime 
-}: { 
-  message: HumanMessage; 
-  formatTime: (d: Date) => string;
-}) {
-  const isBuyer = message.sender === "buyer";
-
-  return (
-    <div className={cn("flex gap-3", isBuyer ? "flex-row" : "flex-row-reverse")}>
-      <div className={cn(
-        "h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0",
-        isBuyer ? "bg-muted" : "bg-primary"
-      )}>
-        <User className={cn("h-4 w-4", isBuyer ? "text-muted-foreground" : "text-primary-foreground")} />
-      </div>
-      <div className={cn(
-        "max-w-[75%] rounded-2xl px-4 py-2",
-        isBuyer ? "bg-muted rounded-tl-sm" : "bg-primary text-primary-foreground rounded-tr-sm"
-      )}>
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-xs font-medium">{message.senderName}</span>
-          <span className={cn("text-[10px]", isBuyer ? "text-muted-foreground" : "text-primary-foreground/70")}>
-            {formatTime(message.timestamp)}
-          </span>
-          {message.sender === "buyer" && (
-            <Badge variant="outline" className="text-[8px] h-4 bg-muted/50">
-              From Buyer Portal
-            </Badge>
-          )}
-        </div>
-        <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-      </div>
-    </div>
-  );
-}
-
-// AI Output Block - Handles both Internal (thinking) and Artifacts (doing)
-function AIOutputBlock({ 
-  explanation, 
-  stageTitle,
-  formatTime,
-  onApprove,
-  onReject,
-  isInternalCollapsed,
-  onToggleCollapse,
-}: { 
-  explanation: AIExplanation; 
-  stageTitle: string;
-  formatTime: (d: Date) => string;
-  onApprove: () => void;
-  onReject: () => void;
-  isInternalCollapsed: boolean;
-  onToggleCollapse: () => void;
-}) {
-  const isPending = explanation.approvalStatus === "pending";
-  const isApproved = explanation.approvalStatus === "approved" && explanation.isVisibleToBuyer;
-  
-  // Determine if this is internal thinking or buyer-facing artifact
-  // For now, check if content starts with thinking-style phrases
-  const contentLower = explanation.content.toLowerCase();
-  const isInternal = contentLower.startsWith("this is because") || 
-                     contentLower.includes("the reason") ||
-                     explanation.approvalStatus === undefined;
-
-  // TYPE A: Internal Conversation (Thinking)
-  if (isInternal) {
-    return (
-      <Collapsible open={!isInternalCollapsed} onOpenChange={onToggleCollapse}>
-        <CollapsibleTrigger asChild>
-          <Card className="cursor-pointer hover:bg-muted/20 transition-colors border-dashed">
-            <CardContent className="p-3">
-              <div className="flex items-center gap-2">
-                <Brain className="h-4 w-4 text-muted-foreground" />
-                <span className="text-xs font-medium text-muted-foreground">
-                  🧠 AgentGPT — Internal Explanation
-                </span>
-                <Badge variant="secondary" className="text-[8px] ml-auto">
-                  Not visible to buyer
-                </Badge>
-                {isInternalCollapsed ? (
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                ) : (
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <Card className="mt-1 border-dashed bg-muted/10">
-            <CardContent className="p-4">
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                {explanation.content}
-              </p>
-              <p className="text-[10px] text-muted-foreground/60 mt-3">
-                {formatTime(explanation.timestamp)}
-              </p>
-            </CardContent>
-          </Card>
-        </CollapsibleContent>
-      </Collapsible>
-    );
-  }
-
-  // TYPE B: AI-Generated Artifact (Doing)
-  return (
-    <Card className={cn(
-      "overflow-hidden",
-      isPending && "border-warning/30 shadow-sm",
-      isApproved && "border-success/30"
-    )}>
-      <CardHeader className="p-3 pb-2 bg-gradient-to-br from-primary/5 to-transparent">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <div className="h-7 w-7 rounded-full flex items-center justify-center bg-gradient-to-br from-primary to-primary/60">
-              <Bot className="h-3.5 w-3.5 text-primary-foreground" />
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-semibold">🤖 AI-Generated Buyer Artifact</span>
-              </div>
-              <p className="text-[10px] text-muted-foreground">
-                Generated by AgentGPT for Stage: {stageTitle}
-              </p>
-            </div>
-          </div>
-          
-          {isPending && (
-            <Badge className="text-[10px] bg-warning/20 text-warning border-warning/30 hover:bg-warning/30">
-              Draft – Pending Approval
-            </Badge>
-          )}
-          {isApproved && (
-            <Badge className="text-[10px] bg-success/20 text-success border-success/30 hover:bg-success/30">
-              Approved & Visible to Buyer
-            </Badge>
-          )}
-        </div>
-      </CardHeader>
-
-      <CardContent className="p-3 pt-2">
-        <p className="text-sm leading-relaxed">{explanation.content}</p>
-        
-        {isPending && (
-          <div className="flex gap-2 mt-3 pt-3 border-t">
-            <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5 flex-1" onClick={onReject}>
-              <Edit3 className="h-3.5 w-3.5" />
-              Edit
-            </Button>
-            <Button size="sm" className="h-8 text-xs gap-1.5 flex-1" onClick={onApprove}>
-              <CheckCircle className="h-3.5 w-3.5" />
-              Approve & Publish
-            </Button>
-            <Button size="sm" variant="ghost" className="h-8 text-xs gap-1.5 text-destructive hover:text-destructive">
-              <Trash2 className="h-3.5 w-3.5" />
-              Discard
-            </Button>
-          </div>
-        )}
-
-        {isApproved && (
-          <div className="flex items-center gap-2 mt-3 pt-3 border-t text-xs text-muted-foreground">
-            <CheckCircle className="h-3.5 w-3.5 text-success" />
-            Published to Buyer Progress Portal • {explanation.approvedAt && formatTime(explanation.approvedAt)}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-// System Event Item
-function SystemEventItem({ 
-  event, 
-  formatTime 
-}: { 
-  event: SystemEvent; 
-  formatTime: (d: Date) => string;
-}) {
-  const isStageAdvanced = event.eventType === "stage-advanced";
-
-  if (isStageAdvanced) {
-    return (
-      <div className="flex items-center gap-3 py-3 px-4 bg-success/10 rounded-xl border border-success/20">
-        <CheckCircle className="h-5 w-5 text-success" />
-        <div className="flex-1">
-          <span className="text-sm font-medium text-success">✅ Stage Advanced</span>
-          {event.description && (
-            <p className="text-xs text-success/80">{event.description}</p>
-          )}
-        </div>
-        <span className="text-[10px] text-muted-foreground">{formatTime(event.timestamp)}</span>
-      </div>
-    );
-  }
-
-  const getEventIcon = () => {
-    switch (event.eventType) {
-      case "offer-submitted": return "📤";
-      case "offer-accepted": return "🎉";
-      case "offer-rejected": return "❌";
-      case "document-uploaded": return "📎";
-      case "property-added": return "🏠";
-      case "task-completed": return "✅";
-      case "viewing-scheduled": return "📅";
-      case "contract-signed": return "✍️";
-      case "closing-complete": return "🔑";
-      default: return "📌";
-    }
-  };
-
-  return (
-    <div className="flex items-center gap-3 py-2 px-3 bg-muted/30 rounded-lg border border-dashed">
-      <span className="text-base">{getEventIcon()}</span>
-      <div className="flex-1">
-        <span className="text-sm font-medium">{event.title}</span>
-        {event.description && (
-          <p className="text-xs text-muted-foreground">{event.description}</p>
-        )}
-      </div>
-      <Badge variant="outline" className="text-[9px] uppercase tracking-wide">
-        System
-      </Badge>
-      <span className="text-[10px] text-muted-foreground">{formatTime(event.timestamp)}</span>
-    </div>
-  );
-}
-
-// Component Block Item
-function ComponentBlockItem({ 
-  block, 
-  stageTitle,
-  onExpand,
-  onOpenDetails,
-}: { 
-  block: ComponentBlock;
-  stageTitle: string;
-  onExpand: () => void;
-  onOpenDetails: () => void;
-}) {
-  const getBlockIcon = () => {
-    switch (block.blockType) {
-      case "property-card": return <Home className="h-4 w-4" />;
-      case "comp-table": return <BarChart3 className="h-4 w-4" />;
-      case "offer-summary": return <DollarSign className="h-4 w-4" />;
-      case "task-checklist": return <CheckSquare className="h-4 w-4" />;
-      case "document-preview": return <FileText className="h-4 w-4" />;
-      default: return <FileText className="h-4 w-4" />;
-    }
-  };
-
-  const renderBlockContent = () => {
-    const data = block.data as any;
-    
-    switch (block.blockType) {
-      case "property-card":
-        return (
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            <div><span className="text-muted-foreground">Price:</span> ${data.price?.toLocaleString()}</div>
-            <div><span className="text-muted-foreground">Bed/Bath:</span> {data.bedrooms}/{data.bathrooms}</div>
-            <div><span className="text-muted-foreground">Sqft:</span> {data.sqft?.toLocaleString()}</div>
-            <div><span className="text-muted-foreground">DOM:</span> {data.daysOnMarket} days</div>
-          </div>
-        );
-      case "comp-table":
-        return (
-          <div className="space-y-1 text-sm">
-            {data.comps?.map((comp: any, i: number) => (
-              <div key={i} className="flex justify-between py-1 border-b border-dashed last:border-0">
-                <span>{comp.address}</span>
-                <span className="font-medium">${comp.soldPrice?.toLocaleString()}</span>
-              </div>
-            ))}
-          </div>
-        );
-      case "offer-summary":
-        return (
-          <div className="space-y-2">
-            {data.scenarios?.map((scenario: any, i: number) => (
-              <div key={i} className="flex items-center justify-between p-2 bg-muted/50 rounded">
-                <div>
-                  <span className="font-medium">{scenario.name}</span>
-                  <p className="text-xs text-muted-foreground">{scenario.note}</p>
-                </div>
-                <span className="font-bold">${scenario.price?.toLocaleString()}</span>
-              </div>
-            ))}
-          </div>
-        );
-      case "task-checklist":
-        return (
-          <div className="space-y-1">
-            {data.tasks?.map((task: any, i: number) => (
-              <div key={i} className="flex items-center gap-2 text-sm">
-                {task.completed ? (
-                  <Check className="h-4 w-4 text-success" />
-                ) : (
-                  <div className="h-4 w-4 rounded border" />
-                )}
-                <span className={task.completed ? "line-through text-muted-foreground" : ""}>
-                  {task.name}
-                </span>
-              </div>
-            ))}
-          </div>
-        );
-      default:
-        return null;
-    }
-  };
-
-  return (
-    <Card className="overflow-hidden">
-      <CardHeader className="p-3 pb-2 bg-muted/20">
-        <div className="flex items-start justify-between">
-          <div>
-            <div className="text-sm font-medium flex items-center gap-2">
-              {getBlockIcon()}
-              {block.title}
-            </div>
-            <p className="text-[10px] text-muted-foreground mt-0.5">
-              Generated by AgentGPT for Stage: {stageTitle}
-            </p>
-          </div>
-          <div className="flex items-center gap-1">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="h-6 text-xs gap-1"
-              onClick={onOpenDetails}
-            >
-              View Details
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-6 w-6">
-                  <MoreHorizontal className="h-3 w-3" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem className="gap-2">
-                  <Edit3 className="h-3.5 w-3.5" />
-                  Edit
-                </DropdownMenuItem>
-                <DropdownMenuItem className="gap-2">
-                  <CheckCircle className="h-3.5 w-3.5" />
-                  Approve & Publish
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-destructive gap-2">
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Discard
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="p-3 pt-2">
-        {renderBlockContent()}
-      </CardContent>
-    </Card>
-  );
 }
