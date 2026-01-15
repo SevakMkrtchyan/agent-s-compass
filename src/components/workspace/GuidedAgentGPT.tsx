@@ -283,56 +283,53 @@ export function GuidedAgentGPT({
   };
 
   return (
-    <div className="flex flex-col h-full w-full" style={{ background: '#f9fafb' }}>
-      {/* Scrollable Content - Edge to Edge */}
+    <div className="flex flex-col h-full w-full bg-[#f9fafb]">
+      {/* Scrollable Content - True Edge to Edge */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto">
-        <div className="w-full px-4 lg:px-6 py-10">
+        <div className="w-full px-3 sm:px-4 md:px-6 py-8 md:py-12">
           
           {/* Minimal Context */}
-          <p className="text-sm text-muted-foreground/60 mb-10">
-            {buyerName} · Stage {currentStage}: {currentStageData.title}
+          <p className="text-sm text-muted-foreground/50 mb-8">
             {lastRefreshed && (
-              <span className="ml-2">
-                · {isCacheHit ? "Cached" : "Updated"} {formatTime(lastRefreshed)}
-              </span>
+              <span>{isCacheHit ? "Cached" : "Updated"} {formatTime(lastRefreshed)}</span>
             )}
           </p>
 
-          {/* Recommended Actions - Plain Text List */}
+          {/* Recommended Actions - Plain Text Links */}
           {showActions && messages.length === 0 && (
-            <div className="mb-12">
-              <div className="flex items-center gap-3 mb-8">
-                <h2 className="text-2xl font-semibold text-foreground">What would you like to do?</h2>
+            <div className="mb-16">
+              <div className="flex items-center gap-3 mb-10">
+                <h2 className="text-2xl md:text-3xl font-semibold text-foreground">What would you like to do?</h2>
                 <button
                   onClick={handleRefresh}
                   disabled={isRefreshing || isLoading}
-                  className="text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+                  className="text-muted-foreground/30 hover:text-muted-foreground transition-colors"
                 >
                   <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
                 </button>
               </div>
 
-              <div className="space-y-1">
-                {recommendedActions.slice(0, 4).map((action) => (
+              <div className="space-y-0">
+                {recommendedActions.slice(0, 4).map((action, idx) => (
                   <button
                     key={action.id}
                     onClick={() => handleRecommendationClick(action)}
                     disabled={isStreaming}
                     className={cn(
-                      "w-full text-left py-4 text-base text-accent hover:text-accent/80 transition-colors",
+                      "w-full text-left py-5 text-lg md:text-xl text-accent hover:text-accent/70 transition-colors",
                       "disabled:opacity-50 disabled:cursor-not-allowed",
-                      "border-b border-border/20 last:border-0"
+                      idx < 3 && "border-b border-border/10"
                     )}
                   >
-                    → {action.label}
+                    {action.label}
                   </button>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Message Stream - Plain Text, No Bubbles */}
-          <div className="space-y-10">
+          {/* Message Stream - Plain Text */}
+          <div className="space-y-12 md:space-y-16">
             {messages.map((message) => (
               <MessageBlock
                 key={message.id}
@@ -346,9 +343,9 @@ export function GuidedAgentGPT({
         </div>
       </div>
 
-      {/* Fixed Input - Full Width, Minimal */}
-      <div className="border-t border-border/30" style={{ background: '#f9fafb' }}>
-        <div className="w-full px-4 lg:px-6 py-5">
+      {/* Fixed Input - Full Width, Minimal Border */}
+      <div className="border-t border-border/20 bg-[#f9fafb]">
+        <div className="w-full px-3 sm:px-4 md:px-6 py-4 md:py-6">
           <div className="relative">
             <textarea
               placeholder="Message AgentGPT..."
@@ -358,10 +355,10 @@ export function GuidedAgentGPT({
               disabled={isStreaming}
               rows={1}
               className={cn(
-                "w-full min-h-[56px] max-h-[200px] resize-none pr-14 py-4 px-5",
-                "text-base leading-relaxed",
-                "bg-white border border-border/50 focus:border-border focus:outline-none",
-                "placeholder:text-muted-foreground/40",
+                "w-full min-h-[52px] md:min-h-[60px] max-h-[200px] resize-none pr-14 py-4 px-5",
+                "text-base md:text-lg",
+                "bg-white border border-border/30 focus:border-border/60 focus:outline-none",
+                "placeholder:text-muted-foreground/30",
                 "disabled:opacity-50"
               )}
               style={{ borderRadius: '2px' }}
@@ -371,8 +368,8 @@ export function GuidedAgentGPT({
               disabled={!commandInput.trim() || isStreaming}
               className={cn(
                 "absolute right-4 bottom-4",
-                "text-muted-foreground/60 hover:text-foreground transition-colors",
-                "disabled:opacity-30 disabled:cursor-not-allowed"
+                "text-muted-foreground/40 hover:text-foreground transition-colors",
+                "disabled:opacity-20 disabled:cursor-not-allowed"
               )}
             >
               <Send className="h-5 w-5" />
@@ -398,8 +395,8 @@ function MessageBlock({
   if (message.type === "user") {
     return (
       <div>
-        <p className="text-xs uppercase tracking-wider text-muted-foreground/50 mb-3">You</p>
-        <p className="text-lg leading-relaxed text-foreground">{message.content}</p>
+        <p className="text-xs uppercase tracking-widest text-muted-foreground/40 mb-4">You</p>
+        <p className="text-xl md:text-2xl font-medium text-foreground leading-relaxed">{message.content}</p>
       </div>
     );
   }
@@ -407,17 +404,17 @@ function MessageBlock({
   if (message.type === "thinking") {
     return (
       <div>
-        <p className="text-xs uppercase tracking-wider text-muted-foreground/50 mb-3">
-          AgentGPT · Internal Analysis
+        <p className="text-xs uppercase tracking-widest text-muted-foreground/40 mb-4">
+          AgentGPT · Internal
         </p>
-        <div className="text-base leading-[1.8] text-foreground/80">
+        <div className="text-base md:text-lg leading-[1.8] text-foreground/80 max-w-none">
           {isStreaming && !message.content ? (
             <ThinkingDots />
           ) : (
             <StreamingText
               content={message.content}
               isComplete={!isStreaming}
-              className="text-base leading-[1.8]"
+              className="text-base md:text-lg leading-[1.8]"
             />
           )}
         </div>
@@ -429,46 +426,46 @@ function MessageBlock({
     const isPending = message.status !== "complete" && !isStreaming;
     return (
       <div>
-        <p className="text-xs uppercase tracking-wider text-muted-foreground/50 mb-3">
-          AgentGPT · Draft Artifact
-          {isPending && <span className="ml-2 text-warning">— Pending Approval</span>}
-          {message.status === "complete" && !isStreaming && <span className="ml-2 text-success">— Approved</span>}
+        <p className="text-xs uppercase tracking-widest text-muted-foreground/40 mb-4">
+          Draft
+          {isPending && <span className="ml-2 text-warning normal-case">· Pending approval</span>}
+          {message.status === "complete" && !isStreaming && <span className="ml-2 text-success normal-case">· Approved</span>}
         </p>
         
-        <div className="text-base leading-[1.8] text-foreground mb-6">
+        <div className="text-base md:text-lg leading-[1.8] text-foreground max-w-none mb-8">
           {isStreaming && !message.content ? (
             <ThinkingDots />
           ) : (
             <StreamingText
               content={message.content}
               isComplete={!isStreaming}
-              className="text-base leading-[1.8]"
+              className="text-base md:text-lg leading-[1.8]"
             />
           )}
         </div>
 
         {isPending && (
-          <div className="flex items-center gap-4 pt-4 border-t border-border/20">
+          <div className="flex items-center gap-4 pt-6 border-t border-border/10">
             <Button 
               variant="ghost" 
               size="sm" 
-              className="h-9 text-muted-foreground hover:text-foreground gap-2"
+              className="h-9 text-muted-foreground hover:text-foreground gap-2 px-0 hover:bg-transparent"
             >
               <Edit3 className="h-4 w-4" />
               Edit
             </Button>
             <Button 
               size="sm" 
-              className="h-9 bg-success hover:bg-success/90 text-success-foreground gap-2" 
+              className="h-9 bg-foreground hover:bg-foreground/90 text-background gap-2" 
               onClick={onApprove}
             >
               <CheckCircle className="h-4 w-4" />
-              Approve & Publish
+              Approve
             </Button>
             <Button
               variant="ghost"
               size="sm"
-              className="h-9 text-muted-foreground/50 hover:text-destructive"
+              className="h-9 text-muted-foreground/40 hover:text-destructive px-0 hover:bg-transparent"
               onClick={onDiscard}
             >
               <Trash2 className="h-4 w-4" />

@@ -212,82 +212,51 @@ export default function Workspace() {
           sidebarCollapsed={sidebarCollapsed}
         />
 
-        {/* Workspace Layout */}
+        {/* Workspace Layout - Full Height */}
         <div className="h-[calc(100vh-56px)] flex flex-col">
-          {/* Admin Header - Buyer Context Only */}
-          <div className="flex items-center justify-between px-6 py-3 border-b bg-card">
-            <div className="flex items-center gap-4">
-              {/* Buyer Avatar */}
-              <div className="h-11 w-11 rounded-xl bg-primary flex items-center justify-center">
-                <span className="text-sm font-bold text-primary-foreground">
+          {/* Minimal Header Bar */}
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-border/30 bg-[#f9fafb]">
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 rounded-md bg-foreground/10 flex items-center justify-center">
+                <span className="text-xs font-medium text-foreground">
                   {workspace.buyerName.split(" ").map((n) => n[0]).join("")}
                 </span>
               </div>
-              
-              {/* Buyer Info */}
               <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-lg font-semibold">{workspace.buyerName}</h1>
-                  <Badge variant={workspace.status === "active" ? "default" : "secondary"} className="text-xs">
-                    {workspace.status === "active" ? "Active" : workspace.status === "under-contract" ? "Under Contract" : "Closed"}
-                  </Badge>
-                </div>
-                <p className="text-sm text-muted-foreground flex items-center gap-1">
-                  {STAGES[workspace.currentStage].icon} Stage {workspace.currentStage} · {STAGES[workspace.currentStage].title}
-                </p>
+                <span className="text-sm font-medium text-foreground">{workspace.buyerName}</span>
+                <span className="text-sm text-muted-foreground ml-2">
+                  · Stage {workspace.currentStage}: {STAGES[workspace.currentStage].title}
+                </span>
               </div>
             </div>
-            
-            {/* Header Actions */}
             <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-2"
-                onClick={() => setDetailsOpen(true)}
-              >
+              <Button variant="ghost" size="sm" className="h-8 text-muted-foreground" onClick={() => setDetailsOpen(true)}>
                 <Info className="h-4 w-4" />
-                Details
-              </Button>
-              <Button
-                size="sm"
-                className="gap-2"
-              >
-                <ArrowRight className="h-4 w-4" />
-                Advance Stage
               </Button>
             </div>
           </div>
 
-          {/* Internal Tab Navigation - Prominent Mode Switcher */}
+          {/* Minimal Tab Navigation */}
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as WorkspaceTab)} className="flex-1 flex flex-col overflow-hidden">
-            <div className="bg-background border-b flex-shrink-0">
-              <div className="px-6 py-3">
-                <TabsList className="h-10 w-auto inline-flex gap-1 bg-muted/50 p-1 rounded-lg">
-                  {WORKSPACE_TABS.map((tab) => {
-                    const Icon = tab.icon;
-                    const isAgent = tab.id === "agentgpt";
-                    return (
-                      <TabsTrigger
-                        key={tab.id}
-                        value={tab.id}
-                        className={cn(
-                          "h-8 px-4 gap-2 rounded-md font-medium text-sm transition-all",
-                          "data-[state=active]:bg-background data-[state=active]:shadow-sm",
-                          "data-[state=active]:text-foreground",
-                          "text-muted-foreground hover:text-foreground",
-                          isAgent && "data-[state=active]:text-accent"
-                        )}
-                      >
-                        <Icon className={cn(
-                          "h-4 w-4",
-                          isAgent && "text-accent"
-                        )} />
-                        {tab.label}
-                      </TabsTrigger>
-                    );
-                  })}
-                </TabsList>
+            <div className="border-b border-border/30 bg-[#f9fafb] flex-shrink-0">
+              <div className="px-4 flex items-center gap-1">
+                {WORKSPACE_TABS.map((tab) => {
+                  const Icon = tab.icon;
+                  return (
+                    <TabsTrigger
+                      key={tab.id}
+                      value={tab.id}
+                      className={cn(
+                        "h-10 px-4 gap-2 text-sm transition-all border-b-2 border-transparent -mb-px",
+                        "data-[state=active]:border-foreground data-[state=active]:text-foreground",
+                        "text-muted-foreground hover:text-foreground bg-transparent"
+                      )}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {tab.label}
+                    </TabsTrigger>
+                  );
+                })}
               </div>
             </div>
 
