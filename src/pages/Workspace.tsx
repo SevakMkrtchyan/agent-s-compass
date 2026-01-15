@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { 
   Home, 
@@ -46,6 +46,7 @@ export default function Workspace() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [agentExpanded, setAgentExpanded] = useState(true); // Start expanded when in workspace
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("agentgpt");
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [prefillCommand, setPrefillCommand] = useState("");
@@ -146,8 +147,9 @@ export default function Workspace() {
     setActiveTab("agentgpt");
   }, []);
 
-  // Handle back to dashboard
-  const handleBackToDashboard = useCallback(() => {
+  // Handle back to global agent view
+  const handleBackToAgent = useCallback(() => {
+    setAgentExpanded(false);
     navigate("/agentgpt");
   }, [navigate]);
 
@@ -161,7 +163,8 @@ export default function Workspace() {
       <div className="min-h-screen bg-background">
         <Sidebar 
           collapsed={sidebarCollapsed}
-          onBackToDashboard={handleBackToDashboard}
+          agentExpanded={agentExpanded}
+          onAgentExpandedChange={setAgentExpanded}
         />
         <div className={cn(
           "transition-all duration-200 min-h-screen",
@@ -183,18 +186,15 @@ export default function Workspace() {
   }
 
   const userRole = currentUser.role;
-  const buyerContext = {
-    id: workspace.buyerId,
-    name: workspace.buyerName,
-  };
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Buyer Rolodex Sidebar (replaces global sidebar when buyer is selected) */}
+      {/* Sidebar with Buyer Rolodex (expanded when in workspace) */}
       <Sidebar 
         collapsed={sidebarCollapsed}
-        buyerContext={buyerContext}
-        onBackToDashboard={handleBackToDashboard}
+        agentExpanded={agentExpanded}
+        onAgentExpandedChange={setAgentExpanded}
+        selectedBuyerId={workspace.id}
       />
 
       {/* Main Content */}
