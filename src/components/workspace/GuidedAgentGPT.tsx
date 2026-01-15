@@ -23,7 +23,7 @@ import { useAgentGPTStream } from "@/hooks/useAgentGPTStream";
 import { useRecommendationCache } from "@/hooks/useRecommendationCache";
 import { useToast } from "@/hooks/use-toast";
 import { StreamingText, ThinkingDots } from "./StreamingText";
-import type { StageGroup, AIExplanation } from "@/types/conversation";
+import type { StageGroup } from "@/types/conversation";
 import type { Stage, Buyer } from "@/types";
 import { STAGES } from "@/types";
 
@@ -39,11 +39,10 @@ interface RecommendedAction {
 // Message types for chat stream
 interface ChatMessage {
   id: string;
-  type: "user" | "artifact" | "thinking" | "actions";
+  type: "user" | "artifact" | "thinking";
   content: string;
   timestamp: Date;
   status?: "streaming" | "complete" | "pending";
-  actions?: RecommendedAction[];
 }
 
 interface GuidedAgentGPTProps {
@@ -62,7 +61,6 @@ interface GuidedAgentGPTProps {
 }
 
 export function GuidedAgentGPT({
-  stages,
   currentStage,
   buyerName,
   buyer,
@@ -74,6 +72,7 @@ export function GuidedAgentGPT({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [recommendedActions, setRecommendedActions] = useState<RecommendedAction[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showActions, setShowActions] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { isLoading, fetchRecommendedActions } = useAgentGPT();
@@ -86,11 +85,16 @@ export function GuidedAgentGPT({
   // Load cached or fresh actions on buyer change
   useEffect(() => {
     const loadActions = async () => {
-      // Check cache first for instant display
+      // Always start with fallback for instant display
+      const fallback = getFallbackActions(currentStage, buyerName);
+      setRecommendedActions(fallback);
+      setShowActions(true);
+
+      // Check cache first
       const cached = getCachedActions(buyer.id);
-      
+
       if (cached && !cached.isStale) {
-        // Instant display from cache
+        // Use cached actions
         const actionsWithIcons = cached.actions.map(action => ({
           ...action,
           icon: getIconForAction(action),
@@ -99,7 +103,7 @@ export function GuidedAgentGPT({
         return;
       }
 
-      // Cache miss or stale - fetch fresh
+      // Cache miss or stale - fetch fresh in background
       setIsRefreshing(true);
       try {
         const actions = await fetchRecommendedActions(buyer);
@@ -111,15 +115,10 @@ export function GuidedAgentGPT({
           setRecommendedActions(actionsWithIcons);
           // Cache for next time
           await setCachedActions(buyer.id, actions);
-        } else {
-          const fallback = getFallbackActions(currentStage, buyerName);
-          setRecommendedActions(fallback);
-          await setCachedActions(buyer.id, fallback);
         }
       } catch (err) {
         console.error("Failed to fetch actions:", err);
-        const fallback = getFallbackActions(currentStage, buyerName);
-        setRecommendedActions(fallback);
+        // Keep fallback already set
       } finally {
         setIsRefreshing(false);
       }
@@ -127,8 +126,9 @@ export function GuidedAgentGPT({
 
     // Reset messages when buyer changes
     setMessages([]);
+    setShowActions(true);
     loadActions();
-  }, [buyer.id]);
+  }, [buyer.id, currentStage, buyerName]);
 
   // Handle prefill from external sources
   useEffect(() => {
@@ -199,6 +199,7 @@ export function GuidedAgentGPT({
     onSendCommand(command);
     setCommandInput("");
     clearStream();
+    setShowActions(false);
 
     // Add user message
     setMessages(prev => [...prev, {
@@ -224,7 +225,7 @@ export function GuidedAgentGPT({
       } else {
         await streamArtifact(command, buyer);
       }
-    } catch (err) {
+    } catch {
       // Error handled by hook
     }
   }, [commandInput, isStreaming, buyer, onSendCommand, streamArtifact, streamThinking, clearStream]);
@@ -238,6 +239,7 @@ export function GuidedAgentGPT({
 
   const handleRecommendationClick = useCallback(async (action: RecommendedAction) => {
     clearStream();
+    setShowActions(false);
 
     // Add action as user message
     setMessages(prev => [...prev, {
@@ -263,7 +265,7 @@ export function GuidedAgentGPT({
       } else {
         await streamArtifact(action.command, buyer);
       }
-    } catch (err) {
+    } catch {
       // Error handled by hook
     }
   }, [buyer, streamArtifact, streamThinking, clearStream]);
@@ -281,7 +283,7 @@ export function GuidedAgentGPT({
         await setCachedActions(buyer.id, actions);
         toast({ title: "Recommendations updated" });
       }
-    } catch (err) {
+    } catch {
       toast({ title: "Failed to refresh", variant: "destructive" });
     } finally {
       setIsRefreshing(false);
@@ -295,7 +297,7 @@ export function GuidedAgentGPT({
         msg.id === messageId ? { ...msg, status: "complete" as const } : msg
       )
     );
-    toast({ title: "Artifact approved" });
+    toast({ title: "Artifact approved and published" });
   };
 
   const handleDiscardArtifact = (messageId: string) => {
@@ -303,42 +305,42 @@ export function GuidedAgentGPT({
   };
 
   return (
-    <div className="flex flex-col h-full bg-background">
-      {/* Scrollable Message Stream */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 md:px-8 py-6">
-        <div className="max-w-3xl mx-auto space-y-6">
-          {/* System Notice */}
-          <div className="flex items-center gap-2 text-xs text-muted-foreground/60 pb-2">
-            <Info className="h-3 w-3" />
-            <span>AI-assisted recommendations for {buyerName}</span>
-            <span className="text-muted-foreground/40">·</span>
-            <span>Stage {currentStage}: {currentStageData.title}</span>
+    <div className="flex flex-col h-full w-full bg-background">
+      {/* Scrollable Message Stream - Full Width */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto">
+        <div className="w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+          {/* System Notice - Full Width */}
+          <div className="flex items-center gap-2 text-xs text-muted-foreground/60 border-b border-border/30 pb-4">
+            <Info className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">AI-assisted recommendations for {buyerName}</span>
+            <span className="text-muted-foreground/30 shrink-0">·</span>
+            <span className="shrink-0">Stage {currentStage}: {currentStageData.title}</span>
           </div>
 
-          {/* Initial Actions (shown when no messages) */}
-          {messages.length === 0 && (
-            <div className="space-y-4">
+          {/* Initial Actions - Full Width Grid */}
+          {showActions && messages.length === 0 && (
+            <div className="space-y-5">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-foreground">Recommended next actions</h2>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <h2 className="text-xl font-semibold text-foreground">Recommended next actions</h2>
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
                   {lastRefreshed && (
-                    <span>
+                    <span className="hidden sm:inline">
                       {isCacheHit ? "Cached" : "Refreshed"} {formatTime(lastRefreshed)}
                     </span>
                   )}
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-7 w-7 p-0"
+                    className="h-8 w-8 p-0"
                     onClick={handleRefresh}
                     disabled={isRefreshing || isLoading}
                   >
-                    <RefreshCw className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")} />
+                    <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
                   </Button>
                 </div>
               </div>
 
-              <div className="space-y-2">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {recommendedActions.slice(0, 4).map((action) => {
                   const Icon = action.icon || Sparkles;
                   return (
@@ -347,9 +349,9 @@ export function GuidedAgentGPT({
                       onClick={() => handleRecommendationClick(action)}
                       disabled={isStreaming}
                       className={cn(
-                        "w-full flex items-center gap-4 px-4 py-4 rounded-xl text-left transition-all group",
-                        "bg-card border border-border/50 hover:border-accent/40 hover:bg-accent/5",
-                        "disabled:opacity-50 disabled:cursor-not-allowed"
+                        "flex flex-col items-start gap-3 p-5 rounded-xl text-left transition-all group",
+                        "bg-card border border-border/40 hover:border-accent/50 hover:shadow-sm",
+                        "disabled:opacity-50 disabled:cursor-not-allowed min-h-[100px]"
                       )}
                     >
                       <div className={cn(
@@ -360,10 +362,12 @@ export function GuidedAgentGPT({
                       )}>
                         <Icon className="h-5 w-5" />
                       </div>
-                      <p className="font-medium text-foreground flex-1">
-                        {action.label}
-                      </p>
-                      <ChevronRight className="h-5 w-5 text-muted-foreground/30 group-hover:text-accent transition-colors" />
+                      <div className="flex-1 flex items-center justify-between w-full">
+                        <p className="font-medium text-foreground leading-snug pr-2">
+                          {action.label}
+                        </p>
+                        <ChevronRight className="h-5 w-5 text-muted-foreground/30 group-hover:text-accent transition-colors shrink-0" />
+                      </div>
                     </button>
                   );
                 })}
@@ -371,22 +375,24 @@ export function GuidedAgentGPT({
             </div>
           )}
 
-          {/* Message Stream */}
-          {messages.map((message) => (
-            <MessageBubble
-              key={message.id}
-              message={message}
-              isStreaming={message.status === "streaming"}
-              onApprove={() => handleApproveArtifact(message.id)}
-              onDiscard={() => handleDiscardArtifact(message.id)}
-            />
-          ))}
+          {/* Message Stream - Full Width */}
+          <div className="space-y-6">
+            {messages.map((message) => (
+              <MessageBubble
+                key={message.id}
+                message={message}
+                isStreaming={message.status === "streaming"}
+                onApprove={() => handleApproveArtifact(message.id)}
+                onDiscard={() => handleDiscardArtifact(message.id)}
+              />
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Fixed Input Bar */}
-      <div className="border-t border-border/40 bg-background/95 backdrop-blur-sm px-4 md:px-8 py-4">
-        <div className="max-w-3xl mx-auto">
+      {/* Fixed Input Bar - Full Width */}
+      <div className="border-t border-border/40 bg-background/95 backdrop-blur-sm">
+        <div className="w-full px-4 sm:px-6 lg:px-8 py-4">
           <div className="relative">
             <Textarea
               placeholder="Tell AgentGPT what you want to do…"
@@ -395,8 +401,8 @@ export function GuidedAgentGPT({
               onKeyDown={handleKeyDown}
               disabled={isStreaming}
               className={cn(
-                "min-h-[52px] max-h-[120px] resize-none pr-14 text-base",
-                "bg-muted/40 border-border/50 focus:border-accent/50 focus:bg-background",
+                "w-full min-h-[56px] max-h-[140px] resize-none pr-14 text-base",
+                "bg-muted/30 border-border/40 focus:border-accent/50 focus:bg-background",
                 "rounded-xl",
                 "placeholder:text-muted-foreground/50",
                 "disabled:opacity-50"
@@ -408,9 +414,9 @@ export function GuidedAgentGPT({
               disabled={!commandInput.trim() || isStreaming}
               size="icon"
               className={cn(
-                "absolute right-2 bottom-2 h-9 w-9 rounded-lg",
+                "absolute right-2.5 bottom-2.5 h-10 w-10 rounded-lg",
                 "bg-accent hover:bg-accent/90 text-accent-foreground",
-                "disabled:opacity-30"
+                "disabled:opacity-30 disabled:cursor-not-allowed"
               )}
             >
               <Send className="h-4 w-4" />
@@ -422,7 +428,7 @@ export function GuidedAgentGPT({
   );
 }
 
-// Message Bubble Component
+// Message Bubble Component - Full Width
 function MessageBubble({
   message,
   isStreaming,
@@ -437,8 +443,8 @@ function MessageBubble({
   if (message.type === "user") {
     return (
       <div className="flex justify-end">
-        <div className="bg-accent text-accent-foreground px-5 py-3 rounded-2xl rounded-br-md max-w-[80%]">
-          <p className="text-sm">{message.content}</p>
+        <div className="bg-accent text-accent-foreground px-5 py-3.5 rounded-2xl rounded-br-md max-w-[85%] lg:max-w-[60%]">
+          <p className="text-sm leading-relaxed">{message.content}</p>
         </div>
       </div>
     );
@@ -446,22 +452,24 @@ function MessageBubble({
 
   if (message.type === "thinking") {
     return (
-      <div className="space-y-2">
+      <div className="space-y-3 w-full">
         <div className="flex items-center gap-2">
-          <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center">
-            <Info className="h-3.5 w-3.5 text-muted-foreground" />
+          <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center">
+            <Info className="h-4 w-4 text-muted-foreground" />
           </div>
-          <span className="text-xs font-medium text-muted-foreground">Internal Analysis</span>
-          <Badge variant="outline" className="text-[10px] text-muted-foreground/70">Private</Badge>
+          <span className="text-sm font-medium text-muted-foreground">Internal Analysis</span>
+          <Badge variant="outline" className="text-[10px] text-muted-foreground/70 border-muted-foreground/30">
+            Private — Not shared with buyer
+          </Badge>
         </div>
-        <div className="bg-muted/30 rounded-xl px-5 py-4 ml-8">
+        <div className="bg-muted/20 border border-border/30 rounded-xl px-6 py-5">
           {isStreaming && !message.content ? (
             <ThinkingDots />
           ) : (
             <StreamingText
               content={message.content}
               isComplete={!isStreaming}
-              className="text-sm text-muted-foreground"
+              className="text-sm text-foreground/80"
             />
           )}
         </div>
@@ -470,21 +478,30 @@ function MessageBubble({
   }
 
   if (message.type === "artifact") {
+    const isPending = message.status !== "complete" && !isStreaming;
     return (
-      <div className="space-y-2">
+      <div className="space-y-3 w-full">
         <div className="flex items-center gap-2">
-          <div className="h-6 w-6 rounded-full bg-accent/10 flex items-center justify-center">
-            <FileText className="h-3.5 w-3.5 text-accent" />
+          <div className="h-7 w-7 rounded-full bg-accent/10 flex items-center justify-center">
+            <FileText className="h-4 w-4 text-accent" />
           </div>
-          <span className="text-xs font-medium text-foreground">Draft Artifact</span>
-          {message.status !== "complete" && (
+          <span className="text-sm font-medium text-foreground">Draft Artifact</span>
+          {isPending && (
             <Badge variant="outline" className="text-[10px] text-warning border-warning/40">
               Pending Approval
             </Badge>
           )}
+          {message.status === "complete" && !isStreaming && (
+            <Badge variant="outline" className="text-[10px] text-success border-success/40">
+              Approved
+            </Badge>
+          )}
         </div>
-        <div className="border border-warning/30 bg-card rounded-xl overflow-hidden ml-8">
-          <div className="px-5 py-4">
+        <div className={cn(
+          "rounded-xl overflow-hidden",
+          isPending ? "border-2 border-warning/40" : "border border-border/40"
+        )}>
+          <div className="px-6 py-5 bg-card">
             {isStreaming && !message.content ? (
               <ThinkingDots />
             ) : (
@@ -495,23 +512,23 @@ function MessageBubble({
               />
             )}
           </div>
-          {!isStreaming && message.status !== "complete" && (
-            <div className="flex gap-2 px-5 py-3 bg-muted/20 border-t border-border/30">
+          {isPending && (
+            <div className="flex gap-2 px-6 py-4 bg-muted/30 border-t border-border/30">
               <Button variant="outline" size="sm" className="flex-1 gap-2">
-                <Edit3 className="h-3.5 w-3.5" />
+                <Edit3 className="h-4 w-4" />
                 Edit
               </Button>
-              <Button size="sm" className="flex-1 gap-2" onClick={onApprove}>
-                <CheckCircle className="h-3.5 w-3.5" />
-                Approve
+              <Button size="sm" className="flex-1 gap-2 bg-success hover:bg-success/90" onClick={onApprove}>
+                <CheckCircle className="h-4 w-4" />
+                Approve & Publish
               </Button>
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-muted-foreground hover:text-destructive"
+                className="text-muted-foreground hover:text-destructive px-3"
                 onClick={onDiscard}
               >
-                <Trash2 className="h-3.5 w-3.5" />
+                <Trash2 className="h-4 w-4" />
               </Button>
             </div>
           )}
