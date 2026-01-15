@@ -25,6 +25,7 @@ import { mockBuyers } from "@/data/mockData";
 import { usePropertySearch } from "@/hooks/usePropertySearch";
 import { MLSProperty } from "@/types/property";
 import { STAGES } from "@/types";
+import { supabase } from "@/integrations/supabase/client";
 
 type Step = "search" | "details";
 
@@ -109,23 +110,86 @@ export default function AddProperty() {
     if (!selectedProperty) return;
     setIsSaving(true);
 
-    // TODO: Save to database
-    await new Promise(resolve => setTimeout(resolve, 800));
+    try {
+      // First, upsert the property to the properties table
+      const { data: propertyData, error: propertyError } = await supabase
+        .from("properties")
+        .upsert({
+          mls_id: selectedProperty.mlsId || selectedProperty.id,
+          mls_number: selectedProperty.mlsNumber,
+          address: selectedProperty.address,
+          city: selectedProperty.city,
+          state: selectedProperty.state,
+          zip_code: selectedProperty.zipCode,
+          price: selectedProperty.price,
+          bedrooms: selectedProperty.bedrooms,
+          bathrooms: selectedProperty.bathrooms,
+          sqft: selectedProperty.sqft,
+          year_built: selectedProperty.yearBuilt,
+          price_per_sqft: selectedProperty.pricePerSqft,
+          days_on_market: selectedProperty.daysOnMarket,
+          property_type: selectedProperty.propertyType,
+          status: selectedProperty.status,
+          description: selectedProperty.description,
+          features: selectedProperty.features || [],
+          photos: selectedProperty.photos || [],
+          listing_url: selectedProperty.listingUrl,
+          listing_agent: selectedProperty.listingAgent,
+          lot_size: selectedProperty.lotSize,
+          raw_data: selectedProperty.rawData || {},
+        }, { 
+          onConflict: "mls_id",
+          ignoreDuplicates: false 
+        })
+        .select("id")
+        .single();
 
-    const assignedNames = assignedBuyers
-      .map(id => mockBuyers.find(b => b.id === id)?.name)
-      .filter(Boolean)
-      .join(", ");
+      if (propertyError) throw propertyError;
 
-    toast({
-      title: "Property saved",
-      description: assignedNames 
-        ? `Property saved and assigned to ${assignedNames}. AI analysis will generate automatically.`
-        : "Property saved as unassigned",
-    });
+      const propertyId = propertyData.id;
 
-    setIsSaving(false);
-    navigate("/properties");
+      // Create buyer_properties records for each assigned buyer
+      if (assignedBuyers.length > 0) {
+        const buyerPropertyRecords = assignedBuyers.map(buyerId => ({
+          buyer_id: buyerId,
+          property_id: propertyId,
+          viewed: buyerStatuses[buyerId]?.viewed || false,
+          scheduled_showing_datetime: buyerStatuses[buyerId]?.scheduled ? new Date().toISOString() : null,
+          favorited: buyerStatuses[buyerId]?.favorited || false,
+          agent_notes: agentNotes || null,
+          archived: false,
+        }));
+
+        const { error: bpError } = await supabase
+          .from("buyer_properties")
+          .insert(buyerPropertyRecords);
+
+        if (bpError) throw bpError;
+      }
+
+      const assignedNames = assignedBuyers
+        .map(id => mockBuyers.find(b => b.id === id)?.name)
+        .filter(Boolean)
+        .join(", ");
+
+      toast({
+        title: "Property saved",
+        description: assignedNames 
+          ? `Property saved and assigned to ${assignedNames}. AI analysis will generate automatically.`
+          : "Property saved as unassigned",
+      });
+
+      navigate("/properties");
+    } catch (err) {
+      console.error("Save error:", err);
+      toast({
+        title: "Save Error",
+        description: err instanceof Error ? err.message : "Failed to save property",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const formatPrice = (price: number) => {
