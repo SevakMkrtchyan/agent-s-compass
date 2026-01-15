@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   CheckCircle,
   Edit3,
@@ -53,6 +54,8 @@ interface GuidedAgentGPTProps {
   onOpenDetails: () => void;
   onPrefillFromProgress?: (command: string) => void;
   prefillCommand?: string;
+  initialAction?: string;
+  initialCommand?: string;
 }
 
 export function GuidedAgentGPT({
@@ -62,12 +65,16 @@ export function GuidedAgentGPT({
   onSendCommand,
   onApprove,
   prefillCommand,
+  initialAction,
+  initialCommand,
 }: GuidedAgentGPTProps) {
+  const [searchParams] = useSearchParams();
   const [commandInput, setCommandInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [recommendedActions, setRecommendedActions] = useState<RecommendedAction[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showActions, setShowActions] = useState(true);
+  const [hasTriggeredInitial, setHasTriggeredInitial] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { isLoading, fetchRecommendedActions } = useAgentGPT();
@@ -77,6 +84,7 @@ export function GuidedAgentGPT({
 
   const currentStageData = STAGES[currentStage];
 
+  // Load actions on mount or buyer change
   useEffect(() => {
     const loadActions = async () => {
       const fallback = getFallbackActions(currentStage, buyerName);
@@ -114,8 +122,34 @@ export function GuidedAgentGPT({
 
     setMessages([]);
     setShowActions(true);
+    setHasTriggeredInitial(false);
     loadActions();
   }, [buyer.id, currentStage, buyerName]);
+
+  // Handle initial action/command from URL params
+  useEffect(() => {
+    if (hasTriggeredInitial) return;
+
+    const actionParam = searchParams.get('action') || initialAction;
+    const commandParam = searchParams.get('command') || initialCommand;
+
+    if (commandParam) {
+      setHasTriggeredInitial(true);
+      // Trigger the command directly
+      setTimeout(() => {
+        triggerCommand(commandParam, "artifact");
+      }, 100);
+    } else if (actionParam) {
+      setHasTriggeredInitial(true);
+      // Map action to appropriate command
+      const actionCommand = getCommandForAction(actionParam, buyerName);
+      if (actionCommand) {
+        setTimeout(() => {
+          triggerCommand(actionCommand.command, actionCommand.type);
+        }, 100);
+      }
+    }
+  }, [searchParams, initialAction, initialCommand, hasTriggeredInitial, buyerName]);
 
   useEffect(() => {
     if (prefillCommand) {
@@ -173,13 +207,7 @@ export function GuidedAgentGPT({
     return thinkingPatterns.some(p => lowerCommand.includes(p)) ? "thinking" : "artifact";
   };
 
-  const handleSend = useCallback(async () => {
-    if (!commandInput.trim() || isStreaming) return;
-
-    const command = commandInput.trim();
-    const intent = determineIntent(command);
-    onSendCommand(command);
-    setCommandInput("");
+  const triggerCommand = useCallback(async (command: string, type: "artifact" | "thinking") => {
     clearStream();
     setShowActions(false);
 
@@ -192,15 +220,15 @@ export function GuidedAgentGPT({
     }]);
 
     setMessages(prev => [...prev, {
-      id: `${intent}-${Date.now()}`,
-      type: intent,
+      id: `${type}-${Date.now()}`,
+      type: type,
       content: "",
       timestamp: new Date(),
       status: "streaming",
     }]);
 
     try {
-      if (intent === "thinking") {
+      if (type === "thinking") {
         await streamThinking(command, buyer);
       } else {
         await streamArtifact(command, buyer);
@@ -208,7 +236,18 @@ export function GuidedAgentGPT({
     } catch {
       // Error handled by hook
     }
-  }, [commandInput, isStreaming, buyer, onSendCommand, streamArtifact, streamThinking, clearStream]);
+  }, [buyer, streamArtifact, streamThinking, clearStream]);
+
+  const handleSend = useCallback(async () => {
+    if (!commandInput.trim() || isStreaming) return;
+
+    const command = commandInput.trim();
+    const intent = determineIntent(command);
+    onSendCommand(command);
+    setCommandInput("");
+    
+    await triggerCommand(command, intent);
+  }, [commandInput, isStreaming, onSendCommand, triggerCommand]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -218,35 +257,8 @@ export function GuidedAgentGPT({
   };
 
   const handleRecommendationClick = useCallback(async (action: RecommendedAction) => {
-    clearStream();
-    setShowActions(false);
-
-    setMessages(prev => [...prev, {
-      id: `user-${Date.now()}`,
-      type: "user",
-      content: action.label,
-      timestamp: new Date(),
-      status: "complete",
-    }]);
-
-    setMessages(prev => [...prev, {
-      id: `${action.type}-${Date.now()}`,
-      type: action.type,
-      content: "",
-      timestamp: new Date(),
-      status: "streaming",
-    }]);
-
-    try {
-      if (action.type === "thinking") {
-        await streamThinking(action.command, buyer);
-      } else {
-        await streamArtifact(action.command, buyer);
-      }
-    } catch {
-      // Error handled by hook
-    }
-  }, [buyer, streamArtifact, streamThinking, clearStream]);
+    await triggerCommand(action.command, action.type);
+  }, [triggerCommand]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -284,22 +296,22 @@ export function GuidedAgentGPT({
 
   return (
     <div className="flex flex-col h-full w-full bg-[#f9fafb]">
-      {/* Scrollable Content - True Edge to Edge */}
+      {/* Scrollable Content */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto">
-        <div className="w-full px-3 sm:px-4 md:px-6 py-8 md:py-12">
+        <div className="w-full px-4 sm:px-6 md:px-8 lg:px-12 py-8 md:py-12">
           
           {/* Minimal Context */}
-          <p className="text-sm text-muted-foreground/50 mb-8">
+          <p className="text-xs text-muted-foreground/40 mb-8">
             {lastRefreshed && (
               <span>{isCacheHit ? "Cached" : "Updated"} {formatTime(lastRefreshed)}</span>
             )}
           </p>
 
-          {/* Recommended Actions - Plain Text Links */}
+          {/* Recommended Actions - Plain Text */}
           {showActions && messages.length === 0 && (
             <div className="mb-16">
               <div className="flex items-center gap-3 mb-10">
-                <h2 className="text-2xl md:text-3xl font-semibold text-foreground">What would you like to do?</h2>
+                <h2 className="text-2xl md:text-3xl font-medium text-foreground">What would you like to do?</h2>
                 <button
                   onClick={handleRefresh}
                   disabled={isRefreshing || isLoading}
@@ -316,7 +328,7 @@ export function GuidedAgentGPT({
                     onClick={() => handleRecommendationClick(action)}
                     disabled={isStreaming}
                     className={cn(
-                      "w-full text-left py-5 text-lg md:text-xl text-accent hover:text-accent/70 transition-colors",
+                      "w-full text-left py-4 text-lg text-foreground/70 hover:text-foreground transition-colors",
                       "disabled:opacity-50 disabled:cursor-not-allowed",
                       idx < 3 && "border-b border-border/10"
                     )}
@@ -328,7 +340,7 @@ export function GuidedAgentGPT({
             </div>
           )}
 
-          {/* Message Stream - Plain Text */}
+          {/* Message Stream */}
           <div className="space-y-12 md:space-y-16">
             {messages.map((message) => (
               <MessageBlock
@@ -343,10 +355,10 @@ export function GuidedAgentGPT({
         </div>
       </div>
 
-      {/* Fixed Input - Full Width, Minimal Border */}
+      {/* Fixed Input */}
       <div className="border-t border-border/20 bg-[#f9fafb]">
-        <div className="w-full px-3 sm:px-4 md:px-6 py-4 md:py-6">
-          <div className="relative">
+        <div className="w-full px-4 sm:px-6 md:px-8 lg:px-12 py-4 md:py-6">
+          <div className="relative max-w-3xl">
             <textarea
               placeholder="Message AgentGPT..."
               value={commandInput}
@@ -355,10 +367,10 @@ export function GuidedAgentGPT({
               disabled={isStreaming}
               rows={1}
               className={cn(
-                "w-full min-h-[52px] md:min-h-[60px] max-h-[200px] resize-none pr-14 py-4 px-5",
-                "text-base md:text-lg",
+                "w-full min-h-[52px] max-h-[200px] resize-none pr-14 py-4 px-5",
+                "text-base",
                 "bg-white border border-border/30 focus:border-border/60 focus:outline-none",
-                "placeholder:text-muted-foreground/30",
+                "placeholder:text-muted-foreground/40",
                 "disabled:opacity-50"
               )}
               style={{ borderRadius: '2px' }}
@@ -394,27 +406,27 @@ function MessageBlock({
 }) {
   if (message.type === "user") {
     return (
-      <div>
+      <div className="max-w-3xl">
         <p className="text-xs uppercase tracking-widest text-muted-foreground/40 mb-4">You</p>
-        <p className="text-xl md:text-2xl font-medium text-foreground leading-relaxed">{message.content}</p>
+        <p className="text-xl font-medium text-foreground leading-relaxed">{message.content}</p>
       </div>
     );
   }
 
   if (message.type === "thinking") {
     return (
-      <div>
+      <div className="max-w-3xl">
         <p className="text-xs uppercase tracking-widest text-muted-foreground/40 mb-4">
-          AgentGPT · Internal
+          AgentGPT
         </p>
-        <div className="text-base md:text-lg leading-[1.8] text-foreground/80 max-w-none">
+        <div className="text-base leading-[1.75] text-foreground/80">
           {isStreaming && !message.content ? (
             <ThinkingDots />
           ) : (
             <StreamingText
               content={message.content}
               isComplete={!isStreaming}
-              className="text-base md:text-lg leading-[1.8]"
+              className="text-base leading-[1.75]"
             />
           )}
         </div>
@@ -425,51 +437,45 @@ function MessageBlock({
   if (message.type === "artifact") {
     const isPending = message.status !== "complete" && !isStreaming;
     return (
-      <div>
+      <div className="max-w-3xl">
         <p className="text-xs uppercase tracking-widest text-muted-foreground/40 mb-4">
           Draft
           {isPending && <span className="ml-2 text-warning normal-case">· Pending approval</span>}
           {message.status === "complete" && !isStreaming && <span className="ml-2 text-success normal-case">· Approved</span>}
         </p>
         
-        <div className="text-base md:text-lg leading-[1.8] text-foreground max-w-none mb-8">
+        <div className="text-base leading-[1.75] text-foreground mb-8">
           {isStreaming && !message.content ? (
             <ThinkingDots />
           ) : (
             <StreamingText
               content={message.content}
               isComplete={!isStreaming}
-              className="text-base md:text-lg leading-[1.8]"
+              className="text-base leading-[1.75]"
             />
           )}
         </div>
 
         {isPending && (
           <div className="flex items-center gap-4 pt-6 border-t border-border/10">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="h-9 text-muted-foreground hover:text-foreground gap-2 px-0 hover:bg-transparent"
-            >
+            <button className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-2 transition-colors">
               <Edit3 className="h-4 w-4" />
               Edit
-            </Button>
-            <Button 
-              size="sm" 
-              className="h-9 bg-foreground hover:bg-foreground/90 text-background gap-2" 
+            </button>
+            <button 
+              className="text-sm bg-foreground text-background px-4 py-2 hover:bg-foreground/90 flex items-center gap-2 transition-colors" 
               onClick={onApprove}
+              style={{ borderRadius: '2px' }}
             >
               <CheckCircle className="h-4 w-4" />
               Approve
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-9 text-muted-foreground/40 hover:text-destructive px-0 hover:bg-transparent"
+            </button>
+            <button
+              className="text-sm text-muted-foreground/40 hover:text-destructive transition-colors"
               onClick={onDiscard}
             >
               <Trash2 className="h-4 w-4" />
-            </Button>
+            </button>
           </div>
         )}
       </div>
@@ -503,6 +509,31 @@ function getIconForAction(action: RecommendedAction): React.ElementType {
   if (action.type === "thinking") return Info;
 
   return Sparkles;
+}
+
+function getCommandForAction(action: string, buyerName: string): { command: string; type: "artifact" | "thinking" } | null {
+  const firstName = buyerName.split(" ")[0];
+  
+  const actionMap: Record<string, { command: string; type: "artifact" | "thinking" }> = {
+    "needs-attention": {
+      command: `Review open tasks and pending items for ${buyerName} and suggest next steps`,
+      type: "artifact"
+    },
+    "review-approvals": {
+      command: `Show pending approvals for ${buyerName} that need my review`,
+      type: "artifact"
+    },
+    "weekly-summary": {
+      command: `Generate a weekly activity summary for ${buyerName}`,
+      type: "artifact"
+    },
+    "create-buyer-intro": {
+      command: `Draft an introduction and set expectations for a new buyer`,
+      type: "artifact"
+    },
+  };
+
+  return actionMap[action] || null;
 }
 
 function getFallbackActions(stage: Stage, buyerName: string): RecommendedAction[] {

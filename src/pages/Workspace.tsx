@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { 
   Home, 
   DollarSign, 
@@ -7,10 +7,8 @@ import {
   CheckSquare,
   Info,
   LayoutGrid,
-  ArrowRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { mockWorkspaces, currentUser } from "@/data/workspaceData";
@@ -46,10 +44,15 @@ const WORKSPACE_TABS: { id: WorkspaceTab; label: string; icon: React.ElementType
 export default function Workspace() {
   const { workspaceId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("agentgpt");
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [prefillCommand, setPrefillCommand] = useState("");
+
+  // Get initial action/command from URL
+  const initialAction = searchParams.get('action') || undefined;
+  const initialCommand = searchParams.get('command') || undefined;
 
   // Find workspace
   const workspace = useMemo(() => {
@@ -269,6 +272,8 @@ export default function Workspace() {
                 onExpandBlock={handleExpandBlock}
                 onOpenDetails={() => setDetailsOpen(true)}
                 onPrefillFromProgress={(cmd) => setPrefillCommand(cmd)}
+                initialAction={initialAction}
+                initialCommand={initialCommand}
               />
             </TabsContent>
 
