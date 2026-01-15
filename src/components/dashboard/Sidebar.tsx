@@ -13,6 +13,9 @@ import {
   Filter,
   ChevronRight,
   Search,
+  UserPlus,
+  Building,
+  FolderOpen,
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useState, useMemo } from "react";
@@ -21,6 +24,7 @@ import { whiteLabelConfig } from "@/config/whiteLabel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 import {
   Select,
   SelectContent,
@@ -41,9 +45,10 @@ interface SidebarProps {
   onBackToDashboard?: () => void;
 }
 
-// Minimal navigation items
+// Minimal navigation items - updated order
 const globalNavItems = [
   { title: "Agent", url: "/agentgpt", icon: Sparkles },
+  { title: "Workspace", url: "/workspace", icon: FolderOpen },
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "Tasks", url: "/tasks", icon: FileText },
   { title: "Properties", url: "/properties", icon: HomeIcon },
@@ -90,8 +95,40 @@ export function Sidebar({ collapsed, buyerContext, onBackToDashboard }: SidebarP
         )}
       </div>
 
+      {/* Primary Action Buttons */}
+      <div className={cn("px-2 pt-4", collapsed ? "space-y-1" : "space-y-2")}>
+        <Button
+          onClick={() => navigate("/add-buyer")}
+          className={cn(
+            "w-full justify-start gap-2 bg-foreground text-background hover:bg-foreground/90",
+            collapsed && "justify-center px-2"
+          )}
+          size={collapsed ? "icon" : "default"}
+        >
+          <UserPlus className="h-4 w-4 shrink-0" />
+          {!collapsed && <span>New Buyer</span>}
+        </Button>
+        <Button
+          onClick={() => navigate("/add-property")}
+          variant="outline"
+          className={cn(
+            "w-full justify-start gap-2 border-foreground/20 hover:bg-muted/50",
+            collapsed && "justify-center px-2"
+          )}
+          size={collapsed ? "icon" : "default"}
+        >
+          <Building className="h-4 w-4 shrink-0" />
+          {!collapsed && <span>Add Property</span>}
+        </Button>
+      </div>
+
+      {/* Divider */}
+      <div className="px-3 py-3">
+        <Separator className="bg-border/50" />
+      </div>
+
       {/* Navigation */}
-      <nav className="flex-1 py-4 overflow-y-auto">
+      <nav className="flex-1 overflow-y-auto">
         <ul className="space-y-1 px-2">
           {globalNavItems.map((item) => (
             <li key={item.title}>
