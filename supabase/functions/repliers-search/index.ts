@@ -11,10 +11,26 @@ interface SearchParams {
   maxPrice?: number;
   minBeds?: number;
   minBaths?: number;
-  propertyType?: string;
+  propertyType?: string | string[];
   status?: string;
   pageSize?: number;
   pageNum?: number;
+}
+
+// Map frontend status values to Repliers API codes
+function mapStatusToRepliers(status: string): string | undefined {
+  switch (status?.toLowerCase()) {
+    case "active":
+      return "A";
+    case "pending":
+    case "sold":
+    case "withdrawn":
+      return "U";
+    case "all":
+      return undefined; // Don't filter by status
+    default:
+      return "A";
+  }
 }
 
 serve(async (req) => {
@@ -33,9 +49,26 @@ serve(async (req) => {
     // Build query parameters for Repliers API
     const queryParams = new URLSearchParams();
     
+    // Use 'search' parameter for address/location queries instead of 'city'
     if (searchParams.location) {
-      queryParams.append("city", searchParams.location);
+      // Try to detect if it's a full address, city name, or ZIP
+      const location = searchParams.location.trim();
+      
+      // Check if it looks like a ZIP code
+      if (/^\d{5}(-\d{4})?$/.test(location)) {
+        queryParams.append("zip", location);
+      } 
+      // Check if it contains numbers (likely an address)
+      else if (/\d/.test(location)) {
+        queryParams.append("search", location);
+        queryParams.append("searchFields", "address,city,zip");
+      }
+      // Otherwise treat as city/area name
+      else {
+        queryParams.append("city", location);
+      }
     }
+    
     if (searchParams.minPrice) {
       queryParams.append("minPrice", searchParams.minPrice.toString());
     }
@@ -49,10 +82,16 @@ serve(async (req) => {
       queryParams.append("minBaths", searchParams.minBaths.toString());
     }
     if (searchParams.propertyType) {
-      queryParams.append("propertyType", searchParams.propertyType);
+      const types = Array.isArray(searchParams.propertyType) 
+        ? searchParams.propertyType.join(",") 
+        : searchParams.propertyType;
+      queryParams.append("propertyType", types);
     }
-    if (searchParams.status) {
-      queryParams.append("status", searchParams.status);
+    
+    // Map status to Repliers API codes
+    const mappedStatus = mapStatusToRepliers(searchParams.status || "active");
+    if (mappedStatus) {
+      queryParams.append("status", mappedStatus);
     }
     
     queryParams.append("pageSize", (searchParams.pageSize || 20).toString());
@@ -136,7 +175,7 @@ function transformRepliersData(data: any): any[] {
     pricePerSqft: listing.sqft ? Math.round(listing.listPrice / listing.sqft) : null,
     daysOnMarket: listing.daysOnMarket || listing.dom,
     propertyType: listing.propertyType,
-    status: listing.status?.toLowerCase() || "active",
+    status: mapRepliersStatusToFrontend(listing.status),
     description: listing.description || listing.publicRemarks,
     features: listing.features || [],
     photos: listing.photos || listing.images || [],
@@ -146,6 +185,20 @@ function transformRepliersData(data: any): any[] {
     lotSize: listing.lotSize,
     rawData: listing
   }));
+}
+
+// Map Repliers status codes back to frontend values
+function mapRepliersStatusToFrontend(status: string): string {
+  switch (status?.toUpperCase()) {
+    case "A":
+      return "active";
+    case "U":
+      return "pending";
+    case "S":
+      return "sold";
+    default:
+      return status?.toLowerCase() || "active";
+  }
 }
 
 function getMockProperties(params: SearchParams): any[] {
