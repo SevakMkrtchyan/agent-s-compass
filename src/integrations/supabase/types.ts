@@ -47,6 +47,62 @@ export type Database = {
         }
         Relationships: []
       }
+      buyer_properties: {
+        Row: {
+          agent_notes: string | null
+          ai_analysis: string | null
+          ai_analysis_generated_at: string | null
+          archived: boolean | null
+          assigned_at: string | null
+          buyer_id: string
+          created_at: string
+          favorited: boolean | null
+          id: string
+          property_id: string
+          scheduled_showing_datetime: string | null
+          updated_at: string
+          viewed: boolean | null
+        }
+        Insert: {
+          agent_notes?: string | null
+          ai_analysis?: string | null
+          ai_analysis_generated_at?: string | null
+          archived?: boolean | null
+          assigned_at?: string | null
+          buyer_id: string
+          created_at?: string
+          favorited?: boolean | null
+          id?: string
+          property_id: string
+          scheduled_showing_datetime?: string | null
+          updated_at?: string
+          viewed?: boolean | null
+        }
+        Update: {
+          agent_notes?: string | null
+          ai_analysis?: string | null
+          ai_analysis_generated_at?: string | null
+          archived?: boolean | null
+          assigned_at?: string | null
+          buyer_id?: string
+          created_at?: string
+          favorited?: boolean | null
+          id?: string
+          property_id?: string
+          scheduled_showing_datetime?: string | null
+          updated_at?: string
+          viewed?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "buyer_properties_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       buyer_recommendations: {
         Row: {
           actions_json: Json
@@ -131,6 +187,90 @@ export type Database = {
           fetched_at?: string
           id?: string
           metadata?: Json | null
+        }
+        Relationships: []
+      }
+      properties: {
+        Row: {
+          address: string
+          bathrooms: number
+          bedrooms: number
+          city: string
+          created_at: string
+          days_on_market: number | null
+          description: string | null
+          features: Json | null
+          id: string
+          listing_agent: Json | null
+          listing_url: string | null
+          lot_size: string | null
+          mls_id: string | null
+          mls_number: string | null
+          photos: Json | null
+          price: number
+          price_per_sqft: number | null
+          property_type: string | null
+          raw_data: Json | null
+          sqft: number
+          state: string
+          status: string | null
+          updated_at: string
+          year_built: number | null
+          zip_code: string
+        }
+        Insert: {
+          address: string
+          bathrooms: number
+          bedrooms: number
+          city: string
+          created_at?: string
+          days_on_market?: number | null
+          description?: string | null
+          features?: Json | null
+          id?: string
+          listing_agent?: Json | null
+          listing_url?: string | null
+          lot_size?: string | null
+          mls_id?: string | null
+          mls_number?: string | null
+          photos?: Json | null
+          price: number
+          price_per_sqft?: number | null
+          property_type?: string | null
+          raw_data?: Json | null
+          sqft: number
+          state: string
+          status?: string | null
+          updated_at?: string
+          year_built?: number | null
+          zip_code: string
+        }
+        Update: {
+          address?: string
+          bathrooms?: number
+          bedrooms?: number
+          city?: string
+          created_at?: string
+          days_on_market?: number | null
+          description?: string | null
+          features?: Json | null
+          id?: string
+          listing_agent?: Json | null
+          listing_url?: string | null
+          lot_size?: string | null
+          mls_id?: string | null
+          mls_number?: string | null
+          photos?: Json | null
+          price?: number
+          price_per_sqft?: number | null
+          property_type?: string | null
+          raw_data?: Json | null
+          sqft?: number
+          state?: string
+          status?: string | null
+          updated_at?: string
+          year_built?: number | null
+          zip_code?: string
         }
         Relationships: []
       }
