@@ -1,6 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { 
-  ArrowRight, 
   ChevronDown,
   ChevronUp,
   CheckCircle,
@@ -16,6 +15,8 @@ import {
   DollarSign,
   Clock,
   ChevronRight,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -27,22 +28,23 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
+import { useAgentGPT } from "@/hooks/useAgentGPT";
+import { useToast } from "@/hooks/use-toast";
 import type { StageGroup, AIExplanation } from "@/types/conversation";
-import type { Stage } from "@/types";
+import type { Stage, Buyer } from "@/types";
 import { STAGES } from "@/types";
 
 // Recommended action types
 interface RecommendedAction {
   id: string;
   label: string;
-  description: string;
   command: string;
-  icon: React.ElementType;
   type: "artifact" | "thinking";
+  icon?: React.ElementType;
 }
 
 // Current UI state
-type AgentGPTMode = "guided" | "artifact" | "thinking";
+type AgentGPTMode = "guided" | "artifact" | "thinking" | "loading";
 
 interface PendingArtifact {
   id: string;
@@ -61,6 +63,7 @@ interface GuidedAgentGPTProps {
   stages: StageGroup[];
   currentStage: Stage;
   buyerName: string;
+  buyer: Buyer;
   onExpandStage: (stageId: Stage) => void;
   onSendCommand: (command: string) => void;
   onApprove: (itemId: string) => void;
@@ -75,23 +78,53 @@ export function GuidedAgentGPT({
   stages,
   currentStage,
   buyerName,
+  buyer,
   onSendCommand,
   onApprove,
   onOpenDetails,
   prefillCommand,
 }: GuidedAgentGPTProps) {
   const [commandInput, setCommandInput] = useState("");
-  const [mode, setMode] = useState<AgentGPTMode>("guided");
+  const [mode, setMode] = useState<AgentGPTMode>("loading");
   const [pendingArtifact, setPendingArtifact] = useState<PendingArtifact | null>(null);
   const [thinkingResponse, setThinkingResponse] = useState<ThinkingResponse | null>(null);
   const [contextExpanded, setContextExpanded] = useState(false);
   const [activityLogOpen, setActivityLogOpen] = useState(false);
+  const [recommendedActions, setRecommendedActions] = useState<RecommendedAction[]>([]);
+
+  const { isLoading, error, fetchRecommendedActions, generateArtifact, generateThinking, clearError } = useAgentGPT();
+  const { toast } = useToast();
 
   // Get current stage info
   const currentStageData = STAGES[currentStage];
 
-  // Generate recommended actions based on stage and context
-  const recommendedActions: RecommendedAction[] = getRecommendedActions(currentStage, buyerName);
+  // Fetch recommended actions when buyer changes
+  useEffect(() => {
+    const loadActions = async () => {
+      setMode("loading");
+      try {
+        const actions = await fetchRecommendedActions(buyer);
+        if (actions.length > 0) {
+          // Add icons based on type/content
+          const actionsWithIcons = actions.map(action => ({
+            ...action,
+            icon: getIconForAction(action),
+          }));
+          setRecommendedActions(actionsWithIcons);
+        } else {
+          // Fallback to stage-based actions
+          setRecommendedActions(getFallbackActions(currentStage, buyerName));
+        }
+        setMode("guided");
+      } catch (err) {
+        console.error("Failed to fetch actions:", err);
+        setRecommendedActions(getFallbackActions(currentStage, buyerName));
+        setMode("guided");
+      }
+    };
+
+    loadActions();
+  }, [buyer.id, fetchRecommendedActions]);
 
   // Handle prefill from external sources
   useEffect(() => {
@@ -100,44 +133,63 @@ export function GuidedAgentGPT({
     }
   }, [prefillCommand]);
 
+  // Show error toast
+  useEffect(() => {
+    if (error) {
+      toast({
+        title: "AgentGPT Error",
+        description: error,
+        variant: "destructive",
+      });
+      clearError();
+    }
+  }, [error, toast, clearError]);
+
   // Determine intent from command
   const determineIntent = (command: string): "artifact" | "thinking" => {
     const lowerCommand = command.toLowerCase();
     const thinkingPatterns = [
       "why", "what does", "what are the", "explain to me", 
-      "help me understand", "what should i", "risks", "mean"
+      "help me understand", "what should i", "risks", "mean",
+      "analyze", "assessment", "evaluate"
     ];
     
     return thinkingPatterns.some(p => lowerCommand.includes(p)) ? "thinking" : "artifact";
   };
 
-  const handleSend = () => {
-    if (!commandInput.trim()) return;
+  const handleSend = useCallback(async () => {
+    if (!commandInput.trim() || isLoading) return;
 
-    const intent = determineIntent(commandInput);
-    onSendCommand(commandInput.trim());
-
-    if (intent === "thinking") {
-      // Generate thinking response
-      setThinkingResponse({
-        id: `think-${Date.now()}`,
-        content: generateThinkingResponse(commandInput),
-        timestamp: new Date(),
-      });
-      setMode("thinking");
-    } else {
-      // Generate artifact
-      setPendingArtifact({
-        id: `artifact-${Date.now()}`,
-        content: generateArtifactContent(commandInput, buyerName),
-        stageTitle: currentStageData.title,
-        timestamp: new Date(),
-      });
-      setMode("artifact");
-    }
-
+    const command = commandInput.trim();
+    const intent = determineIntent(command);
+    onSendCommand(command);
     setCommandInput("");
-  };
+    setMode("loading");
+
+    try {
+      if (intent === "thinking") {
+        const content = await generateThinking(command, buyer);
+        setThinkingResponse({
+          id: `think-${Date.now()}`,
+          content,
+          timestamp: new Date(),
+        });
+        setMode("thinking");
+      } else {
+        const content = await generateArtifact(command, buyer);
+        setPendingArtifact({
+          id: `artifact-${Date.now()}`,
+          content,
+          stageTitle: currentStageData.title,
+          timestamp: new Date(),
+        });
+        setMode("artifact");
+      }
+    } catch (err) {
+      // Error already handled by hook
+      setMode("guided");
+    }
+  }, [commandInput, isLoading, buyer, currentStageData, onSendCommand, generateArtifact, generateThinking]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -146,29 +198,43 @@ export function GuidedAgentGPT({
     }
   };
 
-  const handleRecommendationClick = (action: RecommendedAction) => {
-    if (action.type === "thinking") {
-      setThinkingResponse({
-        id: `think-${Date.now()}`,
-        content: generateThinkingResponse(action.command),
-        timestamp: new Date(),
-      });
-      setMode("thinking");
-    } else {
-      setPendingArtifact({
-        id: `artifact-${Date.now()}`,
-        content: generateArtifactContent(action.command, buyerName),
-        stageTitle: currentStageData.title,
-        timestamp: new Date(),
-      });
-      setMode("artifact");
+  const handleRecommendationClick = useCallback(async (action: RecommendedAction) => {
+    setMode("loading");
+
+    try {
+      if (action.type === "thinking") {
+        const content = await generateThinking(action.command, buyer);
+        setThinkingResponse({
+          id: `think-${Date.now()}`,
+          content,
+          timestamp: new Date(),
+        });
+        setMode("thinking");
+      } else {
+        const content = await generateArtifact(action.command, buyer);
+        setPendingArtifact({
+          id: `artifact-${Date.now()}`,
+          content,
+          stageTitle: currentStageData.title,
+          timestamp: new Date(),
+        });
+        setMode("artifact");
+      }
+    } catch (err) {
+      setMode("guided");
     }
-  };
+  }, [buyer, currentStageData, generateArtifact, generateThinking]);
 
   const handleApproveArtifact = () => {
     if (pendingArtifact) {
       onApprove(pendingArtifact.id);
       setPendingArtifact(null);
+      // Refresh actions after approval
+      fetchRecommendedActions(buyer).then(actions => {
+        if (actions.length > 0) {
+          setRecommendedActions(actions.map(a => ({ ...a, icon: getIconForAction(a) })));
+        }
+      });
       setMode("guided");
     }
   };
@@ -206,6 +272,18 @@ export function GuidedAgentGPT({
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-8">
         <div className="w-full max-w-xl space-y-6">
           
+          {/* Loading State */}
+          {mode === "loading" && (
+            <Card className="border border-border/60 shadow-sm bg-card">
+              <CardContent className="py-12">
+                <div className="flex flex-col items-center justify-center gap-3">
+                  <Loader2 className="h-8 w-8 animate-spin text-accent" />
+                  <p className="text-sm text-muted-foreground">Analyzing context...</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* STATE A: Guided Mode - Recommended Actions */}
           {mode === "guided" && (
             <Card className="border border-border/60 shadow-sm bg-card">
@@ -216,14 +294,15 @@ export function GuidedAgentGPT({
                 <div className="space-y-1">
                   {/* Primary actions - first 3 only */}
                   {recommendedActions.slice(0, 3).map((action) => {
-                    const Icon = action.icon;
+                    const Icon = action.icon || Sparkles;
                     return (
                       <button
                         key={action.id}
                         onClick={() => handleRecommendationClick(action)}
+                        disabled={isLoading}
                         className={cn(
                           "w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left transition-all group",
-                          "hover:bg-muted/60"
+                          "hover:bg-muted/60 disabled:opacity-50 disabled:cursor-not-allowed"
                         )}
                       >
                         <div className={cn(
@@ -282,7 +361,7 @@ export function GuidedAgentGPT({
                 </div>
               </CardHeader>
               <CardContent className="pt-4 pb-5">
-                <div className="bg-muted/40 rounded-lg p-4 mb-5">
+                <div className="bg-muted/40 rounded-lg p-4 mb-5 max-h-[300px] overflow-y-auto">
                   <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground">
                     {pendingArtifact.content}
                   </p>
@@ -331,7 +410,7 @@ export function GuidedAgentGPT({
                 </div>
               </CardHeader>
               <CardContent className="pt-0 pb-4">
-                <div className="bg-background/60 rounded-lg p-3 mb-3">
+                <div className="bg-background/60 rounded-lg p-3 mb-3 max-h-[300px] overflow-y-auto">
                   <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-wrap">
                     {thinkingResponse.content}
                   </p>
@@ -357,22 +436,28 @@ export function GuidedAgentGPT({
                 value={commandInput}
                 onChange={(e) => setCommandInput(e.target.value)}
                 onKeyDown={handleKeyDown}
+                disabled={isLoading}
                 className={cn(
                   "min-h-[48px] max-h-[100px] resize-none pr-12 text-sm",
                   "bg-muted/30 border-0 focus:bg-background focus:ring-1 focus:ring-accent/30",
                   "rounded-lg",
-                  "placeholder:text-muted-foreground/50"
+                  "placeholder:text-muted-foreground/50",
+                  "disabled:opacity-50"
                 )}
                 rows={1}
               />
               <Button 
                 onClick={handleSend} 
-                disabled={!commandInput.trim()} 
+                disabled={!commandInput.trim() || isLoading} 
                 size="icon" 
                 variant="ghost"
                 className="absolute right-1.5 bottom-1.5 h-8 w-8 rounded-md text-muted-foreground hover:text-accent disabled:opacity-30"
               >
-                <Send className="h-4 w-4" />
+                {isLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
               </Button>
             </div>
             {mode === "guided" && (
@@ -407,6 +492,11 @@ export function GuidedAgentGPT({
                     <p className="text-sm font-medium">Stage {currentStage}: {currentStageData.title}</p>
                     <p className="text-xs text-muted-foreground">{buyerName}</p>
                   </div>
+                </div>
+                <div className="text-xs text-muted-foreground space-y-1">
+                  <p>Financing: {buyer.financingConfirmed ? "Confirmed" : "Pending"}</p>
+                  {buyer.buyerType && <p>Buyer Type: {buyer.buyerType}</p>}
+                  {buyer.marketContext && <p>Market: {buyer.marketContext}</p>}
                 </div>
                 <Button 
                   variant="outline" 
@@ -477,105 +567,55 @@ function formatTime(date: Date): string {
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(date);
 }
 
-// Generate thinking response (mock)
-function generateThinkingResponse(command: string): string {
-  const responses: Record<string, string> = {
-    default: `Based on my analysis of the current market conditions and this buyer's profile, here's what you should consider:
-
-1. **Market Context**: Current inventory levels are low, which means buyers face increased competition for desirable properties.
-
-2. **Strategy Consideration**: Given the buyer's pre-approval status and timeline, a more aggressive offer strategy may be warranted for properties that meet their criteria.
-
-3. **Risk Assessment**: The main risks to watch for include appraisal gaps in competitive bidding situations and potential inspection issues with older properties.
-
-This is for your reference only and will not be shared with the client.`,
-  };
-
-  return responses.default;
+// Get icon for action based on content
+function getIconForAction(action: RecommendedAction): React.ElementType {
+  const label = action.label.toLowerCase();
+  const command = action.command.toLowerCase();
+  
+  if (label.includes("comp") || command.includes("comp") || label.includes("market")) return BarChart3;
+  if (label.includes("offer") || command.includes("offer") || label.includes("price")) return DollarSign;
+  if (label.includes("update") || label.includes("draft") || command.includes("draft")) return MessageSquare;
+  if (label.includes("document") || label.includes("checklist") || command.includes("checklist")) return FileText;
+  if (label.includes("inspection") || label.includes("walkthrough")) return Home;
+  if (action.type === "thinking") return Info;
+  
+  return Sparkles;
 }
 
-// Generate artifact content (mock)
-function generateArtifactContent(command: string, buyerName: string): string {
-  if (command.toLowerCase().includes("comp") || command.toLowerCase().includes("comparable")) {
-    return `**Comparable Sales Analysis**
-
-Hi ${buyerName.split(" ")[0]},
-
-I've prepared an analysis of recent comparable sales for 123 Oak Street to help inform our offer strategy:
-
-📊 **Market Overview**
-• Median sale price (last 90 days): $485,000
-• Average days on market: 18 days
-• Price per sq ft range: $285-$315
-
-📍 **Comparable Properties**
-1. 145 Maple Ave - Sold $479,000 (15 days on market)
-2. 89 Pine Street - Sold $492,000 (12 days on market)  
-3. 201 Cedar Lane - Sold $468,000 (22 days on market)
-
-💡 **Key Takeaway**
-Based on these comps, a competitive offer range would be $475,000-$495,000.
-
-Let me know if you have any questions about this analysis.`;
-  }
-
-  if (command.toLowerCase().includes("update") || command.toLowerCase().includes("draft")) {
-    return `**Market Update for ${buyerName.split(" ")[0]}**
-
-Great news! I've identified some new listings that match your search criteria:
-
-🏠 **New Listings This Week**
-• 456 Oak Drive - 4 bed/2.5 bath, $525,000
-• 789 Elm Court - 3 bed/2 bath, $475,000
-
-Both properties are in your preferred neighborhood and within budget. I recommend scheduling viewings soon as they're likely to receive strong interest.
-
-Would you like to tour these properties this weekend?`;
-  }
-
-  return `**Update for ${buyerName.split(" ")[0]}**
-
-I've prepared the following update based on our current transaction status:
-
-${command}
-
-This draft is ready for your review. You can edit before publishing or discard if not needed.`;
-}
-
-// Get recommended actions based on stage context (max 3 primary actions)
-function getRecommendedActions(stage: Stage, buyerName: string): RecommendedAction[] {
+// Fallback actions if AI fails
+function getFallbackActions(stage: Stage, buyerName: string): RecommendedAction[] {
   const firstName = buyerName.split(' ')[0];
   
   const baseActions: Record<Stage, RecommendedAction[]> = {
     0: [
-      { id: "1", label: "Set buyer expectations", description: "", command: "Draft buyer introduction and set expectations for the home buying journey", icon: MessageSquare, type: "artifact" },
-      { id: "2", label: "Confirm financing status", description: "", command: "Create task to confirm financing and pre-approval status", icon: FileText, type: "artifact" },
-      { id: "3", label: "Explain market conditions", description: "", command: "Why is understanding market conditions important for buyers?", icon: Info, type: "thinking" },
+      { id: "1", label: "Set buyer expectations", command: "Draft buyer introduction and set expectations for the home buying journey", type: "artifact", icon: MessageSquare },
+      { id: "2", label: "Confirm financing status", command: "Create task to confirm financing and pre-approval status", type: "artifact", icon: FileText },
+      { id: "3", label: "Explain market conditions", command: "Why is understanding market conditions important for buyers?", type: "thinking", icon: Info },
     ],
     1: [
-      { id: "1", label: `Draft update for ${firstName}`, description: "", command: `Draft buyer update about new listings matching ${buyerName}'s criteria`, icon: MessageSquare, type: "artifact" },
-      { id: "2", label: "Generate property comps", description: "", command: "Generate comparable sales analysis for saved properties", icon: BarChart3, type: "artifact" },
-      { id: "3", label: "Explain days on market", description: "", command: `Explain "days on market" concept to ${buyerName}`, icon: MessageSquare, type: "artifact" },
+      { id: "1", label: `Draft update for ${firstName}`, command: `Draft buyer update about new listings matching ${buyerName}'s criteria`, type: "artifact", icon: MessageSquare },
+      { id: "2", label: "Generate property comps", command: "Generate comparable sales analysis for saved properties", type: "artifact", icon: BarChart3 },
+      { id: "3", label: "Explain days on market", command: `Explain "days on market" concept to ${buyerName}`, type: "artifact", icon: MessageSquare },
     ],
     2: [
-      { id: "1", label: "Prepare offer strategy", description: "", command: "Prepare offer strategy summary for buyer review", icon: DollarSign, type: "artifact" },
-      { id: "2", label: "Generate offer scenarios", description: "", command: "Generate offer scenarios with different price points", icon: BarChart3, type: "artifact" },
-      { id: "3", label: "Explain contingencies", description: "", command: "Draft explanation of key contingencies for buyer", icon: MessageSquare, type: "artifact" },
+      { id: "1", label: "Prepare offer strategy", command: "Prepare offer strategy summary for buyer review", type: "artifact", icon: DollarSign },
+      { id: "2", label: "Generate offer scenarios", command: "Generate offer scenarios with different price points", type: "artifact", icon: BarChart3 },
+      { id: "3", label: "Explain contingencies", command: "Draft explanation of key contingencies for buyer", type: "artifact", icon: MessageSquare },
     ],
     3: [
-      { id: "1", label: "Inspection summary", description: "", command: "Draft inspection findings summary for buyer", icon: FileText, type: "artifact" },
-      { id: "2", label: "Create repair request", description: "", command: "Generate repair request list based on inspection", icon: FileText, type: "artifact" },
-      { id: "3", label: "Timeline update", description: "", command: "Create closing timeline update for buyer", icon: MessageSquare, type: "artifact" },
+      { id: "1", label: "Inspection summary", command: "Draft inspection findings summary for buyer", type: "artifact", icon: FileText },
+      { id: "2", label: "Create repair request", command: "Generate repair request list based on inspection", type: "artifact", icon: FileText },
+      { id: "3", label: "Timeline update", command: "Create closing timeline update for buyer", type: "artifact", icon: MessageSquare },
     ],
     4: [
-      { id: "1", label: "Final walkthrough prep", description: "", command: "Generate final walkthrough checklist", icon: Home, type: "artifact" },
-      { id: "2", label: "Closing cost breakdown", description: "", command: "Draft closing costs explanation for buyer", icon: DollarSign, type: "artifact" },
-      { id: "3", label: "What to verify at closing?", description: "", command: "What should I verify before closing?", icon: Info, type: "thinking" },
+      { id: "1", label: "Final walkthrough prep", command: "Generate final walkthrough checklist", type: "artifact", icon: Home },
+      { id: "2", label: "Closing cost breakdown", command: "Draft closing costs explanation for buyer", type: "artifact", icon: DollarSign },
+      { id: "3", label: "What to verify at closing?", command: "What should I verify before closing?", type: "thinking", icon: Info },
     ],
     5: [
-      { id: "1", label: "Post-closing resources", description: "", command: "Generate post-closing resources and next steps", icon: Home, type: "artifact" },
-      { id: "2", label: "Request review", description: "", command: "Create task to request buyer review and referrals", icon: MessageSquare, type: "artifact" },
-      { id: "3", label: "What's next for retention?", description: "", command: "What's the best approach for client retention?", icon: Info, type: "thinking" },
+      { id: "1", label: "Post-closing resources", command: "Generate post-closing resources and next steps", type: "artifact", icon: Home },
+      { id: "2", label: "Request review", command: "Create task to request buyer review and referrals", type: "artifact", icon: MessageSquare },
+      { id: "3", label: "What's next for retention?", command: "What's the best approach for client retention?", type: "thinking", icon: Info },
     ],
   };
 
