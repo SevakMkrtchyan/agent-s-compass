@@ -11,6 +11,8 @@ import GlobalTasks from "./pages/GlobalTasks";
 import GlobalProperties from "./pages/GlobalProperties";
 import GlobalOffers from "./pages/GlobalOffers";
 import Analytics from "./pages/Analytics";
+import AddBuyer from "./pages/AddBuyer";
+import AddProperty from "./pages/AddProperty";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,12 +28,14 @@ const App = () => (
           <Route path="/" element={<Navigate to="/agentgpt" replace />} />
           <Route path="/agentgpt" element={<AgentGPT />} />
           <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/workspace" element={<Navigate to="/agentgpt" replace />} />
+          <Route path="/workspace" element={<Navigate to="/dashboard" replace />} />
           <Route path="/workspace/:workspaceId" element={<Workspace />} />
           <Route path="/tasks" element={<GlobalTasks />} />
           <Route path="/properties" element={<GlobalProperties />} />
           <Route path="/offers" element={<GlobalOffers />} />
           <Route path="/analytics" element={<Analytics />} />
+          <Route path="/add-buyer" element={<AddBuyer />} />
+          <Route path="/add-property" element={<AddProperty />} />
           {/* Legacy routes redirect to agentgpt */}
           <Route path="/buyers" element={<Navigate to="/agentgpt" replace />} />
           <Route path="/buyer/:buyerId" element={<Navigate to="/agentgpt" replace />} />
