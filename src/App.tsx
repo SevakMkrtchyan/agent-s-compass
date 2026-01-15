@@ -29,7 +29,7 @@ const App = () => (
           <Route path="/" element={<Navigate to="/agentgpt" replace />} />
           <Route path="/agentgpt" element={<AgentGPT />} />
           <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/workspace" element={<WorkspaceList />} />
+          <Route path="/workspace" element={<Navigate to="/agentgpt" replace />} />
           <Route path="/workspace/:workspaceId" element={<Workspace />} />
           <Route path="/tasks" element={<GlobalTasks />} />
           <Route path="/properties" element={<GlobalProperties />} />
