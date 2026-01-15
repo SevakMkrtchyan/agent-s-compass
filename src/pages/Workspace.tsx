@@ -47,7 +47,6 @@ export default function Workspace() {
   const { workspaceId } = useParams();
   const navigate = useNavigate();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("agentgpt");
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [prefillCommand, setPrefillCommand] = useState("");
@@ -166,8 +165,6 @@ export default function Workspace() {
           sidebarCollapsed ? "ml-[58px]" : "ml-[240px]"
         )}>
           <TopBar
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
             onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
             sidebarCollapsed={sidebarCollapsed}
           />
@@ -206,8 +203,6 @@ export default function Workspace() {
       >
         {/* Top Bar */}
         <TopBar
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
           onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
           sidebarCollapsed={sidebarCollapsed}
         />

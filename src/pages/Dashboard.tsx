@@ -61,8 +61,6 @@ export default function Dashboard() {
       >
         {/* Top Bar */}
         <TopBar
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
           onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
           sidebarCollapsed={sidebarCollapsed}
         />

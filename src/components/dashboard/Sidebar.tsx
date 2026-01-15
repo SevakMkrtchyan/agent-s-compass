@@ -5,7 +5,6 @@ import {
   Home as HomeIcon,
   DollarSign,
   BarChart3,
-  Search,
   Sparkles,
   ArrowLeft,
   Pin,
@@ -13,6 +12,7 @@ import {
   X,
   Filter,
   ChevronRight,
+  Search,
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useState, useMemo } from "react";
@@ -20,7 +20,6 @@ import { cn } from "@/lib/utils";
 import { whiteLabelConfig } from "@/config/whiteLabel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
@@ -42,9 +41,9 @@ interface SidebarProps {
   onBackToDashboard?: () => void;
 }
 
-// Global navigation items (when no buyer selected)
+// Minimal navigation items
 const globalNavItems = [
-  { title: "Agent", url: "/agentgpt", icon: Sparkles, primary: true },
+  { title: "Agent", url: "/agentgpt", icon: Sparkles },
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "Tasks", url: "/tasks", icon: FileText },
   { title: "Properties", url: "/properties", icon: HomeIcon },
@@ -54,7 +53,6 @@ const globalNavItems = [
 
 export function Sidebar({ collapsed, buyerContext, onBackToDashboard }: SidebarProps) {
   const navigate = useNavigate();
-  const { workspaceId } = useParams();
 
   // If buyer is selected, show Buyer Rolodex
   if (buyerContext) {
@@ -67,69 +65,47 @@ export function Sidebar({ collapsed, buyerContext, onBackToDashboard }: SidebarP
     );
   }
 
-  // Otherwise show global navigation
+  // Minimal global sidebar
   return (
     <aside
       className={cn(
-        "fixed left-0 top-0 h-screen bg-sidebar text-sidebar-foreground flex flex-col transition-all duration-200 z-50 border-r border-sidebar-border",
+        "fixed left-0 top-0 h-screen bg-[#f9fafb] text-foreground flex flex-col transition-all duration-200 z-50 border-r border-border/30",
         collapsed ? "w-[58px]" : "w-[240px]"
       )}
     >
-      {/* Logo / Brokerage Header */}
+      {/* Logo Header */}
       <div className={cn(
-        "flex items-center h-14 border-b border-sidebar-border",
+        "flex items-center h-14 border-b border-border/30",
         collapsed ? "justify-center px-2" : "px-4 gap-3"
       )}>
-        <div className="w-8 h-8 rounded-lg bg-sidebar-primary flex items-center justify-center shrink-0">
-          <span className="text-sm font-bold text-sidebar-primary-foreground">
+        <div className="w-8 h-8 rounded-lg bg-foreground/10 flex items-center justify-center shrink-0">
+          <span className="text-sm font-semibold text-foreground/70">
             {whiteLabelConfig.brokerage.shortName}
           </span>
         </div>
         {!collapsed && (
-          <span className="text-[15px] font-semibold text-sidebar-foreground truncate">
+          <span className="text-sm font-medium text-foreground truncate">
             {whiteLabelConfig.brokerage.name}
           </span>
         )}
       </div>
 
-      {/* Search */}
-      {!collapsed && (
-        <div className="px-3 py-3">
-          <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-sidebar-accent hover:bg-sidebar-accent/80 transition-colors text-sm text-sidebar-foreground/60">
-            <Search className="h-4 w-4" />
-            <span>Search</span>
-            <span className="ml-auto text-xs text-sidebar-foreground/40 bg-sidebar-accent/50 px-1.5 py-0.5 rounded">⌘K</span>
-          </button>
-        </div>
-      )}
-
       {/* Navigation */}
-      <nav className="flex-1 py-2 overflow-y-auto">
-        <ul className="space-y-0.5 px-2">
+      <nav className="flex-1 py-4 overflow-y-auto">
+        <ul className="space-y-1 px-2">
           {globalNavItems.map((item) => (
             <li key={item.title}>
               <NavLink
                 to={item.url}
                 className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-[14px] font-medium transition-all duration-150",
-                  "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent",
-                  collapsed && "justify-center px-2",
-                  item.primary && "text-sidebar-primary hover:text-sidebar-primary"
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150",
+                  "text-foreground/60 hover:text-foreground hover:bg-muted/50",
+                  collapsed && "justify-center px-2"
                 )}
-                activeClassName={cn(
-                  "bg-sidebar-accent text-sidebar-foreground",
-                  item.primary && "bg-sidebar-primary/20 text-sidebar-primary"
-                )}
+                activeClassName="bg-muted/50 text-foreground"
               >
-                <item.icon className={cn(
-                  "h-5 w-5 shrink-0",
-                  item.primary && "text-sidebar-primary"
-                )} />
-                {!collapsed && (
-                  <span className={cn(
-                    item.primary && "font-semibold"
-                  )}>{item.title}</span>
-                )}
+                <item.icon className="h-4 w-4 shrink-0" />
+                {!collapsed && <span>{item.title}</span>}
               </NavLink>
             </li>
           ))}
@@ -138,21 +114,21 @@ export function Sidebar({ collapsed, buyerContext, onBackToDashboard }: SidebarP
 
       {/* Footer - User section */}
       <div className={cn(
-        "border-t border-sidebar-border p-3",
+        "border-t border-border/30 p-3",
         collapsed ? "flex justify-center" : ""
       )}>
         {collapsed ? (
-          <div className="w-8 h-8 rounded-full bg-sidebar-primary flex items-center justify-center">
-            <span className="text-xs font-semibold text-sidebar-primary-foreground">JS</span>
+          <div className="w-8 h-8 rounded-full bg-foreground/10 flex items-center justify-center">
+            <span className="text-xs font-medium text-foreground/70">JS</span>
           </div>
         ) : (
-          <div className="flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-sidebar-accent cursor-pointer transition-colors">
-            <div className="w-8 h-8 rounded-full bg-sidebar-primary flex items-center justify-center shrink-0">
-              <span className="text-xs font-semibold text-sidebar-primary-foreground">JS</span>
+          <div className="flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors">
+            <div className="w-8 h-8 rounded-full bg-foreground/10 flex items-center justify-center shrink-0">
+              <span className="text-xs font-medium text-foreground/70">JS</span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-sidebar-foreground truncate">John Smith</p>
-              <p className="text-xs text-sidebar-foreground/50 truncate">Agent</p>
+              <p className="text-sm font-medium text-foreground truncate">John Smith</p>
+              <p className="text-xs text-muted-foreground truncate">Agent</p>
             </div>
           </div>
         )}
@@ -224,8 +200,6 @@ function BuyerRolodex({ collapsed, currentBuyerId, onBackToDashboard }: BuyerRol
 
   const WorkspaceItem = ({ workspace }: { workspace: Workspace }) => {
     const isActive = currentBuyerId === workspace.buyerId || currentBuyerId === workspace.id;
-    const stage = STAGES[workspace.currentStage];
-    const statusConfig = WORKSPACE_STATUS_CONFIG[workspace.status];
 
     return (
       <button
@@ -233,14 +207,14 @@ function BuyerRolodex({ collapsed, currentBuyerId, onBackToDashboard }: BuyerRol
         className={cn(
           "w-full text-left p-2.5 rounded-lg transition-all group",
           isActive
-            ? "bg-sidebar-primary/20 text-sidebar-foreground"
-            : "hover:bg-sidebar-accent text-sidebar-foreground/80"
+            ? "bg-muted/70 text-foreground"
+            : "hover:bg-muted/50 text-foreground/70"
         )}
       >
         <div className="flex items-start gap-2.5">
           <div className={cn(
-            "h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0 text-xs font-semibold",
-            isActive ? "bg-sidebar-primary text-sidebar-primary-foreground" : "bg-sidebar-accent text-sidebar-foreground/60"
+            "h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0 text-xs font-medium",
+            isActive ? "bg-foreground/10 text-foreground" : "bg-muted text-foreground/50"
           )}>
             {workspace.buyerName.split(" ").map((n) => n[0]).join("")}
           </div>
@@ -250,15 +224,15 @@ function BuyerRolodex({ collapsed, currentBuyerId, onBackToDashboard }: BuyerRol
               <div className="flex items-center gap-1.5">
                 <span className="font-medium text-sm truncate">{workspace.buyerName}</span>
                 {workspace.isPinned && (
-                  <Pin className="h-3 w-3 text-sidebar-primary flex-shrink-0" />
+                  <Pin className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                 )}
               </div>
               <div className="flex items-center gap-1.5 mt-0.5">
-                <span className="text-xs text-sidebar-foreground/50 truncate">
+                <span className="text-xs text-muted-foreground truncate">
                   Stage {workspace.currentStage}
                 </span>
-                <span className="text-xs text-sidebar-foreground/30">•</span>
-                <span className="text-xs text-sidebar-foreground/50">{formatLastActivity(workspace.lastActivity)}</span>
+                <span className="text-xs text-muted-foreground/50">·</span>
+                <span className="text-xs text-muted-foreground">{formatLastActivity(workspace.lastActivity)}</span>
               </div>
             </div>
           )}
@@ -270,13 +244,13 @@ function BuyerRolodex({ collapsed, currentBuyerId, onBackToDashboard }: BuyerRol
   return (
     <aside
       className={cn(
-        "fixed left-0 top-0 h-screen bg-sidebar text-sidebar-foreground flex flex-col transition-all duration-200 z-50 border-r border-sidebar-border",
+        "fixed left-0 top-0 h-screen bg-[#f9fafb] text-foreground flex flex-col transition-all duration-200 z-50 border-r border-border/30",
         collapsed ? "w-[58px]" : "w-[240px]"
       )}
     >
       {/* Back to Dashboard */}
       <div className={cn(
-        "h-14 border-b border-sidebar-border flex items-center",
+        "h-14 border-b border-border/30 flex items-center",
         collapsed ? "justify-center px-2" : "px-3"
       )}>
         <Button
@@ -284,31 +258,31 @@ function BuyerRolodex({ collapsed, currentBuyerId, onBackToDashboard }: BuyerRol
           size="sm"
           onClick={onBackToDashboard}
           className={cn(
-            "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent",
+            "text-foreground/60 hover:text-foreground hover:bg-muted/50",
             collapsed ? "w-8 h-8 p-0" : "gap-2"
           )}
         >
           <ArrowLeft className="h-4 w-4" />
-          {!collapsed && <span className="text-sm">Back to Dashboard</span>}
+          {!collapsed && <span className="text-sm">Back</span>}
         </Button>
       </div>
 
       {/* Search & Filters */}
       {!collapsed && (
-        <div className="p-3 border-b border-sidebar-border">
+        <div className="p-3 border-b border-border/30">
           <div className="relative mb-2">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-sidebar-foreground/40" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/50" />
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search buyers..."
-              className="pl-8 h-8 text-sm bg-sidebar-accent border-0 text-sidebar-foreground placeholder:text-sidebar-foreground/40"
+              className="pl-8 h-8 text-sm bg-muted/30 border-0 text-foreground placeholder:text-muted-foreground/50"
             />
             {searchQuery && (
               <Button
                 variant="ghost"
                 size="icon"
-                className="absolute right-1 top-1/2 -translate-y-1/2 h-5 w-5 text-sidebar-foreground/60"
+                className="absolute right-1 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground/60"
                 onClick={() => setSearchQuery("")}
               >
                 <X className="h-3 w-3" />
@@ -319,7 +293,7 @@ function BuyerRolodex({ collapsed, currentBuyerId, onBackToDashboard }: BuyerRol
           <Button
             variant="ghost"
             size="sm"
-            className="w-full justify-between h-7 text-xs text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+            className="w-full justify-between h-7 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50"
             onClick={() => setShowFilters(!showFilters)}
           >
             <span className="flex items-center gap-1.5">
@@ -330,9 +304,9 @@ function BuyerRolodex({ collapsed, currentBuyerId, onBackToDashboard }: BuyerRol
           </Button>
 
           {showFilters && (
-            <div className="mt-2 pt-2 border-t border-sidebar-border">
+            <div className="mt-2 pt-2 border-t border-border/30">
               <Select value={statusFilter} onValueChange={(val) => setStatusFilter(val as WorkspaceStatus | "all")}>
-                <SelectTrigger className="h-7 text-xs bg-sidebar-accent border-0 text-sidebar-foreground">
+                <SelectTrigger className="h-7 text-xs bg-muted/30 border-0 text-foreground">
                   <SelectValue placeholder="All statuses" />
                 </SelectTrigger>
                 <SelectContent>
@@ -354,7 +328,7 @@ function BuyerRolodex({ collapsed, currentBuyerId, onBackToDashboard }: BuyerRol
           {/* Pinned Section */}
           {pinnedWorkspaces.length > 0 && !collapsed && (
             <div className="mb-3">
-              <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-medium text-sidebar-foreground/50 uppercase tracking-wider">
+              <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">
                 <Pin className="h-3 w-3" />
                 Pinned
               </div>
@@ -370,7 +344,7 @@ function BuyerRolodex({ collapsed, currentBuyerId, onBackToDashboard }: BuyerRol
           {recentWorkspaces.length > 0 && (
             <div>
               {!collapsed && (
-                <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-medium text-sidebar-foreground/50 uppercase tracking-wider">
+                <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">
                   <Clock className="h-3 w-3" />
                   Recent
                 </div>
@@ -393,7 +367,7 @@ function BuyerRolodex({ collapsed, currentBuyerId, onBackToDashboard }: BuyerRol
           )}
 
           {sortedWorkspaces.length === 0 && !collapsed && (
-            <div className="p-4 text-center text-sidebar-foreground/50 text-sm">
+            <div className="p-4 text-center text-muted-foreground/50 text-sm">
               No buyers found
             </div>
           )}

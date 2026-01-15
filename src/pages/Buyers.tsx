@@ -76,8 +76,6 @@ export default function Buyers() {
   return (
     <div className="min-h-screen bg-background">
       <TopBar
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
         onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
         sidebarCollapsed={sidebarCollapsed}
       />
