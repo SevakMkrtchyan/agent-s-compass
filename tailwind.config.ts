@@ -14,8 +14,16 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ["DM Sans", "system-ui", "sans-serif"],
-        display: ["Playfair Display", "Georgia", "serif"],
+        sans: ["system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "sans-serif"],
+        display: ["system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
+      },
+      fontSize: {
+        'base': ['16px', { lineHeight: '1.7', letterSpacing: '-0.01em' }],
+        'lg': ['17px', { lineHeight: '1.7', letterSpacing: '-0.01em' }],
+        'xl': ['18px', { lineHeight: '1.65', letterSpacing: '-0.01em' }],
+        '2xl': ['22px', { lineHeight: '1.4', letterSpacing: '-0.02em' }],
+        '3xl': ['28px', { lineHeight: '1.3', letterSpacing: '-0.02em' }],
+        '4xl': ['36px', { lineHeight: '1.2', letterSpacing: '-0.02em' }],
       },
       colors: {
         border: "hsl(var(--border))",
