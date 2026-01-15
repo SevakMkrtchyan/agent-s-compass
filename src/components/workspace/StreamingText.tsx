@@ -49,18 +49,13 @@ export function StreamingText({
     return () => clearInterval(interval);
   }, [content, isComplete, speed]);
 
-  // Cursor blink
+  // Hide cursor when complete
   useEffect(() => {
     if (isComplete && displayedRef.current.length >= contentRef.current.length) {
       setShowCursor(false);
-      return;
+    } else {
+      setShowCursor(true);
     }
-
-    const cursorInterval = setInterval(() => {
-      setShowCursor((prev) => !prev);
-    }, 530);
-
-    return () => clearInterval(cursorInterval);
   }, [isComplete]);
 
   // Parse basic markdown
@@ -149,25 +144,51 @@ export function StreamingText({
   };
 
   return (
-    <div className={cn("leading-relaxed space-y-1", className)}>
+    <div className={cn("leading-relaxed space-y-1 min-h-[1.5em]", className)}>
       {renderMarkdown(displayedContent)}
       {showCursor && (
-        <span className="inline-block w-0.5 h-4 bg-accent animate-pulse ml-0.5 align-middle" />
+        <span 
+          className="inline-block w-0.5 h-4 bg-foreground/40 ml-0.5 align-middle"
+          style={{ 
+            animation: 'cursor-fade 1s ease-in-out infinite',
+          }} 
+        />
       )}
+      <style>{`
+        @keyframes cursor-fade {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.3; }
+        }
+      `}</style>
     </div>
   );
 }
 
-// Thinking dots animation
+// Thinking dots animation - stable, no bouncing
 export function ThinkingDots() {
   return (
-    <div className="flex items-center gap-1 py-2">
+    <div className="flex items-center gap-1.5 py-2 min-h-[2rem]">
       <span className="text-sm text-muted-foreground">Thinking</span>
-      <div className="flex gap-0.5">
-        <span className="w-1.5 h-1.5 rounded-full bg-accent animate-bounce" style={{ animationDelay: "0ms" }} />
-        <span className="w-1.5 h-1.5 rounded-full bg-accent animate-bounce" style={{ animationDelay: "150ms" }} />
-        <span className="w-1.5 h-1.5 rounded-full bg-accent animate-bounce" style={{ animationDelay: "300ms" }} />
+      <div className="flex gap-1 items-center">
+        <span 
+          className="w-1 h-1 rounded-full bg-muted-foreground/60"
+          style={{ animation: 'dot-fade 1.4s ease-in-out infinite', animationDelay: '0ms' }} 
+        />
+        <span 
+          className="w-1 h-1 rounded-full bg-muted-foreground/60"
+          style={{ animation: 'dot-fade 1.4s ease-in-out infinite', animationDelay: '200ms' }} 
+        />
+        <span 
+          className="w-1 h-1 rounded-full bg-muted-foreground/60"
+          style={{ animation: 'dot-fade 1.4s ease-in-out infinite', animationDelay: '400ms' }} 
+        />
       </div>
+      <style>{`
+        @keyframes dot-fade {
+          0%, 80%, 100% { opacity: 0.3; }
+          40% { opacity: 1; }
+        }
+      `}</style>
     </div>
   );
 }
