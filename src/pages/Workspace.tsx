@@ -298,7 +298,7 @@ export default function Workspace() {
 
             {/* Offers Tab */}
             <TabsContent value="offers" className="flex-1 m-0 overflow-auto p-6">
-              <WorkspaceOffers buyerId={workspace.buyerId} />
+              <WorkspaceOffers buyerId={workspace.buyerId} onAgentCommand={handlePrefillAgentGPT} />
             </TabsContent>
 
             {/* Tasks & Documents Tab */}
