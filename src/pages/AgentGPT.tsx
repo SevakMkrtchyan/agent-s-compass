@@ -127,12 +127,12 @@ export default function AgentGPT() {
 
         <div className="flex-1 flex">
           {/* Main Content */}
-          <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col">
             <ScrollArea className="flex-1">
-              <div className="w-full px-4 sm:px-6 md:px-8 lg:px-12 xl:px-16 py-12 md:py-16 lg:py-20">
+              <div className="w-full px-6 sm:px-8 md:px-12 lg:px-16 xl:px-20 py-12 md:py-16 lg:py-20">
                 
                 {/* Welcome Header - Personalized */}
-                <div className="max-w-3xl mx-auto mb-12 md:mb-16 text-center">
+                <div className="max-w-4xl mx-auto mb-12 md:mb-16 text-center">
                   <h1 className="text-3xl md:text-4xl lg:text-5xl font-medium text-foreground mb-3 tracking-tight">
                     What can I help you with, {agentFirstName}?
                   </h1>
@@ -141,8 +141,8 @@ export default function AgentGPT() {
                   </p>
                 </div>
 
-                {/* Command Input */}
-                <div className="max-w-2xl mx-auto mb-16 md:mb-20">
+                {/* Command Input - Wider */}
+                <div className="max-w-4xl mx-auto mb-16 md:mb-20">
                   <div className="relative">
                     <textarea
                       placeholder="Tell AgentGPT what to do..."
@@ -150,11 +150,10 @@ export default function AgentGPT() {
                       onChange={(e) => setCommandInput(e.target.value)}
                       onKeyDown={handleKeyDown}
                       rows={1}
-                      className="w-full min-h-[52px] text-base px-5 py-3.5 pr-14 bg-background border border-border/50 resize-none focus:outline-none focus:border-border transition-all"
-                      style={{ borderRadius: '2px', lineHeight: '1.6' }}
+                      className="w-full min-h-[56px] text-base px-5 py-4 pr-14 bg-background border border-border/50 resize-none focus:outline-none focus:border-border transition-all rounded-lg"
                     />
                     <button
-                      className="absolute right-3 bottom-3 text-muted-foreground/40 hover:text-foreground disabled:opacity-30 transition-colors"
+                      className="absolute right-4 bottom-4 text-muted-foreground/40 hover:text-foreground disabled:opacity-30 transition-colors"
                       disabled={!commandInput.trim()}
                       onClick={handleSendCommand}
                     >
@@ -163,57 +162,53 @@ export default function AgentGPT() {
                   </div>
                 </div>
 
-                {/* Plain Text Suggestions */}
-                <div className="max-w-2xl mx-auto mb-16 md:mb-20">
-                  <p className="text-xs font-medium uppercase tracking-wider mb-4" style={{ color: '#9ca3af' }}>
-                    Suggestions
-                  </p>
-                  <ul className="space-y-3">
-                    {globalSuggestions.map((suggestion) => (
-                      <li key={suggestion.id}>
-                        <button
-                          onClick={() => handleSuggestionClick(suggestion)}
-                          className="text-left text-base transition-colors hover:underline underline-offset-4"
-                          style={{ color: '#374151' }}
-                          onMouseEnter={(e) => e.currentTarget.style.color = '#111827'}
-                          onMouseLeave={(e) => e.currentTarget.style.color = '#374151'}
-                        >
-                          {suggestion.label}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <hr className="max-w-2xl mx-auto mb-12 md:mb-16" style={{ borderColor: '#e5e7eb' }} />
-
-                {/* Action Queue Section */}
-                <div className="max-w-2xl mx-auto mb-16">
-                  <p className="text-xs font-medium uppercase tracking-wider mb-6" style={{ color: '#9ca3af' }}>
-                    Action Queue
-                  </p>
+                {/* Two Column Layout for Suggestions and Action Queue */}
+                <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
                   
-                  {hasUrgentItems ? (
-                    <ActionQueue onActionClick={handleActionClick} />
-                  ) : (
-                    <div className="bg-card rounded-xl border p-8 text-center">
-                      <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-muted/50 mb-4">
-                        <span className="text-2xl">✓</span>
+                  {/* Left Column - Suggestions */}
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wider mb-4 text-muted-foreground">
+                      Suggestions
+                    </p>
+                    <ul className="space-y-3">
+                      {globalSuggestions.map((suggestion) => (
+                        <li key={suggestion.id}>
+                          <button
+                            onClick={() => handleSuggestionClick(suggestion)}
+                            className="text-left text-base text-foreground/70 transition-colors hover:text-foreground hover:underline underline-offset-4"
+                          >
+                            {suggestion.label}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* Right Column - Action Queue */}
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wider mb-4 text-muted-foreground">
+                      Action Queue
+                    </p>
+                  
+                    {hasUrgentItems ? (
+                      <ActionQueue onActionClick={handleActionClick} />
+                    ) : (
+                      <div className="bg-card rounded-xl border p-8 text-center">
+                        <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-muted/50 mb-4">
+                          <span className="text-2xl">✓</span>
+                        </div>
+                        <p className="text-foreground font-medium mb-1">All caught up!</p>
+                        <p className="text-muted-foreground text-sm">No urgent items across your pipeline.</p>
                       </div>
-                      <p className="text-foreground font-medium mb-1">All caught up!</p>
-                      <p className="text-muted-foreground text-sm">No urgent items across your pipeline.</p>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
 
                 {/* New Buyer Button - Subtle, at bottom */}
-                <div className="max-w-2xl mx-auto text-center pt-8">
+                <div className="max-w-5xl mx-auto text-center pt-12 mt-8 border-t border-border/30">
                   <button
                     onClick={() => navigate("/add-buyer")}
-                    className="inline-flex items-center gap-2 text-sm transition-colors hover:underline underline-offset-4"
-                    style={{ color: '#6b7280' }}
-                    onMouseEnter={(e) => e.currentTarget.style.color = '#374151'}
-                    onMouseLeave={(e) => e.currentTarget.style.color = '#6b7280'}
+                    className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground hover:underline underline-offset-4 mt-8"
                   >
                     <Plus className="h-4 w-4" />
                     New buyer
