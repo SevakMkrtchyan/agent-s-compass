@@ -311,7 +311,7 @@ export function GuidedAgentGPT({
           {showActions && messages.length === 0 && (
             <div className="mb-16">
               <div className="flex items-center gap-3 mb-10">
-                <h2 className="text-2xl md:text-3xl font-medium text-foreground">What would you like to do?</h2>
+                <h2 className="text-2xl md:text-3xl font-medium text-foreground">What would you like to do for {buyerName}?</h2>
                 <button
                   onClick={handleRefresh}
                   disabled={isRefreshing || isLoading}
@@ -360,7 +360,7 @@ export function GuidedAgentGPT({
         <div className="w-full px-4 sm:px-6 md:px-8 lg:px-12 py-4 md:py-6">
           <div className="relative max-w-3xl">
             <textarea
-              placeholder="Message AgentGPT..."
+              placeholder={`Tell AgentGPT what to do for ${buyerName}...`}
               value={commandInput}
               onChange={(e) => setCommandInput(e.target.value)}
               onKeyDown={handleKeyDown}
