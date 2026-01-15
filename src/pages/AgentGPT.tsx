@@ -1,10 +1,6 @@
-import { useState, useCallback, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { 
-  Send, 
-  ChevronRight,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import { Send, ChevronRight, Plus } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { TopBar } from "@/components/dashboard/TopBar";
@@ -14,15 +10,34 @@ import { STAGES } from "@/types";
 
 // Plain text suggestions - global actions
 const globalSuggestions = [
-  { id: "1", label: "Create a new buyer workspace", action: "create-workspace" },
-  { id: "2", label: "Review pending approvals across all buyers", action: "review-approvals" },
-  { id: "3", label: "Generate weekly activity summary", action: "weekly-summary" },
-  { id: "4", label: "View pipeline health metrics", action: "pipeline-metrics" },
+  { 
+    id: "1", 
+    label: "Create a new buyer workspace", 
+    action: "create-workspace",
+    command: "Create a new buyer workspace and draft the initial buyer representation agreement (BR-11) for signature"
+  },
+  { 
+    id: "2", 
+    label: "Review pending approvals across all buyers", 
+    action: "review-approvals",
+    command: "Review all pending approvals and drafts across my buyer pipeline - prioritize by urgency"
+  },
+  { 
+    id: "3", 
+    label: "Generate weekly activity summary", 
+    action: "weekly-summary",
+    command: "Generate a comprehensive weekly activity summary for all active buyers including key milestones and next steps"
+  },
+  { 
+    id: "4", 
+    label: "View pipeline health metrics", 
+    action: "pipeline-metrics",
+    command: "Analyze my current pipeline health - stage distribution, average time per stage, and bottlenecks"
+  },
 ];
 
 export default function AgentGPT() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [commandInput, setCommandInput] = useState("");
 
@@ -37,68 +52,112 @@ export default function AgentGPT() {
     .sort((a, b) => b.lastActivity.getTime() - a.lastActivity.getTime())
     .slice(0, 5);
 
-  // Navigate to buyer workspace with optional initial action
-  const openBuyerWorkspace = useCallback((workspaceId: string, action?: string) => {
-    if (action) {
-      navigate(`/workspace/${workspaceId}?action=${encodeURIComponent(action)}`);
+  // Navigate to buyer workspace with command for Claude
+  const openBuyerWorkspace = useCallback((workspaceId: string, command?: string) => {
+    if (command) {
+      navigate(`/workspace/${workspaceId}?command=${encodeURIComponent(command)}`);
     } else {
       navigate(`/workspace/${workspaceId}`);
     }
   }, [navigate]);
 
-  // Handle global suggestion clicks
+  // Handle global suggestion clicks - trigger Claude with specific command
   const handleSuggestionClick = useCallback((suggestion: typeof globalSuggestions[0]) => {
-    switch (suggestion.action) {
-      case "create-workspace":
-        // For now, just show the first workspace - in real app, would open create modal
-        const firstWorkspace = mockWorkspaces[0];
-        if (firstWorkspace) {
-          openBuyerWorkspace(firstWorkspace.id, "create-buyer-intro");
-        }
-        break;
-      case "review-approvals":
-        // Open first workspace with pending approvals
-        const wsWithApprovals = mockWorkspaces.find(ws => ws.openTasks > 0);
-        if (wsWithApprovals) {
-          openBuyerWorkspace(wsWithApprovals.id, "review-approvals");
-        }
-        break;
-      case "weekly-summary":
-        // Open first workspace with weekly summary action
-        const firstWs = mockWorkspaces[0];
-        if (firstWs) {
-          openBuyerWorkspace(firstWs.id, "weekly-summary");
-        }
-        break;
-      case "pipeline-metrics":
-        navigate("/analytics");
-        break;
-      default:
-        break;
+    const firstWorkspace = mockWorkspaces[0];
+    if (!firstWorkspace) return;
+
+    if (suggestion.action === "pipeline-metrics") {
+      navigate("/analytics");
+      return;
     }
+
+    // All other suggestions open workspace with Claude command
+    openBuyerWorkspace(firstWorkspace.id, suggestion.command);
   }, [navigate, openBuyerWorkspace]);
 
-  // Handle needs attention item click
-  const handleNeedsAttentionClick = useCallback((workspaceId: string) => {
-    openBuyerWorkspace(workspaceId, "needs-attention");
+  // Handle needs attention item click - stage-aware command
+  const handleNeedsAttentionClick = useCallback((workspace: typeof mockWorkspaces[0]) => {
+    const stage = STAGES[workspace.currentStage];
+    
+    // Generate stage-aware command for Claude
+    let command = "";
+    switch (workspace.currentStage) {
+      case 0:
+        command = `Review ${workspace.buyerName}'s readiness status and draft the buyer representation agreement for signature`;
+        break;
+      case 1:
+        command = `Generate property search criteria and create a first-time buyer guide for ${workspace.buyerName}`;
+        break;
+      case 2:
+        command = `Prepare offer strategy analysis for ${workspace.buyerName} - include market comps and negotiation approach`;
+        break;
+      case 3:
+        command = `Review contract milestones for ${workspace.buyerName} and schedule next inspection or appraisal`;
+        break;
+      case 4:
+        command = `Create closing preparation checklist for ${workspace.buyerName} - final walkthrough, utilities, and docs`;
+        break;
+      case 5:
+        command = `Generate post-close follow-up plan and referral request for ${workspace.buyerName}`;
+        break;
+      default:
+        command = `Review open tasks and prioritize next actions for ${workspace.buyerName}`;
+    }
+
+    openBuyerWorkspace(workspace.id, command);
   }, [openBuyerWorkspace]);
 
-  // Handle recent buyer click
-  const handleRecentBuyerClick = useCallback((workspaceId: string) => {
-    openBuyerWorkspace(workspaceId);
+  // Handle recent buyer click - immediate workspace with proactive suggestions
+  const handleRecentBuyerClick = useCallback((workspace: typeof mockWorkspaces[0]) => {
+    const stage = STAGES[workspace.currentStage];
+    
+    // Generate stage-appropriate proactive command
+    let command = "";
+    switch (workspace.currentStage) {
+      case 0:
+        command = `What are the next steps to complete ${workspace.buyerName}'s readiness stage? Check BR-11 and financing status`;
+        break;
+      case 1:
+        command = `Suggest 3-4 proactive actions for ${workspace.buyerName} in the Home Search stage - property tours, market updates, or buyer education`;
+        break;
+      case 2:
+        command = `What should I prioritize for ${workspace.buyerName}'s offer strategy? Include comp analysis and contingency recommendations`;
+        break;
+      case 3:
+        command = `What inspections or milestones are pending for ${workspace.buyerName}? List critical dates and next actions`;
+        break;
+      case 4:
+        command = `Create a closing countdown for ${workspace.buyerName} with remaining tasks and timeline`;
+        break;
+      case 5:
+        command = `Draft a personalized post-close email for ${workspace.buyerName} with move-in tips and referral request`;
+        break;
+      default:
+        command = `What should I focus on next for ${workspace.buyerName}?`;
+    }
+
+    openBuyerWorkspace(workspace.id, command);
+  }, [openBuyerWorkspace]);
+
+  // Handle new buyer creation
+  const handleNewBuyer = useCallback(() => {
+    const firstWorkspace = mockWorkspaces[0];
+    if (firstWorkspace) {
+      const command = "Create a new buyer profile with Stage 1 actions - include buyer consultation checklist, BR-11 agreement draft, and financing pre-approval requirements";
+      openBuyerWorkspace(firstWorkspace.id, command);
+    }
   }, [openBuyerWorkspace]);
 
   // Handle command input submit
   const handleSendCommand = useCallback(() => {
     if (!commandInput.trim()) return;
     
-    // For global commands, open first workspace with the command
     const firstWorkspace = mockWorkspaces[0];
     if (firstWorkspace) {
-      navigate(`/workspace/${firstWorkspace.id}?command=${encodeURIComponent(commandInput.trim())}`);
+      openBuyerWorkspace(firstWorkspace.id, commandInput.trim());
     }
     setCommandInput("");
-  }, [commandInput, navigate]);
+  }, [commandInput, openBuyerWorkspace]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -121,28 +180,24 @@ export default function AgentGPT() {
 
   return (
     <div className="min-h-screen bg-[#f9fafb]">
-      {/* Slim Sidebar */}
       <Sidebar collapsed={sidebarCollapsed} />
 
-      {/* Main Content */}
       <div
         className={cn(
           "transition-all duration-200 min-h-screen flex flex-col",
           sidebarCollapsed ? "ml-[58px]" : "ml-[240px]"
         )}
       >
-        {/* Minimal Top Bar */}
         <TopBar
           onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
           sidebarCollapsed={sidebarCollapsed}
         />
 
-        {/* Full-Width Content Area */}
         <div className="flex-1 flex flex-col">
           <ScrollArea className="flex-1">
             <div className="w-full px-4 sm:px-6 md:px-8 lg:px-12 xl:px-16 py-12 md:py-16 lg:py-20">
               
-              {/* Welcome Header - Centered, Large */}
+              {/* Welcome Header */}
               <div className="max-w-3xl mx-auto mb-12 md:mb-16 text-center">
                 <h1 className="text-3xl md:text-4xl lg:text-5xl font-medium text-foreground mb-3 tracking-tight">
                   What can I help you with?
@@ -152,7 +207,7 @@ export default function AgentGPT() {
                 </p>
               </div>
 
-              {/* Command Input - Clean, Centered */}
+              {/* Command Input */}
               <div className="max-w-2xl mx-auto mb-16 md:mb-20">
                 <div className="relative">
                   <textarea
@@ -161,24 +216,22 @@ export default function AgentGPT() {
                     onChange={(e) => setCommandInput(e.target.value)}
                     onKeyDown={handleKeyDown}
                     rows={1}
-                    className="w-full min-h-[52px] text-base px-5 py-3.5 pr-14 bg-background border border-border/50 resize-none focus:outline-none focus:ring-1 focus:ring-border transition-all"
+                    className="w-full min-h-[52px] text-base px-5 py-3.5 pr-14 bg-background border border-border/50 resize-none focus:outline-none focus:border-border transition-all"
                     style={{ borderRadius: '2px', lineHeight: '1.6' }}
                   />
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="absolute right-2 bottom-2 h-9 w-9 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                  <button
+                    className="absolute right-3 bottom-3 text-muted-foreground/40 hover:text-foreground disabled:opacity-30 transition-colors"
                     disabled={!commandInput.trim()}
                     onClick={handleSendCommand}
                   >
-                    <Send className="h-4 w-4" />
-                  </Button>
+                    <Send className="h-5 w-5" />
+                  </button>
                 </div>
               </div>
 
               {/* Plain Text Suggestions */}
               <div className="max-w-2xl mx-auto mb-16 md:mb-20">
-                <p className="text-xs font-medium text-muted-foreground/50 uppercase tracking-wider mb-4">
+                <p className="text-xs font-medium uppercase tracking-wider mb-4" style={{ color: '#9ca3af' }}>
                   Suggestions
                 </p>
                 <ul className="space-y-3">
@@ -186,7 +239,10 @@ export default function AgentGPT() {
                     <li key={suggestion.id}>
                       <button
                         onClick={() => handleSuggestionClick(suggestion)}
-                        className="text-left text-base text-foreground/70 hover:text-foreground hover:underline underline-offset-4 transition-colors"
+                        className="text-left text-base transition-colors hover:underline underline-offset-4"
+                        style={{ color: '#374151' }}
+                        onMouseEnter={(e) => e.currentTarget.style.color = '#111827'}
+                        onMouseLeave={(e) => e.currentTarget.style.color = '#374151'}
                       >
                         {suggestion.label}
                       </button>
@@ -195,32 +251,31 @@ export default function AgentGPT() {
                 </ul>
               </div>
 
-              {/* Divider */}
-              <hr className="max-w-2xl mx-auto border-border/20 mb-12 md:mb-16" />
+              <hr className="max-w-2xl mx-auto mb-12 md:mb-16" style={{ borderColor: '#e5e7eb' }} />
 
-              {/* Needs Attention - Plain Text List */}
+              {/* Needs Attention */}
               {buyersNeedingAttention.length > 0 && (
                 <div className="max-w-2xl mx-auto mb-12 md:mb-16">
-                  <p className="text-xs font-medium text-muted-foreground/50 uppercase tracking-wider mb-6">
+                  <p className="text-xs font-medium uppercase tracking-wider mb-6" style={{ color: '#9ca3af' }}>
                     Needs attention
                   </p>
-                  <ul className="space-y-1">
+                  <ul className="space-y-0">
                     {buyersNeedingAttention.map((ws) => (
                       <li key={ws.id}>
                         <button
-                          onClick={() => handleNeedsAttentionClick(ws.id)}
-                          className="w-full flex items-center justify-between py-3.5 text-left group hover:bg-muted/30 -mx-3 px-3 transition-colors"
-                          style={{ borderRadius: '2px' }}
+                          onClick={() => handleNeedsAttentionClick(ws)}
+                          className="w-full flex items-center justify-between py-4 text-left group transition-colors"
+                          style={{ borderBottom: '1px solid #f3f4f6' }}
                         >
                           <div className="flex items-center gap-4">
-                            <span className="text-base font-medium text-foreground">
+                            <span className="text-base font-medium" style={{ color: '#374151' }}>
                               {ws.buyerName}
                             </span>
-                            <span className="text-sm text-muted-foreground/60">
+                            <span className="text-sm" style={{ color: '#9ca3af' }}>
                               {ws.openTasks} open task{ws.openTasks !== 1 ? 's' : ''}
                             </span>
                           </div>
-                          <ChevronRight className="h-4 w-4 text-muted-foreground/30 group-hover:text-muted-foreground/60 transition-colors" />
+                          <ChevronRight className="h-4 w-4 transition-colors" style={{ color: '#d1d5db' }} />
                         </button>
                       </li>
                     ))}
@@ -228,40 +283,54 @@ export default function AgentGPT() {
                 </div>
               )}
 
-              {/* Recent Buyers - Plain Text List */}
-              <div className="max-w-2xl mx-auto">
-                <p className="text-xs font-medium text-muted-foreground/50 uppercase tracking-wider mb-6">
+              {/* Recent Buyers */}
+              <div className="max-w-2xl mx-auto mb-16">
+                <p className="text-xs font-medium uppercase tracking-wider mb-6" style={{ color: '#9ca3af' }}>
                   Recent buyers
                 </p>
-                <ul className="space-y-1">
+                <ul className="space-y-0">
                   {recentBuyers.map((ws) => {
                     const stage = STAGES[ws.currentStage];
                     return (
                       <li key={ws.id}>
                         <button
-                          onClick={() => handleRecentBuyerClick(ws.id)}
-                          className="w-full flex items-center justify-between py-3.5 text-left group hover:bg-muted/30 -mx-3 px-3 transition-colors"
-                          style={{ borderRadius: '2px' }}
+                          onClick={() => handleRecentBuyerClick(ws)}
+                          className="w-full flex items-center justify-between py-4 text-left group transition-colors"
+                          style={{ borderBottom: '1px solid #f3f4f6' }}
                         >
                           <div className="flex items-center gap-4">
-                            <span className="text-base font-medium text-foreground">
+                            <span className="text-base font-medium" style={{ color: '#374151' }}>
                               {ws.buyerName}
                             </span>
-                            <span className="text-sm text-muted-foreground/60">
+                            <span className="text-sm" style={{ color: '#9ca3af' }}>
                               {stage.title}
                             </span>
                           </div>
                           <div className="flex items-center gap-4">
-                            <span className="text-sm text-muted-foreground/40">
+                            <span className="text-sm" style={{ color: '#d1d5db' }}>
                               {formatLastActivity(ws.lastActivity)}
                             </span>
-                            <ChevronRight className="h-4 w-4 text-muted-foreground/30 group-hover:text-muted-foreground/60 transition-colors" />
+                            <ChevronRight className="h-4 w-4 transition-colors" style={{ color: '#d1d5db' }} />
                           </div>
                         </button>
                       </li>
                     );
                   })}
                 </ul>
+              </div>
+
+              {/* New Buyer Button - Subtle, at bottom */}
+              <div className="max-w-2xl mx-auto text-center pt-8">
+                <button
+                  onClick={handleNewBuyer}
+                  className="inline-flex items-center gap-2 text-sm transition-colors hover:underline underline-offset-4"
+                  style={{ color: '#6b7280' }}
+                  onMouseEnter={(e) => e.currentTarget.style.color = '#374151'}
+                  onMouseLeave={(e) => e.currentTarget.style.color = '#6b7280'}
+                >
+                  <Plus className="h-4 w-4" />
+                  New buyer
+                </button>
               </div>
 
             </div>
