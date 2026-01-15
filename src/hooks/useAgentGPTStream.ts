@@ -9,6 +9,7 @@ interface BuyerContext {
   buyerType?: string;
   marketContext?: string;
   recentActivity?: string[];
+  buyerId?: string;
 }
 
 interface UseAgentGPTStreamReturn {
@@ -31,6 +32,7 @@ function buyerToContext(buyer: Buyer): BuyerContext {
     buyerType: buyer.buyerType,
     marketContext: buyer.marketContext,
     recentActivity: [],
+    buyerId: buyer.id,
   };
 }
 
@@ -109,7 +111,7 @@ export function useAgentGPTStream(): UseAgentGPTStreamReturn {
 
             try {
               const parsed = JSON.parse(data);
-              
+
               // Anthropic streaming format
               if (parsed.type === "content_block_delta" && parsed.delta?.text) {
                 setStreamedContent((prev) => prev + parsed.delta.text);
