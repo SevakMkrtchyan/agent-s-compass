@@ -297,6 +297,7 @@ export default function Workspace() {
                 stages={conversationStages}
                 currentStage={workspace.currentStage}
                 buyerName={workspace.buyerName}
+                buyer={buyer}
                 onExpandStage={handleExpandStage}
                 onSendCommand={handleSendCommand}
                 onApprove={handleApprove}
