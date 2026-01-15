@@ -1,4 +1,4 @@
-import { AlertCircle, Clock, FileWarning, CheckCircle2, ChevronRight } from "lucide-react";
+import { AlertCircle, Clock, CheckCircle2, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -61,22 +61,19 @@ const mockActions: ActionItem[] = [
 
 const typeConfig = {
   urgent: {
-    icon: AlertCircle,
-    color: "text-destructive",
-    bg: "bg-destructive/10",
-    border: "border-l-destructive",
+    label: "Urgent",
+    dotColor: "bg-red-500",
+    textColor: "text-red-600",
   },
   pending: {
-    icon: Clock,
-    color: "text-warning",
-    bg: "bg-warning/10",
-    border: "border-l-warning",
+    label: "Pending",
+    dotColor: "bg-amber-500",
+    textColor: "text-amber-600",
   },
   completed: {
-    icon: CheckCircle2,
-    color: "text-muted-foreground",
-    bg: "bg-muted",
-    border: "border-l-muted-foreground",
+    label: "Completed",
+    dotColor: "bg-muted-foreground/40",
+    textColor: "text-muted-foreground",
   },
 };
 
@@ -85,60 +82,51 @@ export function ActionQueue({ onActionClick }: ActionQueueProps) {
   const pendingCount = mockActions.filter((a) => a.type === "pending").length;
 
   return (
-    <div className="bg-card rounded-xl border shadow-sm h-full flex flex-col">
-      <div className="p-4 border-b">
-        <h3 className="font-semibold text-foreground mb-2">Action Queue</h3>
-        <div className="flex gap-3 text-xs">
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-destructive" />
-            {urgentCount} urgent
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-warning" />
-            {pendingCount} pending
-          </span>
-        </div>
-      </div>
+    <div className="bg-card rounded-xl border shadow-sm">
+      {/* Action Items */}
+      <div className="divide-y divide-border/30">
+        {mockActions.map((action) => {
+          const config = typeConfig[action.type];
 
-      <ScrollArea className="flex-1">
-        <div className="p-2 space-y-2">
-          {mockActions.map((action) => {
-            const config = typeConfig[action.type];
-            const Icon = config.icon;
-
-            return (
-              <button
-                key={action.id}
-                onClick={() => onActionClick(action)}
-                className={cn(
-                  "w-full text-left p-3 rounded-lg border-l-4 transition-all",
-                  "hover:shadow-sm hover:bg-secondary/30",
-                  config.border,
-                  config.bg
-                )}
-              >
-                <div className="flex items-start gap-3">
-                  <Icon className={cn("h-4 w-4 mt-0.5 shrink-0", config.color)} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">
-                      {action.title}
-                    </p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {action.description}
-                    </p>
-                    {action.buyerName && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {action.buyerName}
-                      </p>
-                    )}
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+          return (
+            <button
+              key={action.id}
+              onClick={() => onActionClick(action)}
+              className="w-full text-left px-4 py-3.5 transition-colors hover:bg-muted/30 group"
+            >
+              <div className="flex items-start gap-3">
+                {/* Priority Dot */}
+                <div className="pt-1.5">
+                  <div className={cn("w-2 h-2 rounded-full shrink-0", config.dotColor)} />
                 </div>
-              </button>
-            );
-          })}
-        </div>
-      </ScrollArea>
+
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className={cn("text-[10px] font-medium uppercase tracking-wider", config.textColor)}>
+                      {config.label}
+                    </span>
+                  </div>
+                  <p className="text-sm font-medium text-foreground truncate">
+                    {action.title}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate mt-0.5">
+                    {action.description}
+                  </p>
+                  {action.buyerName && (
+                    <p className="text-xs text-muted-foreground/70 mt-1">
+                      {action.buyerName}
+                    </p>
+                  )}
+                </div>
+
+                {/* Arrow */}
+                <ChevronRight className="h-4 w-4 text-muted-foreground/30 shrink-0 mt-1 group-hover:text-muted-foreground transition-colors" />
+              </div>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
