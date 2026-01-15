@@ -239,7 +239,7 @@ export default function Workspace() {
           {/* Minimal Tab Navigation */}
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as WorkspaceTab)} className="flex-1 flex flex-col overflow-hidden">
             <div className="border-b border-border/30 bg-[#f9fafb] flex-shrink-0">
-              <div className="px-4 flex items-center gap-1">
+              <TabsList className="h-auto bg-transparent px-4 gap-1">
                 {WORKSPACE_TABS.map((tab) => {
                   const Icon = tab.icon;
                   return (
@@ -247,8 +247,8 @@ export default function Workspace() {
                       key={tab.id}
                       value={tab.id}
                       className={cn(
-                        "h-10 px-4 gap-2 text-sm transition-all border-b-2 border-transparent -mb-px",
-                        "data-[state=active]:border-foreground data-[state=active]:text-foreground",
+                        "h-10 px-4 gap-2 text-sm transition-all border-b-2 border-transparent -mb-px rounded-none",
+                        "data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:shadow-none",
                         "text-muted-foreground hover:text-foreground bg-transparent"
                       )}
                     >
@@ -257,7 +257,7 @@ export default function Workspace() {
                     </TabsTrigger>
                   );
                 })}
-              </div>
+              </TabsList>
             </div>
 
             {/* AgentGPT Tab - Full Bleed, No Padding */}
