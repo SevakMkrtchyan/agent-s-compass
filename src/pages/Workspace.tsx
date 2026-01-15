@@ -291,8 +291,8 @@ export default function Workspace() {
               </div>
             </div>
 
-            {/* AgentGPT Tab - Primary Operating Surface */}
-            <TabsContent value="agentgpt" className="flex-1 m-0 overflow-hidden">
+            {/* AgentGPT Tab - Full Bleed, No Padding */}
+            <TabsContent value="agentgpt" className="flex-1 m-0 p-0 overflow-hidden">
               <GuidedAgentGPT
                 stages={conversationStages}
                 currentStage={workspace.currentStage}
