@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      buyer_data: {
+        Row: {
+          buyer_id: string
+          content: string
+          created_at: string
+          data_type: string
+          embedding: string | null
+          id: string
+          metadata: Json | null
+          updated_at: string
+        }
+        Insert: {
+          buyer_id: string
+          content: string
+          created_at?: string
+          data_type: string
+          embedding?: string | null
+          id?: string
+          metadata?: Json | null
+          updated_at?: string
+        }
+        Update: {
+          buyer_id?: string
+          content?: string
+          created_at?: string
+          data_type?: string
+          embedding?: string | null
+          id?: string
+          metadata?: Json | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       buyer_recommendations: {
         Row: {
           actions_json: Json
@@ -41,12 +74,101 @@ export type Database = {
         }
         Relationships: []
       }
+      compliance_rules: {
+        Row: {
+          blocked_actions: string[] | null
+          created_at: string
+          description: string
+          embedding: string | null
+          id: string
+          prerequisites: string[] | null
+          rule_code: string
+          title: string
+        }
+        Insert: {
+          blocked_actions?: string[] | null
+          created_at?: string
+          description: string
+          embedding?: string | null
+          id?: string
+          prerequisites?: string[] | null
+          rule_code: string
+          title: string
+        }
+        Update: {
+          blocked_actions?: string[] | null
+          created_at?: string
+          description?: string
+          embedding?: string | null
+          id?: string
+          prerequisites?: string[] | null
+          rule_code?: string
+          title?: string
+        }
+        Relationships: []
+      }
+      market_feeds: {
+        Row: {
+          content: string
+          embedding: string | null
+          feed_type: string
+          fetched_at: string
+          id: string
+          metadata: Json | null
+        }
+        Insert: {
+          content: string
+          embedding?: string | null
+          feed_type: string
+          fetched_at?: string
+          id?: string
+          metadata?: Json | null
+        }
+        Update: {
+          content?: string
+          embedding?: string | null
+          feed_type?: string
+          fetched_at?: string
+          id?: string
+          metadata?: Json | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      match_buyer_context: {
+        Args: {
+          match_buyer_id: string
+          match_count?: number
+          match_threshold?: number
+          query_embedding: string
+        }
+        Returns: {
+          buyer_id: string
+          content: string
+          data_type: string
+          id: string
+          metadata: Json
+          similarity: number
+        }[]
+      }
+      match_market_feeds: {
+        Args: {
+          match_count?: number
+          match_threshold?: number
+          query_embedding: string
+        }
+        Returns: {
+          content: string
+          feed_type: string
+          id: string
+          metadata: Json
+          similarity: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
