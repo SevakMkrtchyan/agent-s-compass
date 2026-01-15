@@ -13,6 +13,7 @@ import GlobalOffers from "./pages/GlobalOffers";
 import Analytics from "./pages/Analytics";
 import AddBuyer from "./pages/AddBuyer";
 import AddProperty from "./pages/AddProperty";
+import WorkspaceList from "./pages/WorkspaceList";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,7 +29,7 @@ const App = () => (
           <Route path="/" element={<Navigate to="/agentgpt" replace />} />
           <Route path="/agentgpt" element={<AgentGPT />} />
           <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/workspace" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/workspace" element={<WorkspaceList />} />
           <Route path="/workspace/:workspaceId" element={<Workspace />} />
           <Route path="/tasks" element={<GlobalTasks />} />
           <Route path="/properties" element={<GlobalProperties />} />
