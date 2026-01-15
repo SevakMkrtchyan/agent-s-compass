@@ -65,8 +65,6 @@ export default function GlobalProperties() {
         sidebarCollapsed ? "ml-[58px]" : "ml-[240px]"
       )}>
         <TopBar
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
           onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
           sidebarCollapsed={sidebarCollapsed}
         />

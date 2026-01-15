@@ -48,7 +48,6 @@ const taskCompletion = [
 
 export default function Analytics() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   const [timeRange, setTimeRange] = useState("6m");
 
   // Stats
@@ -70,8 +69,6 @@ export default function Analytics() {
         sidebarCollapsed ? "ml-[58px]" : "ml-[240px]"
       )}>
         <TopBar
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
           onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
           sidebarCollapsed={sidebarCollapsed}
         />
