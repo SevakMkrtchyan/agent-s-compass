@@ -289,7 +289,8 @@ export function WorkspaceProperties({ buyerId, onAgentCommand }: WorkspaceProper
         sqft: p.sqft,
         pricePerSqft: p.pricePerSqft,
         daysOnMarket: p.daysOnMarket,
-        status: p.status,
+        status: p.status as 'active' | 'pending' | 'sold' | 'withdrawn',
+        photos: p.images,
       }));
 
     let fullAnalysis = "";
