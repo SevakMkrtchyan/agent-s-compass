@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.property-analysis]
 verify_jwt = false
+
+[functions.zillow-search]
+verify_jwt = false
