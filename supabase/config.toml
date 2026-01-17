@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.zillow-search]
 verify_jwt = false
+
+[functions.scrape-property-link]
+verify_jwt = false
