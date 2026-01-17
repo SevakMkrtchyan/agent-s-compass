@@ -54,6 +54,7 @@ export type Database = {
           ai_analysis_generated_at: string | null
           archived: boolean | null
           assigned_at: string | null
+          assigned_by: string | null
           buyer_id: string
           created_at: string
           favorited: boolean | null
@@ -69,6 +70,7 @@ export type Database = {
           ai_analysis_generated_at?: string | null
           archived?: boolean | null
           assigned_at?: string | null
+          assigned_by?: string | null
           buyer_id: string
           created_at?: string
           favorited?: boolean | null
@@ -84,6 +86,7 @@ export type Database = {
           ai_analysis_generated_at?: string | null
           archived?: boolean | null
           assigned_at?: string | null
+          assigned_by?: string | null
           buyer_id?: string
           created_at?: string
           favorited?: boolean | null
@@ -127,6 +130,81 @@ export type Database = {
           expires_at?: string
           id?: string
           status?: string
+        }
+        Relationships: []
+      }
+      buyers: {
+        Row: {
+          agent_id: string
+          agent_notes: string | null
+          avatar_url: string | null
+          budget_max: number | null
+          budget_min: number | null
+          buyer_type: string | null
+          created_at: string
+          current_stage: string | null
+          email: string | null
+          id: string
+          min_baths: number | null
+          min_beds: number | null
+          must_haves: string | null
+          name: string
+          nice_to_haves: string | null
+          phone: string | null
+          portal_link: string | null
+          pre_approval_amount: number | null
+          pre_approval_status: string | null
+          preferred_cities: string[] | null
+          property_types: string[] | null
+          updated_at: string
+        }
+        Insert: {
+          agent_id: string
+          agent_notes?: string | null
+          avatar_url?: string | null
+          budget_max?: number | null
+          budget_min?: number | null
+          buyer_type?: string | null
+          created_at?: string
+          current_stage?: string | null
+          email?: string | null
+          id?: string
+          min_baths?: number | null
+          min_beds?: number | null
+          must_haves?: string | null
+          name: string
+          nice_to_haves?: string | null
+          phone?: string | null
+          portal_link?: string | null
+          pre_approval_amount?: number | null
+          pre_approval_status?: string | null
+          preferred_cities?: string[] | null
+          property_types?: string[] | null
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string
+          agent_notes?: string | null
+          avatar_url?: string | null
+          budget_max?: number | null
+          budget_min?: number | null
+          buyer_type?: string | null
+          created_at?: string
+          current_stage?: string | null
+          email?: string | null
+          id?: string
+          min_baths?: number | null
+          min_beds?: number | null
+          must_haves?: string | null
+          name?: string
+          nice_to_haves?: string | null
+          phone?: string | null
+          portal_link?: string | null
+          pre_approval_amount?: number | null
+          pre_approval_status?: string | null
+          preferred_cities?: string[] | null
+          property_types?: string[] | null
+          updated_at?: string
         }
         Relationships: []
       }
@@ -197,6 +275,7 @@ export type Database = {
           bedrooms: number
           city: string
           created_at: string
+          created_by: string | null
           days_on_market: number | null
           description: string | null
           features: Json | null
@@ -211,6 +290,9 @@ export type Database = {
           price_per_sqft: number | null
           property_type: string | null
           raw_data: Json | null
+          source_id: string | null
+          source_type: string | null
+          source_url: string | null
           sqft: number
           state: string
           status: string | null
@@ -224,6 +306,7 @@ export type Database = {
           bedrooms: number
           city: string
           created_at?: string
+          created_by?: string | null
           days_on_market?: number | null
           description?: string | null
           features?: Json | null
@@ -238,6 +321,9 @@ export type Database = {
           price_per_sqft?: number | null
           property_type?: string | null
           raw_data?: Json | null
+          source_id?: string | null
+          source_type?: string | null
+          source_url?: string | null
           sqft: number
           state: string
           status?: string | null
@@ -251,6 +337,7 @@ export type Database = {
           bedrooms?: number
           city?: string
           created_at?: string
+          created_by?: string | null
           days_on_market?: number | null
           description?: string | null
           features?: Json | null
@@ -265,6 +352,9 @@ export type Database = {
           price_per_sqft?: number | null
           property_type?: string | null
           raw_data?: Json | null
+          source_id?: string | null
+          source_type?: string | null
+          source_url?: string | null
           sqft?: number
           state?: string
           status?: string | null
