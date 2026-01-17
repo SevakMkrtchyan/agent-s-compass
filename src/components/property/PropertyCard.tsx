@@ -124,12 +124,12 @@ export function PropertyCard({
   }
 
   return (
-    <Card className="overflow-hidden hover:shadow-elevated transition-shadow duration-300 group">
-      <div className="relative aspect-[16/10]">
+    <Card className="overflow-hidden property-card group">
+      <div className="relative aspect-[16/10] overflow-hidden">
         <img
           src={property.images[0]}
           alt={property.address}
-          className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+          className="absolute inset-0 w-full h-full object-cover image-zoom"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
         
