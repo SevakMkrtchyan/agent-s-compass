@@ -270,17 +270,114 @@ function transformSingleProperty(data: any): any {
     status: mapZillowStatus(data.homeStatus),
     description: data.description || "",
     features: extractFeatures(data),
-    photos: data.photos?.map((p: any) => p.url || p) || (data.imgSrc ? [data.imgSrc] : []),
+    photos: extractAllPhotos(data),
     listingUrl: data.url || `https://www.zillow.com/homedetails/${data.zpid}_zpid/`,
     mlsNumber: data.zpid?.toString(),
     listingAgent: data.attributionInfo ? {
       name: data.attributionInfo.agentName,
       phone: data.attributionInfo.agentPhoneNumber,
-      email: null,
+      email: data.attributionInfo.agentEmail || null,
+      brokerName: data.attributionInfo.brokerName || null,
     } : null,
     lotSize: data.resoFacts?.lotSize || null,
+    // Property History
+    priceHistory: extractPriceHistory(data),
+    taxHistory: extractTaxHistory(data),
+    // Tax Information
+    taxInfo: {
+      annualTax: data.propertyTaxRate ? Math.round((data.price || data.zestimate) * data.propertyTaxRate / 100) : null,
+      taxRate: data.propertyTaxRate || null,
+      taxAssessedValue: data.taxAssessedValue || null,
+      taxYear: data.taxAssessedYear || null,
+    },
+    // School Information
+    schools: extractSchools(data),
+    // Zestimate data
+    zestimate: data.zestimate || null,
+    rentZestimate: data.rentZestimate || null,
+    // Additional property details
+    hoaFee: data.monthlyHoaFee || null,
+    parking: data.resoFacts?.parkingCapacity || null,
+    heating: data.resoFacts?.heating || null,
+    cooling: data.resoFacts?.cooling || null,
+    appliances: data.resoFacts?.appliances || [],
+    flooring: data.resoFacts?.flooring || [],
+    // Location details
+    latitude: data.latitude || null,
+    longitude: data.longitude || null,
+    county: data.county || null,
+    // Raw data for any additional fields
     rawData: data,
   };
+}
+
+function extractAllPhotos(data: any): string[] {
+  // Try to get all photos from various possible locations in the response
+  if (data.photos && Array.isArray(data.photos)) {
+    return data.photos.map((p: any) => {
+      if (typeof p === 'string') return p;
+      return p.url || p.mixedSources?.jpeg?.[0]?.url || p.mixedSources?.webp?.[0]?.url || null;
+    }).filter(Boolean);
+  }
+  
+  if (data.responsivePhotos && Array.isArray(data.responsivePhotos)) {
+    return data.responsivePhotos.map((p: any) => {
+      return p.mixedSources?.jpeg?.[0]?.url || p.mixedSources?.webp?.[0]?.url || p.url || null;
+    }).filter(Boolean);
+  }
+  
+  if (data.imgSrc) {
+    return [data.imgSrc];
+  }
+  
+  return [];
+}
+
+function extractPriceHistory(data: any): any[] {
+  if (!data.priceHistory || !Array.isArray(data.priceHistory)) {
+    return [];
+  }
+  
+  return data.priceHistory.map((item: any) => ({
+    date: item.date || null,
+    time: item.time || null,
+    price: item.price || null,
+    priceChangeRate: item.priceChangeRate || null,
+    event: item.event || null,
+    source: item.source || null,
+    buyerAgent: item.buyerAgent || null,
+    sellerAgent: item.sellerAgent || null,
+  }));
+}
+
+function extractTaxHistory(data: any): any[] {
+  if (!data.taxHistory || !Array.isArray(data.taxHistory)) {
+    return [];
+  }
+  
+  return data.taxHistory.map((item: any) => ({
+    year: item.time || null,
+    taxPaid: item.taxPaid || null,
+    taxIncreaseRate: item.taxIncreaseRate || null,
+    value: item.value || null,
+    valueIncreaseRate: item.valueIncreaseRate || null,
+  }));
+}
+
+function extractSchools(data: any): any[] {
+  if (!data.schools || !Array.isArray(data.schools)) {
+    return [];
+  }
+  
+  return data.schools.map((school: any) => ({
+    name: school.name || school.schoolName || null,
+    rating: school.rating || school.greatSchoolsRating || null,
+    level: school.level || school.grades || null,
+    type: school.type || null,
+    distance: school.distance || null,
+    link: school.link || null,
+    isAssigned: school.isAssigned || false,
+  }));
 }
 
 function extractFeatures(data: any): string[] {
@@ -290,9 +387,16 @@ function extractFeatures(data: any): string[] {
   if (facts.hasGarage) features.push("Garage");
   if (facts.hasPool) features.push("Pool");
   if (facts.hasFireplace) features.push("Fireplace");
-  if (facts.hasAC) features.push("Air Conditioning");
-  if (facts.hasHeating) features.push("Heating");
+  if (facts.hasAC || facts.cooling) features.push("Air Conditioning");
+  if (facts.hasHeating || facts.heating) features.push("Heating");
   if (data.isNewConstruction) features.push("New Construction");
+  if (facts.hasView) features.push("View");
+  if (facts.hasSpa) features.push("Spa");
+  if (facts.hasWaterfront) features.push("Waterfront");
+  if (facts.parkingCapacity) features.push(`${facts.parkingCapacity}-Car Parking`);
+  if (facts.stories && facts.stories > 1) features.push(`${facts.stories} Stories`);
+  if (facts.basement) features.push("Basement");
+  if (facts.laundryFeatures) features.push("Laundry");
   
   return features;
 }
