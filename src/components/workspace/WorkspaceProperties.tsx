@@ -22,6 +22,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
   Plus,
   MapPin,
   Bed,
@@ -51,11 +56,20 @@ import {
   RefreshCw,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Filter,
+  CheckCircle2,
+  AlertTriangle,
+  Thermometer,
+  FileText,
+  Share2,
+  Info,
+  Download,
 } from "lucide-react";
-import { mockProperties } from "@/data/mockData";
+import { mockProperties, mockBuyers } from "@/data/mockData";
 import { Property } from "@/types";
 import { cn } from "@/lib/utils";
+import { usePropertyAnalysis } from "@/hooks/usePropertyAnalysis";
 
 interface WorkspacePropertiesProps {
   buyerId: string;
@@ -75,6 +89,24 @@ interface BuyerProperty extends Property {
   archived?: boolean;
   agentNotes?: string;
   aiAnalysis?: string;
+  aiAnalysisGeneratedAt?: string;
+}
+
+interface MarketSummary {
+  avgPrice: number;
+  avgPricePerSqft: number;
+  avgDom: number;
+  marketTemp: 'hot' | 'warm' | 'cool';
+  totalComps: number;
+  location: string;
+  criteria: string;
+}
+
+interface PropertyAnalysis {
+  propertyId: string;
+  generatedAt: string;
+  isGenerating: boolean;
+  analysis: string | null;
 }
 
 export function WorkspaceProperties({ buyerId, onAgentCommand }: WorkspacePropertiesProps) {
@@ -86,6 +118,12 @@ export function WorkspaceProperties({ buyerId, onAgentCommand }: WorkspaceProper
   const [priceFilter, setPriceFilter] = useState<string>("any");
   const [bedsFilter, setBedsFilter] = useState<string>("any");
   
+  // Get buyer info
+  const buyer = mockBuyers.find(b => b.id === buyerId) || mockBuyers[0];
+  
+  // Property analysis hook
+  const { generateAnalysis, isAnalyzing, analysis: streamedAnalysis } = usePropertyAnalysis();
+  
   // Mock buyer properties with extended data
   const [properties, setProperties] = useState<BuyerProperty[]>(
     mockProperties.map((p, i) => ({
@@ -96,17 +134,22 @@ export function WorkspaceProperties({ buyerId, onAgentCommand }: WorkspaceProper
       favorited: i === 0 || i === 2,
       archived: false,
       agentNotes: i === 0 ? "Great backyard for their kids. Close to schools they wanted. Might need to act fast given low DOM." : "",
-      aiAnalysis: i === 0 ? "This property aligns well with the buyer's criteria for a family home. The price per sqft is 2.3% below neighborhood median." : undefined,
+      aiAnalysis: undefined,
+      aiAnalysisGeneratedAt: undefined,
     }))
   );
   
   const [selectedProperty, setSelectedProperty] = useState<BuyerProperty | null>(null);
   const [isGeneratingComps, setIsGeneratingComps] = useState(false);
-  const [streamedComps, setStreamedComps] = useState<any[]>([]);
-  const [compAnalysis, setCompAnalysis] = useState<string>("");
   const [editingNotes, setEditingNotes] = useState(false);
   const [tempNotes, setTempNotes] = useState("");
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  
+  // Comparables tab state
+  const [expandedProperty, setExpandedProperty] = useState<string | null>(null);
+  const [propertyAnalyses, setPropertyAnalyses] = useState<Record<string, PropertyAnalysis>>({});
+  const [marketSummary, setMarketSummary] = useState<MarketSummary | null>(null);
+  const [isLoadingMarketSummary, setIsLoadingMarketSummary] = useState(false);
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -145,7 +188,6 @@ export function WorkspaceProperties({ buyerId, onAgentCommand }: WorkspaceProper
   };
 
   const handleScheduleShowing = (propertyId: string) => {
-    // In real app, would open a date picker modal
     setProperties(prev => prev.map(p => 
       p.id === propertyId 
         ? { ...p, scheduled: true, scheduledDate: new Date().toISOString() } 
@@ -163,64 +205,146 @@ export function WorkspaceProperties({ buyerId, onAgentCommand }: WorkspaceProper
     setEditingNotes(false);
   };
 
-  const handleGenerateComps = useCallback(async () => {
-    setIsGeneratingComps(true);
-    setStreamedComps([]);
-    setCompAnalysis("");
-
-    const mockComps = [
-      { 
-        address: "123 Oak Street", 
-        price: 485000, 
-        sqft: 1850, 
-        pricePerSqft: 262, 
-        dom: 14,
-        image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=400",
-        status: "selected" 
-      },
-      { 
-        address: "145 Oak Street", 
-        price: 478000, 
-        sqft: 1820, 
-        pricePerSqft: 263, 
-        dom: 22,
-        image: "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=400",
-        status: "sold" 
-      },
-      { 
-        address: "98 Maple Ave", 
-        price: 492000, 
-        sqft: 1900, 
-        pricePerSqft: 259, 
-        dom: 8,
-        image: "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=400",
-        status: "active" 
-      },
-      { 
-        address: "210 Cedar Lane", 
-        price: 469000, 
-        sqft: 1780, 
-        pricePerSqft: 264, 
-        dom: 31,
-        image: "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=400",
-        status: "pending" 
-      },
-    ];
-
-    for (let i = 0; i < mockComps.length; i++) {
-      await new Promise(resolve => setTimeout(resolve, 400));
-      setStreamedComps(prev => [...prev, mockComps[i]]);
-    }
-
-    const analysisText = "Based on the buyer's first-time buyer profile with a focus on affordability, these comps show a median price/sqft of $262. The selected property is competitively priced at 1.5% below market average. Recommend negotiating 3-5% below asking given the 14-day DOM.";
+  // Generate market summary for comparables tab
+  const generateMarketSummary = useCallback(async () => {
+    setIsLoadingMarketSummary(true);
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 1000));
     
-    for (let i = 0; i < analysisText.length; i += 3) {
-      await new Promise(resolve => setTimeout(resolve, 15));
-      setCompAnalysis(analysisText.slice(0, i + 3));
-    }
+    const nonArchivedProperties = properties.filter(p => !p.archived);
+    const avgPrice = nonArchivedProperties.reduce((sum, p) => sum + p.price, 0) / nonArchivedProperties.length;
+    const avgPricePerSqft = nonArchivedProperties.reduce((sum, p) => sum + p.pricePerSqft, 0) / nonArchivedProperties.length;
+    const avgDom = nonArchivedProperties.reduce((sum, p) => sum + p.daysOnMarket, 0) / nonArchivedProperties.length;
+    
+    const buyerBudget = 500000; // Default budget
+    setMarketSummary({
+      avgPrice: Math.round(avgPrice),
+      avgPricePerSqft: Math.round(avgPricePerSqft),
+      avgDom: Math.round(avgDom),
+      marketTemp: avgDom < 14 ? 'hot' : avgDom < 30 ? 'warm' : 'cool',
+      totalComps: 47,
+      location: 'Austin, TX',
+      criteria: `3bd, ${formatPrice(buyerBudget * 0.9)}-${formatPrice(buyerBudget * 1.1)}`,
+    });
+    setIsLoadingMarketSummary(false);
+  }, [properties]);
 
-    setIsGeneratingComps(false);
-  }, []);
+  // Generate AI analysis for a specific property
+  const handleGeneratePropertyAnalysis = useCallback(async (property: BuyerProperty) => {
+    setPropertyAnalyses(prev => ({
+      ...prev,
+      [property.id]: {
+        propertyId: property.id,
+        generatedAt: new Date().toISOString(),
+        isGenerating: true,
+        analysis: null,
+      }
+    }));
+
+    const buyerProfile = {
+      id: buyer.id,
+      name: buyer.name,
+      type: (buyer.buyerType || 'first-time') as 'first-time' | 'move-up' | 'investor' | 'downsizing',
+      budget: 500000,
+      preApproval: 475000,
+      mustHaves: ['Move-in ready', 'Good schools'],
+      niceToHaves: ['Updated kitchen', 'Fenced yard'],
+      preferredCities: ['Austin'],
+      agentNotes: property.agentNotes,
+    };
+
+    const mlsProperty = {
+      id: property.id,
+      address: property.address,
+      city: property.city,
+      state: property.state,
+      zipCode: property.zipCode,
+      price: property.price,
+      bedrooms: property.bedrooms,
+      bathrooms: property.bathrooms,
+      sqft: property.sqft,
+      yearBuilt: property.yearBuilt,
+      pricePerSqft: property.pricePerSqft,
+      daysOnMarket: property.daysOnMarket,
+      propertyType: 'Single Family',
+      status: property.status as 'active' | 'pending' | 'sold' | 'withdrawn',
+      description: property.description,
+      features: property.features,
+      photos: property.images,
+    };
+
+    // Mock comparables
+    const comparables = properties
+      .filter(p => p.id !== property.id && !p.archived)
+      .slice(0, 4)
+      .map(p => ({
+        id: p.id,
+        address: p.address,
+        city: p.city,
+        state: p.state,
+        zipCode: p.zipCode,
+        price: p.price,
+        bedrooms: p.bedrooms,
+        bathrooms: p.bathrooms,
+        sqft: p.sqft,
+        pricePerSqft: p.pricePerSqft,
+        daysOnMarket: p.daysOnMarket,
+        status: p.status,
+      }));
+
+    let fullAnalysis = "";
+    
+    try {
+      const result = await generateAnalysis(
+        mlsProperty,
+        buyerProfile,
+        comparables,
+        (chunk) => {
+          fullAnalysis += chunk;
+          setPropertyAnalyses(prev => ({
+            ...prev,
+            [property.id]: {
+              ...prev[property.id],
+              analysis: fullAnalysis,
+            }
+          }));
+        }
+      );
+
+      setPropertyAnalyses(prev => ({
+        ...prev,
+        [property.id]: {
+          propertyId: property.id,
+          generatedAt: new Date().toISOString(),
+          isGenerating: false,
+          analysis: result || fullAnalysis,
+        }
+      }));
+
+      // Also update the property's aiAnalysis
+      setProperties(prev => prev.map(p => 
+        p.id === property.id 
+          ? { ...p, aiAnalysis: result || fullAnalysis, aiAnalysisGeneratedAt: new Date().toISOString() } 
+          : p
+      ));
+    } catch (error) {
+      setPropertyAnalyses(prev => ({
+        ...prev,
+        [property.id]: {
+          ...prev[property.id],
+          isGenerating: false,
+          analysis: "Failed to generate analysis. Please try again.",
+        }
+      }));
+    }
+  }, [buyer, properties, generateAnalysis]);
+
+  // Load market summary when comparables tab is active
+  useEffect(() => {
+    if (activeSubTab === "comparables" && !marketSummary && !isLoadingMarketSummary) {
+      generateMarketSummary();
+    }
+  }, [activeSubTab, marketSummary, isLoadingMarketSummary, generateMarketSummary]);
 
   // Apply filters
   const filteredProperties = properties.filter(p => {
@@ -472,18 +596,131 @@ export function WorkspaceProperties({ buyerId, onAgentCommand }: WorkspaceProper
     );
   };
 
+  // AI Analysis Renderer
+  const AIAnalysisContent = ({ analysis, generatedAt }: { analysis: string; generatedAt?: string }) => {
+    return (
+      <div className="prose prose-sm max-w-none dark:prose-invert">
+        <div className="text-xs text-muted-foreground mb-4 flex items-center gap-2">
+          <Sparkles className="h-3 w-3" />
+          Generated {generatedAt ? new Date(generatedAt).toLocaleDateString('en-US', { 
+            month: 'short', 
+            day: 'numeric', 
+            year: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit'
+          }) : 'just now'} • Customized for {buyer.name}
+        </div>
+        <div className="whitespace-pre-wrap text-sm leading-relaxed">
+          {analysis.split('\n').map((line, i) => {
+            // Handle headers
+            if (line.startsWith('## ')) {
+              return <h3 key={i} className="text-base font-semibold mt-6 mb-3 text-foreground">{line.slice(3)}</h3>;
+            }
+            if (line.startsWith('### ')) {
+              return <h4 key={i} className="text-sm font-medium mt-4 mb-2 text-foreground">{line.slice(4)}</h4>;
+            }
+            // Handle bullet points
+            if (line.startsWith('- ') || line.startsWith('• ')) {
+              const content = line.slice(2);
+              const isPositive = content.startsWith('✅') || content.includes('Strength');
+              const isWarning = content.startsWith('⚠️') || content.includes('Consider');
+              return (
+                <div key={i} className={cn(
+                  "flex items-start gap-2 py-1",
+                  isPositive && "text-emerald-600 dark:text-emerald-400",
+                  isWarning && "text-amber-600 dark:text-amber-400"
+                )}>
+                  <span className="mt-1">•</span>
+                  <span>{content}</span>
+                </div>
+              );
+            }
+            // Handle numbered lists
+            if (/^\d+\.\s/.test(line)) {
+              return <div key={i} className="py-1 pl-4 text-muted-foreground">{line}</div>;
+            }
+            // Handle bold text
+            if (line.includes('**')) {
+              const parts = line.split(/\*\*(.*?)\*\*/g);
+              return (
+                <p key={i} className="py-1 text-muted-foreground">
+                  {parts.map((part, j) => j % 2 === 1 ? <strong key={j} className="text-foreground">{part}</strong> : part)}
+                </p>
+              );
+            }
+            // Regular paragraphs
+            if (line.trim()) {
+              return <p key={i} className="py-1 text-muted-foreground">{line}</p>;
+            }
+            return <div key={i} className="h-2" />;
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  // Comparable Properties Table
+  const ComparablePropertiesTable = ({ selectedProperty, comparables }: { selectedProperty: BuyerProperty; comparables: BuyerProperty[] }) => {
+    const allProps = [selectedProperty, ...comparables];
+    
+    return (
+      <div className="border border-border rounded-lg overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-muted/50 border-b border-border">
+              <th className="text-left py-3 px-4 font-medium text-muted-foreground">Address</th>
+              <th className="text-right py-3 px-4 font-medium text-muted-foreground">Price</th>
+              <th className="text-center py-3 px-4 font-medium text-muted-foreground">Beds</th>
+              <th className="text-center py-3 px-4 font-medium text-muted-foreground">Baths</th>
+              <th className="text-right py-3 px-4 font-medium text-muted-foreground">Sqft</th>
+              <th className="text-right py-3 px-4 font-medium text-muted-foreground">$/Sqft</th>
+              <th className="text-center py-3 px-4 font-medium text-muted-foreground">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {allProps.map((prop, i) => {
+              const isSelected = prop.id === selectedProperty.id;
+              return (
+                <tr key={prop.id} className={cn(
+                  "border-b border-border last:border-0",
+                  isSelected && "bg-primary/5 font-medium"
+                )}>
+                  <td className="py-3 px-4">
+                    <span className={cn(isSelected && "font-semibold")}>{prop.address}</span>
+                    {isSelected && <Badge className="ml-2 text-xs" variant="secondary">Selected</Badge>}
+                  </td>
+                  <td className={cn("text-right py-3 px-4", isSelected && "font-semibold")}>
+                    {formatPrice(prop.price)}
+                  </td>
+                  <td className="text-center py-3 px-4">{prop.bedrooms}</td>
+                  <td className="text-center py-3 px-4">{prop.bathrooms}</td>
+                  <td className="text-right py-3 px-4">{prop.sqft.toLocaleString()}</td>
+                  <td className="text-right py-3 px-4">${prop.pricePerSqft}</td>
+                  <td className="text-center py-3 px-4">
+                    <Badge variant="outline" className={cn(
+                      "capitalize text-xs",
+                      prop.status === "active" && "bg-emerald-500/10 text-emerald-600 border-emerald-200",
+                      prop.status === "pending" && "bg-amber-500/10 text-amber-600 border-amber-200",
+                      prop.status === "sold" && "bg-muted text-muted-foreground"
+                    )}>
+                      {isSelected ? "Active" : prop.status || "Sold"}
+                    </Badge>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
   const PropertyDetailModal = () => {
     if (!selectedProperty) return null;
 
     const badges = getStatusBadges(selectedProperty);
     const images = selectedProperty.images || [];
-
-    const aiAnalysis = {
-      domAnalysis: "14 days on market is 40% faster than area average (23 days). This suggests strong buyer interest or competitive pricing.",
-      pricePerSqft: "At $262/sqft, this property is priced 2.3% below the neighborhood median of $268/sqft.",
-      roiEstimate: "For investor buyers: Estimated 5.2% cap rate based on comparable rental rates of $2,450/month.",
-      marketTrend: "Austin condo prices up 4.7% YoY. Current listing aligns with upward trend.",
-    };
+    const propertyAnalysis = propertyAnalyses[selectedProperty.id];
 
     return (
       <Dialog open={!!selectedProperty} onOpenChange={() => setSelectedProperty(null)}>
@@ -624,6 +861,7 @@ export function WorkspaceProperties({ buyerId, onAgentCommand }: WorkspaceProper
               {/* Buyer Status & Actions */}
               <div>
                 <h3 className="font-medium mb-4">Buyer Status & Actions</h3>
+                <p className="text-sm text-muted-foreground mb-3">For: {buyer.name}</p>
                 <div className="flex flex-wrap items-center gap-4">
                   <div className="flex items-center gap-2">
                     {selectedProperty.viewed ? (
@@ -694,43 +932,79 @@ export function WorkspaceProperties({ buyerId, onAgentCommand }: WorkspaceProper
 
               {/* AI Market Analysis */}
               <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <Sparkles className="h-4 w-4 text-primary" />
-                  <h3 className="font-medium">AI Market Analysis</h3>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    <h3 className="font-medium">AI Market Analysis</h3>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="gap-2"
+                    onClick={() => handleGeneratePropertyAnalysis(selectedProperty)}
+                    disabled={propertyAnalysis?.isGenerating}
+                  >
+                    {propertyAnalysis?.isGenerating ? (
+                      <>
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="h-3 w-3" />
+                        {propertyAnalysis?.analysis || selectedProperty.aiAnalysis ? 'Regenerate' : 'Generate'} Analysis
+                      </>
+                    )}
+                  </Button>
                 </div>
-                <div className="space-y-3">
-                  <div className="p-4 border border-border bg-muted/30 rounded-lg">
-                    <div className="flex items-start gap-3">
-                      <Clock className="h-4 w-4 text-muted-foreground mt-0.5" />
-                      <div>
-                        <p className="text-sm font-medium mb-1">Days on Market Analysis</p>
-                        <p className="text-sm text-muted-foreground">{aiAnalysis.domAnalysis}</p>
+                
+                {(propertyAnalysis?.analysis || selectedProperty.aiAnalysis) ? (
+                  <div className="p-4 border border-border rounded-lg bg-muted/30">
+                    <AIAnalysisContent 
+                      analysis={propertyAnalysis?.analysis || selectedProperty.aiAnalysis || ""} 
+                      generatedAt={propertyAnalysis?.generatedAt || selectedProperty.aiAnalysisGeneratedAt}
+                    />
+                    
+                    {/* Disclaimer */}
+                    <div className="mt-6 pt-4 border-t border-border">
+                      <div className="flex items-start gap-2 text-xs text-muted-foreground">
+                        <Info className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                        <p>
+                          This analysis is AI-generated for informational purposes only. Agent should verify all data and use professional judgment. Not a substitute for CMA, appraisal, or inspection.
+                        </p>
                       </div>
                     </div>
-                  </div>
-                  <div className="p-4 border border-border bg-muted/30 rounded-lg">
-                    <div className="flex items-start gap-3">
-                      <DollarSign className="h-4 w-4 text-muted-foreground mt-0.5" />
-                      <div>
-                        <p className="text-sm font-medium mb-1">Price per Sq Ft</p>
-                        <p className="text-sm text-muted-foreground">{aiAnalysis.pricePerSqft}</p>
-                      </div>
+                    
+                    {/* Action buttons */}
+                    <div className="flex items-center gap-2 mt-4 pt-4 border-t border-border">
+                      <Button variant="outline" size="sm" className="gap-2">
+                        <Download className="h-3 w-3" />
+                        Export as PDF
+                      </Button>
+                      <Button variant="outline" size="sm" className="gap-2">
+                        <Share2 className="h-3 w-3" />
+                        Publish to Buyer Portal
+                      </Button>
                     </div>
                   </div>
-                  <div className="p-4 border border-border bg-muted/30 rounded-lg">
-                    <div className="flex items-start gap-3">
-                      <TrendingUp className="h-4 w-4 text-muted-foreground mt-0.5" />
-                      <div>
-                        <p className="text-sm font-medium mb-1">Market Trend</p>
-                        <p className="text-sm text-muted-foreground">{aiAnalysis.marketTrend}</p>
-                      </div>
-                    </div>
+                ) : propertyAnalysis?.isGenerating ? (
+                  <div className="p-8 border border-border rounded-lg bg-muted/30 text-center">
+                    <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3 text-primary" />
+                    <p className="text-sm text-muted-foreground">Generating comprehensive analysis...</p>
                   </div>
-                </div>
-                <Button variant="outline" size="sm" className="mt-4 gap-2">
-                  <RefreshCw className="h-3 w-3" />
-                  Regenerate Analysis
-                </Button>
+                ) : (
+                  <div className="p-8 border border-dashed border-border rounded-lg bg-muted/30 text-center">
+                    <Sparkles className="h-8 w-8 mx-auto mb-3 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground mb-3">No analysis generated yet</p>
+                    <Button 
+                      size="sm" 
+                      onClick={() => handleGeneratePropertyAnalysis(selectedProperty)}
+                    >
+                      <Sparkles className="h-3 w-3 mr-2" />
+                      Generate AI Analysis
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
           </ScrollArea>
@@ -759,6 +1033,243 @@ export function WorkspaceProperties({ buyerId, onAgentCommand }: WorkspaceProper
           </div>
         </DialogContent>
       </Dialog>
+    );
+  };
+
+  // Comparables Tab Content
+  const ComparablesTabContent = () => {
+    const nonArchivedProperties = properties.filter(p => !p.archived);
+    
+    return (
+      <div className="space-y-6">
+        {/* Market Summary Header */}
+        <div className="p-6 border border-border rounded-lg bg-muted/30">
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <h3 className="font-medium text-foreground">Market Analysis for {buyer.name}</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                Budget: {formatPrice(450000)}-{formatPrice(500000)} • 
+                Looking for: Move-in ready, good schools
+              </p>
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={generateMarketSummary}
+              disabled={isLoadingMarketSummary}
+            >
+              {isLoadingMarketSummary ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            </Button>
+          </div>
+          
+          {marketSummary ? (
+            <>
+              <h4 className="text-sm font-medium mb-3">Market Summary</h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="p-3 bg-background rounded-lg">
+                  <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                    <BarChart3 className="h-4 w-4" />
+                    <span className="text-xs">Average Price</span>
+                  </div>
+                  <p className="font-semibold">{formatPrice(marketSummary.avgPrice)}</p>
+                </div>
+                <div className="p-3 bg-background rounded-lg">
+                  <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                    <Square className="h-4 w-4" />
+                    <span className="text-xs">Average $/sqft</span>
+                  </div>
+                  <p className="font-semibold">${marketSummary.avgPricePerSqft}</p>
+                </div>
+                <div className="p-3 bg-background rounded-lg">
+                  <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                    <Clock className="h-4 w-4" />
+                    <span className="text-xs">Average DOM</span>
+                  </div>
+                  <p className="font-semibold">{marketSummary.avgDom} days</p>
+                </div>
+                <div className="p-3 bg-background rounded-lg">
+                  <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                    <Thermometer className="h-4 w-4" />
+                    <span className="text-xs">Market Temperature</span>
+                  </div>
+                  <p className="font-semibold flex items-center gap-1">
+                    {marketSummary.marketTemp === 'hot' && <span className="text-orange-500">🔥 Hot</span>}
+                    {marketSummary.marketTemp === 'warm' && <span className="text-amber-500">🌡️ Warm</span>}
+                    {marketSummary.marketTemp === 'cool' && <span className="text-blue-500">❄️ Cool</span>}
+                    <span className="text-xs text-muted-foreground ml-1">
+                      ({marketSummary.marketTemp === 'hot' ? 'High competition' : marketSummary.marketTemp === 'warm' ? 'Moderate' : 'Buyer\'s market'})
+                    </span>
+                  </p>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground mt-4">
+                Based on {marketSummary.totalComps} similar properties in {marketSummary.location} ({marketSummary.criteria})
+              </p>
+            </>
+          ) : isLoadingMarketSummary ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : null}
+        </div>
+
+        {/* Property-Specific Comparables */}
+        <div>
+          <h4 className="font-medium mb-4">Property-Specific Comparables</h4>
+          
+          {nonArchivedProperties.length > 0 ? (
+            <div className="space-y-3">
+              {nonArchivedProperties.map((property) => {
+                const propertyAnalysis = propertyAnalyses[property.id];
+                const isExpanded = expandedProperty === property.id;
+                const comparables = nonArchivedProperties.filter(p => p.id !== property.id).slice(0, 4);
+                
+                return (
+                  <Collapsible 
+                    key={property.id} 
+                    open={isExpanded}
+                    onOpenChange={() => setExpandedProperty(isExpanded ? null : property.id)}
+                  >
+                    <CollapsibleTrigger className="w-full">
+                      <div className="flex items-center justify-between p-4 bg-card border border-border rounded-lg hover:border-foreground/20 transition-colors">
+                        <div className="flex items-center gap-4">
+                          <img 
+                            src={property.images[0]} 
+                            alt={property.address}
+                            className="w-16 h-12 object-cover rounded"
+                          />
+                          <div className="text-left">
+                            <p className="font-medium">{property.address}</p>
+                            <p className="text-sm text-muted-foreground">{formatPrice(property.price)}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {property.aiAnalysis || propertyAnalysis?.analysis ? (
+                            <Badge variant="secondary" className="gap-1">
+                              <CheckCircle2 className="h-3 w-3" />
+                              Analysis Ready
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-muted-foreground">
+                              No Analysis
+                            </Badge>
+                          )}
+                          <ChevronDown className={cn(
+                            "h-4 w-4 text-muted-foreground transition-transform",
+                            isExpanded && "rotate-180"
+                          )} />
+                        </div>
+                      </div>
+                    </CollapsibleTrigger>
+                    
+                    <CollapsibleContent>
+                      <div className="mt-2 p-6 bg-muted/30 border border-border rounded-lg space-y-6">
+                        {/* Comparable Properties Table */}
+                        <div>
+                          <h5 className="text-sm font-medium mb-3">Comparable Properties</h5>
+                          <ComparablePropertiesTable 
+                            selectedProperty={property} 
+                            comparables={comparables} 
+                          />
+                        </div>
+                        
+                        {/* AI Analysis Section */}
+                        <div>
+                          <div className="flex items-center justify-between mb-3">
+                            <h5 className="text-sm font-medium flex items-center gap-2">
+                              <Sparkles className="h-4 w-4 text-primary" />
+                              AI-Generated Comparative Analysis
+                            </h5>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleGeneratePropertyAnalysis(property);
+                              }}
+                              disabled={propertyAnalysis?.isGenerating}
+                            >
+                              {propertyAnalysis?.isGenerating ? (
+                                <>
+                                  <Loader2 className="h-3 w-3 animate-spin mr-2" />
+                                  Generating...
+                                </>
+                              ) : (
+                                <>
+                                  <RefreshCw className="h-3 w-3 mr-2" />
+                                  {propertyAnalysis?.analysis || property.aiAnalysis ? 'Regenerate' : 'Generate'}
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                          
+                          {(propertyAnalysis?.analysis || property.aiAnalysis) ? (
+                            <div className="p-4 bg-background border border-border rounded-lg">
+                              <AIAnalysisContent 
+                                analysis={propertyAnalysis?.analysis || property.aiAnalysis || ""} 
+                                generatedAt={propertyAnalysis?.generatedAt || property.aiAnalysisGeneratedAt}
+                              />
+                              
+                              {/* Disclaimer */}
+                              <div className="mt-6 pt-4 border-t border-border">
+                                <div className="flex items-start gap-2 text-xs text-muted-foreground">
+                                  <Info className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                                  <p>
+                                    This analysis is AI-generated for informational purposes only. Agent should verify all data and use professional judgment.
+                                  </p>
+                                </div>
+                              </div>
+                              
+                              {/* Actions */}
+                              <div className="flex items-center gap-2 mt-4">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={() => setSelectedProperty(property)}
+                                >
+                                  View Full Analysis
+                                </Button>
+                                <Button variant="outline" size="sm" className="gap-2">
+                                  <Download className="h-3 w-3" />
+                                  Export as PDF
+                                </Button>
+                                <Button variant="outline" size="sm" className="gap-2">
+                                  <Share2 className="h-3 w-3" />
+                                  Publish to Buyer Portal
+                                </Button>
+                              </div>
+                            </div>
+                          ) : propertyAnalysis?.isGenerating ? (
+                            <div className="p-8 bg-background border border-border rounded-lg text-center">
+                              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3 text-primary" />
+                              <p className="text-sm text-muted-foreground">Generating comprehensive analysis...</p>
+                            </div>
+                          ) : (
+                            <div className="p-8 bg-background border border-dashed border-border rounded-lg text-center">
+                              <Sparkles className="h-8 w-8 mx-auto mb-3 text-muted-foreground" />
+                              <p className="text-sm text-muted-foreground mb-3">Click "Generate" to create AI comparative analysis</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-16 text-muted-foreground">
+              <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p className="text-sm font-medium">No properties to compare</p>
+              <p className="text-xs mt-1">Add properties to the workspace to generate comparables</p>
+              <Button size="sm" className="mt-4" onClick={handleAddProperty}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Property
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
     );
   };
 
@@ -948,129 +1459,7 @@ export function WorkspaceProperties({ buyerId, onAgentCommand }: WorkspaceProper
             </>
           )}
 
-          {activeSubTab === "comparables" && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-medium text-foreground">Comparable Market Analysis</h3>
-                  <p className="text-sm text-muted-foreground">AI-generated comps based on buyer criteria</p>
-                </div>
-                <Button
-                  onClick={handleGenerateComps}
-                  disabled={isGeneratingComps}
-                  className="gap-2"
-                >
-                  {isGeneratingComps ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Generating...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="h-4 w-4" />
-                      Generate Comps
-                    </>
-                  )}
-                </Button>
-              </div>
-
-              {streamedComps.length > 0 && (
-                <div className="border border-border overflow-hidden rounded-lg">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-border bg-muted/50">
-                        <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Property</th>
-                        <th className="text-right py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Price</th>
-                        <th className="text-right py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Sq Ft</th>
-                        <th className="text-right py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">$/Sq Ft</th>
-                        <th className="text-right py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">DOM</th>
-                        <th className="text-right py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {streamedComps.map((comp, index) => {
-                        const isSelected = comp.status === "selected";
-                        return (
-                          <tr
-                            key={index}
-                            className={cn(
-                              "border-b border-border last:border-0 transition-all",
-                              isSelected && "bg-muted/30"
-                            )}
-                          >
-                            <td className="py-3 px-4">
-                              <div className="flex items-center gap-3">
-                                <img 
-                                  src={comp.image} 
-                                  alt={comp.address}
-                                  className="w-12 h-12 object-cover rounded"
-                                />
-                                <div>
-                                  <span className={cn("text-sm", isSelected && "font-medium")}>
-                                    {comp.address}
-                                  </span>
-                                  {isSelected && (
-                                    <Badge className="ml-2 text-xs">
-                                      Selected
-                                    </Badge>
-                                  )}
-                                </div>
-                              </div>
-                            </td>
-                            <td className="text-right py-3 px-4 font-medium text-sm">
-                              {formatPrice(comp.price)}
-                            </td>
-                            <td className="text-right py-3 px-4 text-sm text-muted-foreground">
-                              {comp.sqft.toLocaleString()}
-                            </td>
-                            <td className="text-right py-3 px-4 text-sm text-muted-foreground">
-                              ${comp.pricePerSqft}
-                            </td>
-                            <td className="text-right py-3 px-4 text-sm text-muted-foreground">
-                              {comp.dom}d
-                            </td>
-                            <td className="text-right py-3 px-4">
-                              <Badge
-                                className={cn(
-                                  "text-xs capitalize font-normal",
-                                  comp.status === "active" && "bg-emerald-500/10 text-emerald-600 border-emerald-200",
-                                  comp.status === "sold" && "bg-muted text-muted-foreground",
-                                  comp.status === "pending" && "bg-amber-500/10 text-amber-600 border-amber-200",
-                                  comp.status === "selected" && "bg-primary text-primary-foreground"
-                                )}
-                              >
-                                {comp.status}
-                              </Badge>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {compAnalysis && (
-                <div className="p-4 bg-muted/30 border border-border rounded-lg">
-                  <div className="flex items-start gap-3">
-                    <Sparkles className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-sm font-medium mb-1">AI Analysis</p>
-                      <p className="text-sm text-muted-foreground">{compAnalysis}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {streamedComps.length === 0 && !isGeneratingComps && (
-                <div className="text-center py-16 text-muted-foreground">
-                  <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p className="text-sm">Click "Generate Comps" to create a market analysis</p>
-                  <p className="text-xs mt-1">Based on buyer's profile and property preferences</p>
-                </div>
-              )}
-            </div>
-          )}
+          {activeSubTab === "comparables" && <ComparablesTabContent />}
 
           {activeSubTab === "favorites" && (
             <>
