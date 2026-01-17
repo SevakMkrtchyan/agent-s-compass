@@ -1464,32 +1464,53 @@ export function WorkspaceProperties({ buyerId, onAgentCommand }: WorkspaceProper
 
           {activeSubTab === "favorites" && (
             <>
+              {/* Favorites Header */}
+              <div className="mb-6 p-4 bg-muted/30 border border-border rounded-lg">
+                <h3 className="font-medium text-foreground flex items-center gap-2">
+                  <Heart className="h-4 w-4 text-red-500 fill-red-500" />
+                  Favorited Properties ({favoriteCount})
+                </h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Properties marked as favorites by you or {buyer.name}
+                </p>
+              </div>
+
               {favoriteCount > 0 ? (
-                <>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    These properties are visible on the buyer portal for review.
-                  </p>
-                  <div
-                    className={cn(
-                      viewMode === "grid"
-                        ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
-                        : "space-y-2"
-                    )}
-                  >
+                viewMode === "grid" ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                     {properties
                       .filter((p) => p.favorited && !p.archived)
-                      .map((property) => 
-                        viewMode === "grid" 
-                          ? <PropertyCard key={property.id} property={property} />
-                          : <PropertyListRow key={property.id} property={property} />
-                      )}
+                      .map((property) => (
+                        <PropertyCard key={property.id} property={property} />
+                      ))}
                   </div>
-                </>
+                ) : (
+                  <div className="space-y-2">
+                    {/* List Header */}
+                    <div className="flex items-center gap-4 px-4 py-2 text-xs text-muted-foreground uppercase tracking-wider">
+                      <div className="w-20">Photo</div>
+                      <div className="flex-1">Address</div>
+                      <div className="w-24 text-right">Price</div>
+                      <div className="w-16 text-center">Beds</div>
+                      <div className="w-16 text-center">Baths</div>
+                      <div className="w-20 text-center">Sqft</div>
+                      <div className="w-20 text-center">$/sqft</div>
+                      <div className="w-16 text-center">DOM</div>
+                      <div className="w-24"></div>
+                    </div>
+                    {properties
+                      .filter((p) => p.favorited && !p.archived)
+                      .map((property) => (
+                        <PropertyListRow key={property.id} property={property} />
+                      ))}
+                  </div>
+                )
               ) : (
                 <div className="text-center py-16 text-muted-foreground">
                   <Heart className="h-12 w-12 mx-auto mb-4 opacity-50" />
                   <p className="text-sm font-medium">No favorite properties yet</p>
-                  <p className="text-xs mt-1">Click the heart icon on any property to add it to favorites</p>
+                  <p className="text-xs mt-1 mb-1">Click the ♡ icon on any property to add it to favorites.</p>
+                  <p className="text-xs">Favorited properties are highlighted for this buyer.</p>
                 </div>
               )}
             </>
