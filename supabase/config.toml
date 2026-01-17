@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.scrape-property-link]
 verify_jwt = false
+
+[functions.generate-property-analysis]
+verify_jwt = false
