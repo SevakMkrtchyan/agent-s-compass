@@ -21,6 +21,17 @@ interface PropertyDetails {
   url?: string;
 }
 
+interface ComparableParams {
+  address: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  bedrooms: number;
+  bathrooms: number;
+  sqft: number;
+  soldInLast?: string; // '1month', '3months', '6months', '12months', '24months'
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
@@ -42,7 +53,12 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { searchParams, propertyDetails } = await req.json();
+    const { searchParams, propertyDetails, comparableParams } = await req.json();
+    
+    // If comparableParams is provided, fetch comparable properties
+    if (comparableParams) {
+      return await handleComparables(comparableParams, rapidApiKey, corsHeaders);
+    }
     
     // If propertyDetails is provided, fetch single property details
     if (propertyDetails) {
@@ -164,6 +180,222 @@ async function handlePropertySearch(
       { headers: { ...headers, "Content-Type": "application/json" } }
     );
   }
+}
+
+async function handleComparables(
+  params: ComparableParams,
+  apiKey: string,
+  headers: Record<string, string>
+) {
+  const { address, city, state, zipCode, bedrooms, bathrooms, sqft, soldInLast = '6months' } = params;
+
+  if (!address || !city || !state) {
+    return new Response(
+      JSON.stringify({ success: false, error: "Address, city, and state are required" }),
+      { headers: { ...headers, "Content-Type": "application/json" }, status: 400 }
+    );
+  }
+
+  const location = `${address}, ${city}, ${state} ${zipCode}`;
+  console.log("Fetching comparables for:", location);
+
+  // Map soldInLast to Zillow API format
+  const soldInLastMapping: Record<string, string> = {
+    '1month': '1',
+    '3months': '3',
+    '6months': '6',
+    '12months': '12',
+    '24months': '24',
+  };
+
+  try {
+    const compsUrl = new URL("https://zillow-com1.p.rapidapi.com/similarSales");
+    compsUrl.searchParams.set("location", location);
+    
+    // Set bed range (±1 from subject property)
+    if (bedrooms) {
+      compsUrl.searchParams.set("beds_min", Math.max(1, bedrooms - 1).toString());
+      compsUrl.searchParams.set("beds_max", (bedrooms + 1).toString());
+    }
+    
+    // Set bath range (±1 from subject property)
+    if (bathrooms) {
+      compsUrl.searchParams.set("baths_min", Math.max(1, Math.floor(bathrooms) - 1).toString());
+      compsUrl.searchParams.set("baths_max", (Math.ceil(bathrooms) + 1).toString());
+    }
+    
+    // Set sqft range (±20% from subject property)
+    if (sqft) {
+      compsUrl.searchParams.set("sqft_min", Math.round(sqft * 0.8).toString());
+      compsUrl.searchParams.set("sqft_max", Math.round(sqft * 1.2).toString());
+    }
+    
+    compsUrl.searchParams.set("status_type", "RecentlySold");
+    compsUrl.searchParams.set("sold_in_last", soldInLastMapping[soldInLast] || "6");
+
+    console.log("Comparables API URL:", compsUrl.toString());
+
+    const response = await fetch(compsUrl.toString(), {
+      method: "GET",
+      headers: {
+        "X-RapidAPI-Key": apiKey,
+        "X-RapidAPI-Host": "zillow-com1.p.rapidapi.com",
+      },
+    });
+
+    console.log("Comparables API response status:", response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Comparables API error:", errorText);
+      throw new Error(`Zillow API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log("Comparables received:", data.props?.length || 0);
+
+    const comparables = transformComparables(data);
+
+    if (comparables.length === 0) {
+      console.log("No comparables found, returning mock data");
+      return new Response(
+        JSON.stringify({
+          success: true,
+          data: getMockComparables(params),
+          isMock: true,
+          message: "No comparables found. Showing estimated comparables.",
+        }),
+        { headers: { ...headers, "Content-Type": "application/json" } }
+      );
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        data: comparables,
+        isMock: false,
+        totalResults: data.totalResultCount || comparables.length,
+      }),
+      { headers: { ...headers, "Content-Type": "application/json" } }
+    );
+  } catch (error) {
+    console.error("Comparables search failed:", error);
+    return new Response(
+      JSON.stringify({
+        success: true,
+        data: getMockComparables(params),
+        isMock: true,
+        message: "Comparables search failed. Showing estimated comparables.",
+      }),
+      { headers: { ...headers, "Content-Type": "application/json" } }
+    );
+  }
+}
+
+function transformComparables(data: any): any[] {
+  const props = data.props || data.results || [];
+  
+  return props.map((prop: any) => ({
+    id: prop.zpid?.toString() || crypto.randomUUID(),
+    mlsId: prop.zpid?.toString(),
+    address: prop.streetAddress || prop.address || "Address unavailable",
+    city: prop.city || "",
+    state: prop.state || "",
+    zipCode: prop.zipcode || "",
+    price: prop.price || prop.lastSoldPrice || 0,
+    bedrooms: prop.bedrooms || 0,
+    bathrooms: prop.bathrooms || 0,
+    sqft: prop.livingArea || 0,
+    yearBuilt: prop.yearBuilt,
+    pricePerSqft: prop.livingArea ? Math.round((prop.price || prop.lastSoldPrice) / prop.livingArea) : null,
+    soldDate: prop.dateSold || prop.lastSoldDate || null,
+    daysOnMarket: prop.daysOnZillow || 0,
+    propertyType: mapPropertyType(prop.propertyType || prop.homeType),
+    status: "sold",
+    photos: prop.imgSrc ? [prop.imgSrc] : [],
+    listingUrl: `https://www.zillow.com/homedetails/${prop.zpid}_zpid/`,
+    distance: prop.distance || null,
+  }));
+}
+
+function getMockComparables(params: ComparableParams): any[] {
+  const basePrice = 450000;
+  const { bedrooms = 3, bathrooms = 2, sqft = 1800 } = params;
+  
+  return [
+    {
+      id: "comp-1",
+      mlsId: "COMP-001",
+      address: "125 Oak St",
+      city: params.city || "Austin",
+      state: params.state || "TX",
+      zipCode: params.zipCode || "78701",
+      price: Math.round(basePrice * 0.98),
+      bedrooms: bedrooms,
+      bathrooms: bathrooms,
+      sqft: Math.round(sqft * 0.97),
+      pricePerSqft: 264,
+      soldDate: "2026-01-05",
+      status: "sold",
+      photos: ["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&q=80"],
+      listingUrl: "#",
+      distance: "0.2 mi",
+    },
+    {
+      id: "comp-2",
+      mlsId: "COMP-002",
+      address: "130 Oak St",
+      city: params.city || "Austin",
+      state: params.state || "TX",
+      zipCode: params.zipCode || "78701",
+      price: Math.round(basePrice * 1.02),
+      bedrooms: bedrooms,
+      bathrooms: bathrooms + 0.5,
+      sqft: Math.round(sqft * 1.03),
+      pricePerSqft: 260,
+      soldDate: "2025-12-18",
+      status: "sold",
+      photos: ["https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800&q=80"],
+      listingUrl: "#",
+      distance: "0.3 mi",
+    },
+    {
+      id: "comp-3",
+      mlsId: "COMP-003",
+      address: "140 Oak St",
+      city: params.city || "Austin",
+      state: params.state || "TX",
+      zipCode: params.zipCode || "78701",
+      price: Math.round(basePrice * 0.93),
+      bedrooms: bedrooms,
+      bathrooms: bathrooms,
+      sqft: Math.round(sqft * 0.95),
+      pricePerSqft: 257,
+      soldDate: "2025-11-22",
+      status: "sold",
+      photos: ["https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=800&q=80"],
+      listingUrl: "#",
+      distance: "0.4 mi",
+    },
+    {
+      id: "comp-4",
+      mlsId: "COMP-004",
+      address: "150 Oak St",
+      city: params.city || "Austin",
+      state: params.state || "TX",
+      zipCode: params.zipCode || "78701",
+      price: Math.round(basePrice * 1.05),
+      bedrooms: bedrooms,
+      bathrooms: bathrooms,
+      sqft: Math.round(sqft * 1.05),
+      pricePerSqft: 262,
+      soldDate: "2025-10-15",
+      status: "sold",
+      photos: ["https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?w=800&q=80"],
+      listingUrl: "#",
+      distance: "0.5 mi",
+    },
+  ];
 }
 
 async function handlePropertyDetails(
