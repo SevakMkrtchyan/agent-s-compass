@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      api_logs: {
+        Row: {
+          created_at: string
+          endpoint: string
+          id: string
+          request_params: Json | null
+          response_status: number | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          endpoint: string
+          id?: string
+          request_params?: Json | null
+          response_status?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          endpoint?: string
+          id?: string
+          request_params?: Json | null
+          response_status?: number | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       buyer_data: {
         Row: {
           buyer_id: string
@@ -364,11 +391,42 @@ export type Database = {
         }
         Relationships: []
       }
+      property_cache: {
+        Row: {
+          cache_key: string
+          cached_at: string
+          data: Json
+          expires_at: string
+          id: string
+          source: string | null
+          zpid: string | null
+        }
+        Insert: {
+          cache_key: string
+          cached_at?: string
+          data: Json
+          expires_at?: string
+          id?: string
+          source?: string | null
+          zpid?: string | null
+        }
+        Update: {
+          cache_key?: string
+          cached_at?: string
+          data?: Json
+          expires_at?: string
+          id?: string
+          source?: string | null
+          zpid?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      clean_expired_cache: { Args: never; Returns: undefined }
       match_buyer_context: {
         Args: {
           match_buyer_id: string
