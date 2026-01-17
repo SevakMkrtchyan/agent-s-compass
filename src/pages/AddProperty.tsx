@@ -1,12 +1,15 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { 
   ArrowLeft, Search, Link2, FileEdit, 
-  Check, Loader2, Bed, Bath, Square, MapPin, ExternalLink
+  Check, Loader2, Bed, Bath, Square, MapPin, ExternalLink,
+  Calendar, Sparkles, User
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
@@ -23,6 +26,8 @@ type Step = "input" | "assign";
 
 export default function AddProperty() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const preselectedBuyerId = searchParams.get("buyerId");
   const { toast } = useToast();
   
   const [step, setStep] = useState<Step>("input");
@@ -30,10 +35,23 @@ export default function AddProperty() {
   const [selectedProperty, setSelectedProperty] = useState<MLSProperty | null>(null);
 
   // Property assignment state
-  const [assignedBuyers, setAssignedBuyers] = useState<string[]>([]);
-  const [buyerStatuses, setBuyerStatuses] = useState<Record<string, { viewed: boolean; scheduled: boolean; favorited: boolean }>>({});
+  const [assignedBuyers, setAssignedBuyers] = useState<string[]>(
+    preselectedBuyerId ? [preselectedBuyerId] : []
+  );
+  
+  interface BuyerStatus {
+    viewed: boolean;
+    scheduled: boolean;
+    favorited: boolean;
+    showingDate?: string;
+    showingTime?: string;
+  }
+  
+  const [buyerStatuses, setBuyerStatuses] = useState<Record<string, BuyerStatus>>({});
   const [agentNotes, setAgentNotes] = useState("");
+  const [generateAIAnalysis, setGenerateAIAnalysis] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveToPool, setSaveToPool] = useState(false);
 
   const handleSelectProperty = (property: MLSProperty) => {
     setSelectedProperty(property);
@@ -41,6 +59,15 @@ export default function AddProperty() {
   };
 
   const handleBuyerToggle = (buyerId: string) => {
+    if (buyerId === "unassigned") {
+      setSaveToPool(!saveToPool);
+      if (!saveToPool) {
+        setAssignedBuyers([]);
+      }
+      return;
+    }
+    
+    setSaveToPool(false);
     setAssignedBuyers(prev => {
       if (prev.includes(buyerId)) {
         const { [buyerId]: _, ...rest } = buyerStatuses;
@@ -62,6 +89,26 @@ export default function AddProperty() {
       [buyerId]: {
         ...prev[buyerId],
         [field]: !prev[buyerId]?.[field]
+      }
+    }));
+  };
+
+  const handleShowingDateChange = (buyerId: string, date: string) => {
+    setBuyerStatuses(prev => ({
+      ...prev,
+      [buyerId]: {
+        ...prev[buyerId],
+        showingDate: date
+      }
+    }));
+  };
+
+  const handleShowingTimeChange = (buyerId: string, time: string) => {
+    setBuyerStatuses(prev => ({
+      ...prev,
+      [buyerId]: {
+        ...prev[buyerId],
+        showingTime: time
       }
     }));
   };
@@ -110,21 +157,45 @@ export default function AddProperty() {
 
       // Create buyer_properties records for each assigned buyer
       if (assignedBuyers.length > 0) {
-        const buyerPropertyRecords = assignedBuyers.map(buyerId => ({
-          buyer_id: buyerId,
-          property_id: propertyId,
-          viewed: buyerStatuses[buyerId]?.viewed || false,
-          scheduled_showing_datetime: buyerStatuses[buyerId]?.scheduled ? new Date().toISOString() : null,
-          favorited: buyerStatuses[buyerId]?.favorited || false,
-          agent_notes: agentNotes || null,
-          archived: false,
-        }));
+        const buyerPropertyRecords = assignedBuyers.map(buyerId => {
+          const status = buyerStatuses[buyerId];
+          let scheduledDatetime = null;
+          
+          if (status?.scheduled && status?.showingDate) {
+            const timeStr = status.showingTime || "12:00";
+            scheduledDatetime = new Date(`${status.showingDate}T${timeStr}`).toISOString();
+          }
+          
+          return {
+            buyer_id: buyerId,
+            property_id: propertyId,
+            viewed: status?.viewed || false,
+            scheduled_showing_datetime: scheduledDatetime,
+            favorited: status?.favorited || false,
+            agent_notes: agentNotes || null,
+            archived: false,
+          };
+        });
 
         const { error: bpError } = await supabase
           .from("buyer_properties")
           .insert(buyerPropertyRecords);
 
         if (bpError) throw bpError;
+
+        // Trigger AI analysis generation in background if enabled
+        if (generateAIAnalysis) {
+          // Fire and forget - don't await
+          for (const buyerId of assignedBuyers) {
+            supabase.functions.invoke("property-analysis", {
+              body: {
+                propertyId,
+                buyerId,
+                property: selectedProperty,
+              },
+            }).catch(err => console.log("AI analysis generation started:", err));
+          }
+        }
       }
 
       const assignedNames = assignedBuyers
@@ -135,11 +206,16 @@ export default function AddProperty() {
       toast({
         title: "Property saved",
         description: assignedNames 
-          ? `Property saved and assigned to ${assignedNames}. AI analysis will generate automatically.`
-          : "Property saved as unassigned",
+          ? `Property saved and assigned to ${assignedNames}. ${generateAIAnalysis ? "AI analysis will generate automatically." : ""}`
+          : "Property saved to general properties pool",
       });
 
-      navigate("/properties");
+      // Navigate based on assignment
+      if (assignedBuyers.length === 1) {
+        navigate(`/workspace/${assignedBuyers[0]}`);
+      } else {
+        navigate("/properties");
+      }
     } catch (err) {
       console.error("Save error:", err);
       toast({
@@ -180,10 +256,12 @@ export default function AddProperty() {
           className="gap-2 text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
-          {step === "assign" ? "Back to Input" : "Back"}
+          {step === "assign" ? "Back" : "Back"}
         </Button>
         <div className="ml-4">
-          <h1 className="text-lg font-medium text-foreground">Add Property</h1>
+          <h1 className="text-lg font-medium text-foreground">
+            {step === "input" ? "Add Property" : "Add Property to Workspace"}
+          </h1>
           <p className="text-xs text-muted-foreground">
             {step === "input" 
               ? "Search listings, paste a link, or add manually" 
@@ -225,195 +303,246 @@ export default function AddProperty() {
           </Tabs>
         </div>
       ) : (
-        /* Step 2: Property Details & Assignment */
-        <div className="max-w-5xl mx-auto py-8 px-6">
+        /* Step 2: Property Assignment */
+        <div className="max-w-4xl mx-auto py-8 px-6">
           {selectedProperty && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Left: Property Info (Read-only) */}
-              <div>
-                <h2 className="text-sm font-medium text-muted-foreground mb-4 uppercase tracking-wide">
-                  Property Information
-                </h2>
-                
-                {/* Image Gallery */}
-                <div className="aspect-video rounded-lg overflow-hidden bg-muted mb-4">
+            <div className="space-y-8">
+              {/* Property Summary */}
+              <div className="flex items-start gap-4 p-4 border border-border rounded-lg bg-card">
+                <div className="w-24 h-24 rounded-lg overflow-hidden bg-muted flex-shrink-0">
                   <img
                     src={selectedProperty.photos[0] || "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&q=80"}
                     alt={selectedProperty.address}
                     className="w-full h-full object-cover"
                   />
                 </div>
-
-                <div className="space-y-4">
-                  <div>
-                    <p className="text-2xl font-semibold text-foreground">
-                      {formatPrice(selectedProperty.price)}
-                    </p>
-                    <p className="text-base font-medium text-foreground mt-1">
-                      {selectedProperty.address}
-                    </p>
-                    <p className="text-sm text-muted-foreground flex items-center gap-1">
-                      <MapPin className="h-3 w-3" />
-                      {selectedProperty.city}, {selectedProperty.state} {selectedProperty.zipCode}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-6 text-sm">
-                    <span className="flex items-center gap-1.5">
-                      <Bed className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">{selectedProperty.bedrooms}</span> beds
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <Bath className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">{selectedProperty.bathrooms}</span> baths
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <Square className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">{selectedProperty.sqft.toLocaleString()}</span> sqft
-                    </span>
-                  </div>
-
-                  {selectedProperty.yearBuilt && (
-                    <p className="text-sm text-muted-foreground">
-                      Built {selectedProperty.yearBuilt}
-                      {selectedProperty.lotSize && ` • ${selectedProperty.lotSize} lot`}
-                    </p>
-                  )}
-
-                  {selectedProperty.description && (
-                    <div className="pt-4 border-t border-border">
-                      <p className="text-sm text-muted-foreground line-clamp-4">
-                        {selectedProperty.description}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xl font-semibold text-foreground">
+                        {formatPrice(selectedProperty.price)}
+                      </p>
+                      <p className="text-sm font-medium text-foreground mt-0.5">
+                        {selectedProperty.address}, {selectedProperty.city}, {selectedProperty.state}
                       </p>
                     </div>
-                  )}
-
-                  {selectedProperty.listingUrl && selectedProperty.listingUrl !== "#" && (
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      className="gap-2"
-                      onClick={() => window.open(selectedProperty.listingUrl, "_blank")}
-                    >
-                      <ExternalLink className="h-4 w-4" />
-                      View Original Listing
-                    </Button>
-                  )}
+                    {selectedProperty.listingUrl && selectedProperty.listingUrl !== "#" && (
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        onClick={() => window.open(selectedProperty.listingUrl, "_blank")}
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <Bed className="h-4 w-4" />
+                      {selectedProperty.bedrooms} bd
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Bath className="h-4 w-4" />
+                      {selectedProperty.bathrooms} ba
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Square className="h-4 w-4" />
+                      {selectedProperty.sqft.toLocaleString()} sqft
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              {/* Right: Assignment */}
-              <div>
-                <h2 className="text-sm font-medium text-muted-foreground mb-4 uppercase tracking-wide">
-                  Assign to Buyers
-                </h2>
+              <div className="border-t border-border" />
 
-                <ScrollArea className="h-[400px] border border-border rounded-lg">
-                  <div className="p-4 space-y-3">
+              {/* Buyer Assignment */}
+              <div className="space-y-4">
+                <div>
+                  <Label className="text-sm font-medium">Assign to Buyer(s) *</Label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Select one or more buyers to assign this property to
+                  </p>
+                </div>
+
+                <ScrollArea className="h-[280px] border border-border rounded-lg">
+                  <div className="p-3 space-y-2">
                     {mockBuyers.map(buyer => {
                       const isAssigned = assignedBuyers.includes(buyer.id);
+                      const status = buyerStatuses[buyer.id];
+                      const initials = buyer.name.split(" ").map(n => n[0]).join("");
+                      
                       return (
-                        <div
-                          key={buyer.id}
-                          className={cn(
-                            "p-4 rounded-lg border transition-colors",
-                            isAssigned 
-                              ? "border-primary bg-primary/5" 
-                              : "border-border hover:border-primary/50"
-                          )}
-                        >
-                          <div className="flex items-start gap-3">
+                        <div key={buyer.id} className="space-y-3">
+                          <div
+                            className={cn(
+                              "flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer",
+                              isAssigned 
+                                ? "border-primary bg-primary/5" 
+                                : "border-border hover:border-primary/50"
+                            )}
+                            onClick={() => handleBuyerToggle(buyer.id)}
+                          >
                             <Checkbox
                               checked={isAssigned}
                               onCheckedChange={() => handleBuyerToggle(buyer.id)}
                             />
+                            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary">
+                              {initials}
+                            </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
                                 <span className="font-medium text-sm">{buyer.name}</span>
                                 <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                                  {STAGES[buyer.currentStage]?.title || "Unknown"}
+                                  Stage {buyer.currentStage}: {STAGES[buyer.currentStage]?.title}
                                 </span>
                               </div>
-                              <p className="text-xs text-muted-foreground mt-0.5">
-                                {buyer.buyerType || "Buyer"} • {buyer.marketContext || "Active"}
-                              </p>
-                              
-                              {isAssigned && (
-                                <div className="mt-3 flex flex-wrap gap-3">
-                                  <label className="flex items-center gap-2 text-xs cursor-pointer">
-                                    <Checkbox
-                                      checked={buyerStatuses[buyer.id]?.viewed || false}
-                                      onCheckedChange={() => handleStatusChange(buyer.id, "viewed")}
-                                    />
-                                    Viewed
-                                  </label>
-                                  <label className="flex items-center gap-2 text-xs cursor-pointer">
-                                    <Checkbox
-                                      checked={buyerStatuses[buyer.id]?.scheduled || false}
-                                      onCheckedChange={() => handleStatusChange(buyer.id, "scheduled")}
-                                    />
-                                    Showing Scheduled
-                                  </label>
-                                  <label className="flex items-center gap-2 text-xs cursor-pointer">
-                                    <Checkbox
-                                      checked={buyerStatuses[buyer.id]?.favorited || false}
-                                      onCheckedChange={() => handleStatusChange(buyer.id, "favorited")}
-                                    />
-                                    Favorited
-                                  </label>
-                                </div>
-                              )}
                             </div>
                           </div>
+
+                          {/* Expanded Status Options */}
+                          {isAssigned && (
+                            <div className="ml-14 pl-3 border-l-2 border-primary/20 space-y-3">
+                              <div className="flex flex-wrap gap-4">
+                                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                  <Checkbox
+                                    checked={status?.viewed || false}
+                                    onCheckedChange={() => handleStatusChange(buyer.id, "viewed")}
+                                  />
+                                  Mark as viewed by buyer
+                                </label>
+                                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                  <Checkbox
+                                    checked={status?.favorited || false}
+                                    onCheckedChange={() => handleStatusChange(buyer.id, "favorited")}
+                                  />
+                                  Add to buyer's favorites
+                                </label>
+                              </div>
+                              
+                              <div className="space-y-2">
+                                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                  <Checkbox
+                                    checked={status?.scheduled || false}
+                                    onCheckedChange={() => handleStatusChange(buyer.id, "scheduled")}
+                                  />
+                                  Schedule for showing
+                                </label>
+                                
+                                {status?.scheduled && (
+                                  <div className="flex items-center gap-3 pl-6">
+                                    <div className="flex items-center gap-2">
+                                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                                      <Input
+                                        type="date"
+                                        value={status?.showingDate || ""}
+                                        onChange={(e) => handleShowingDateChange(buyer.id, e.target.value)}
+                                        className="w-40 h-8"
+                                      />
+                                    </div>
+                                    <Input
+                                      type="time"
+                                      value={status?.showingTime || ""}
+                                      onChange={(e) => handleShowingTimeChange(buyer.id, e.target.value)}
+                                      className="w-28 h-8"
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
+
+                    {/* Unassigned Option */}
+                    <div
+                      className={cn(
+                        "flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer",
+                        saveToPool 
+                          ? "border-primary bg-primary/5" 
+                          : "border-border hover:border-primary/50"
+                      )}
+                      onClick={() => handleBuyerToggle("unassigned")}
+                    >
+                      <Checkbox
+                        checked={saveToPool}
+                        onCheckedChange={() => handleBuyerToggle("unassigned")}
+                      />
+                      <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
+                        <User className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                      <div className="flex-1">
+                        <span className="text-sm text-muted-foreground">[Unassigned]</span>
+                        <p className="text-xs text-muted-foreground">Save to general properties pool</p>
+                      </div>
+                    </div>
                   </div>
                 </ScrollArea>
+              </div>
 
-                {/* Agent Notes */}
-                <div className="mt-6">
-                  <h3 className="text-sm font-medium text-muted-foreground mb-2">
-                    Agent Notes (Optional)
-                  </h3>
-                  <Textarea
-                    value={agentNotes}
-                    onChange={(e) => setAgentNotes(e.target.value)}
-                    placeholder="Add notes about this property..."
-                    rows={3}
-                  />
+              {/* Agent Notes */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium">
+                    Agent Notes <span className="text-muted-foreground font-normal">(Private - Not Visible to Buyer)</span>
+                  </Label>
+                  <span className="text-xs text-muted-foreground">
+                    {agentNotes.length}/500 characters
+                  </span>
                 </div>
+                <Textarea
+                  value={agentNotes}
+                  onChange={(e) => setAgentNotes(e.target.value.slice(0, 500))}
+                  placeholder="Great backyard for their kids, close to schools they want..."
+                  rows={3}
+                  className="resize-none"
+                />
+              </div>
 
-                {/* Actions */}
-                <div className="mt-6 flex gap-3">
-                  <Button
-                    variant="outline"
-                    onClick={handleBack}
-                    className="flex-1"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={handleSave}
-                    disabled={isSaving}
-                    className="flex-1 gap-2"
-                  >
-                    {isSaving ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        <Check className="h-4 w-4" />
-                        {assignedBuyers.length > 0 
-                          ? `Save & Assign to ${assignedBuyers.length} Buyer${assignedBuyers.length > 1 ? 's' : ''}`
-                          : "Save Property"
-                        }
-                      </>
-                    )}
-                  </Button>
+              {/* AI Analysis Toggle */}
+              <div className="flex items-start gap-3 p-4 border border-border rounded-lg bg-muted/30">
+                <Checkbox
+                  id="ai-analysis"
+                  checked={generateAIAnalysis}
+                  onCheckedChange={(checked) => setGenerateAIAnalysis(checked === true)}
+                />
+                <div className="flex-1">
+                  <label htmlFor="ai-analysis" className="text-sm font-medium cursor-pointer flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    Generate AI comparative analysis automatically
+                  </label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Recommended - analyzes property vs. buyer profile for personalized insights
+                  </p>
                 </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-4 border-t border-border">
+                <Button
+                  variant="outline"
+                  onClick={handleBack}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSave}
+                  disabled={isSaving || (!saveToPool && assignedBuyers.length === 0)}
+                  className="flex-1 gap-2"
+                >
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Adding property...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="h-4 w-4" />
+                      Save Property
+                    </>
+                  )}
+                </Button>
               </div>
             </div>
           )}
