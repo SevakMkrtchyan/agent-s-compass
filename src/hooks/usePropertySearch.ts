@@ -3,14 +3,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { MLSProperty, PropertySearchFilters } from "@/types/property";
 import { useToast } from "@/hooks/use-toast";
 
+export type SearchState = "idle" | "loading" | "success" | "error";
+
 export function usePropertySearch() {
-  const [isSearching, setIsSearching] = useState(false);
+  const [searchState, setSearchState] = useState<SearchState>("idle");
   const [results, setResults] = useState<MLSProperty[]>([]);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
   const search = useCallback(async (filters: PropertySearchFilters) => {
-    setIsSearching(true);
+    setSearchState("loading");
     setError(null);
 
     try {
@@ -31,31 +33,40 @@ export function usePropertySearch() {
       }
 
       setResults(data?.data || []);
+      setSearchState("success");
       return data?.data || [];
     } catch (err) {
       const message = err instanceof Error ? err.message : "Search failed";
       setError(message);
+      setSearchState("error");
       toast({
         title: "Search Error",
-        description: message,
+        description: "Unable to search properties. Please try again.",
         variant: "destructive",
       });
       return [];
-    } finally {
-      setIsSearching(false);
     }
   }, [toast]);
 
   const clearResults = useCallback(() => {
     setResults([]);
     setError(null);
+    setSearchState("idle");
   }, []);
+
+  // Computed helpers
+  const isSearching = searchState === "loading";
+  const hasResults = results.length > 0;
+  const isEmpty = searchState === "success" && results.length === 0;
 
   return {
     search,
     clearResults,
     results,
+    searchState,
     isSearching,
+    hasResults,
+    isEmpty,
     error,
   };
 }
