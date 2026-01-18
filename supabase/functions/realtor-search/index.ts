@@ -46,7 +46,7 @@ interface MLSProperty {
   rawData?: any;
 }
 
-// Normalize US Real Estate Listings API response to MLSProperty format
+// Normalize US Real Estate API response to MLSProperty format
 function normalizeProperty(property: any): MLSProperty | null {
   try {
     const location = property.location || {};
@@ -144,15 +144,16 @@ async function searchProperties(params: SearchParams): Promise<{ properties: MLS
   if (params.beds_min) queryParams.set('beds_min', String(params.beds_min));
   if (params.baths_min) queryParams.set('baths_min', String(params.baths_min));
 
-  // US Real Estate Listings API endpoint
-  const url = `https://us-real-estate-listings.p.rapidapi.com/v2/for-sale?${queryParams.toString()}`;
+  // US Real Estate API - correct host and endpoint
+  const host = 'us-real-estate.p.rapidapi.com';
+  const url = `https://${host}/api/v2/for-sale?${queryParams.toString()}`;
   console.log("Searching US Real Estate API:", url);
 
   const response = await fetch(url, {
     method: 'GET',
     headers: {
       'X-RapidAPI-Key': apiKey,
-      'X-RapidAPI-Host': 'us-real-estate-listings.p.rapidapi.com',
+      'X-RapidAPI-Host': host,
     },
   });
 
@@ -164,11 +165,16 @@ async function searchProperties(params: SearchParams): Promise<{ properties: MLS
 
   const data = await response.json();
   console.log("US Real Estate API response keys:", Object.keys(data));
-  console.log("Total results:", data.total || data.count || 0);
+  console.log("Total results:", data.total || data.count || data.matching_rows || 0);
 
   // The API may return listings under different keys
-  const rawProperties = data.listings || data.results || data.properties || data.data || [];
-  console.log("Raw properties count:", rawProperties.length);
+  const rawProperties = data.data?.results || data.results || data.listings || data.properties || data.data || [];
+  console.log("Raw properties count:", Array.isArray(rawProperties) ? rawProperties.length : 0);
+
+  if (!Array.isArray(rawProperties)) {
+    console.log("Raw properties structure:", typeof rawProperties, rawProperties);
+    return { properties: [], total: 0 };
+  }
 
   const properties = rawProperties
     .map(normalizeProperty)
@@ -178,7 +184,7 @@ async function searchProperties(params: SearchParams): Promise<{ properties: MLS
 
   return {
     properties,
-    total: data.total || data.count || properties.length,
+    total: data.total || data.count || data.matching_rows || properties.length,
   };
 }
 
@@ -188,14 +194,15 @@ async function getPropertyDetails(propertyId: string): Promise<MLSProperty | nul
     throw new Error('RAPIDAPI_KEY is not configured');
   }
 
-  const url = `https://us-real-estate-listings.p.rapidapi.com/v2/property?property_id=${propertyId}`;
+  const host = 'us-real-estate.p.rapidapi.com';
+  const url = `https://${host}/property?property_id=${propertyId}`;
   console.log("Fetching property details:", url);
 
   const response = await fetch(url, {
     method: 'GET',
     headers: {
       'X-RapidAPI-Key': apiKey,
-      'X-RapidAPI-Host': 'us-real-estate-listings.p.rapidapi.com',
+      'X-RapidAPI-Host': host,
     },
   });
 
@@ -208,7 +215,7 @@ async function getPropertyDetails(propertyId: string): Promise<MLSProperty | nul
   const data = await response.json();
   console.log("Property detail response keys:", Object.keys(data));
 
-  const property = data.property || data.listing || data;
+  const property = data.data || data.property || data.listing || data;
   return normalizeProperty(property);
 }
 
