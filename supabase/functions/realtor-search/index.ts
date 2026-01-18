@@ -6,7 +6,7 @@ const corsHeaders = {
 }
 
 const RAPIDAPI_KEY = Deno.env.get('USREALLISTINGS')
-const RAPIDAPI_HOST = 'us-real-estate-listings.p.rapidapi.com'
+const RAPIDAPI_HOST = 'us-real-estate.p.rapidapi.com'
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -39,7 +39,7 @@ serve(async (req) => {
       if (beds_min) params.append('beds_min', beds_min.toString())
       if (baths_min) params.append('baths_min', baths_min.toString())
 
-      const url = `https://${RAPIDAPI_HOST}/for-sale?${params}`
+      const url = `https://${RAPIDAPI_HOST}/api/v3/for-sale?${params}`
       console.log('Calling API:', url)
 
       const response = await fetch(url, {
@@ -56,9 +56,14 @@ serve(async (req) => {
       }
 
       const data = await response.json()
-      console.log('API Response:', { listingsCount: data.listings?.length, total: data.totalResultCount })
-
-      const listings = data.listings || []
+      console.log('Raw API response keys:', JSON.stringify(Object.keys(data)))
+      
+      // Handle nested structure from us-real-estate API
+      const homeSearch = data?.data?.home_search || {}
+      const listings = homeSearch.results || []
+      const total = homeSearch.total || 0
+      
+      console.log('API Response:', { listingsCount: listings.length, total })
 
       const properties = listings.map((property: any) => {
         const address = property.location?.address || {}
@@ -85,7 +90,9 @@ serve(async (req) => {
           status: property.status === 'for_sale' ? 'active' : (property.status || 'active'),
           description: description.text || undefined,
           features: property.tags || [],
-          photos: property.photos?.map((p: any) => p.href) || [],
+          photos: property.primary_photo?.href 
+            ? [property.primary_photo.href, ...(property.photos?.map((p: any) => p.href) || [])]
+            : property.photos?.map((p: any) => p.href) || [],
           listingUrl: property.href || '#',
           listingAgent: property.advertisers?.[0]?.name ? { name: property.advertisers[0].name } : undefined,
           rawData: property,
@@ -96,7 +103,7 @@ serve(async (req) => {
         JSON.stringify({
           success: true,
           properties,
-          total: data.totalResultCount || properties.length,
+          total: total || properties.length,
           isMock: false
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -109,7 +116,7 @@ serve(async (req) => {
       }
 
       const response = await fetch(
-        `https://${RAPIDAPI_HOST}/property?property_id=${property_id}`,
+        `https://${RAPIDAPI_HOST}/api/v3/property?property_id=${property_id}`,
         {
           headers: {
             'X-RapidAPI-Key': RAPIDAPI_KEY,
