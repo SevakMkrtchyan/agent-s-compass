@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { 
   Search, Filter, ChevronDown, ChevronUp, 
-  Loader2, Home, Bed, Bath, Square, MapPin 
+  Loader2, Home, Bed, Bath, Square, MapPin,
+  ChevronLeft, ChevronRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,15 +16,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { useZillowSearch } from "@/hooks/useZillowSearch";
-import { MLSProperty, PropertySearchFilters } from "@/types/property";
+import { useRealtorSearch } from "@/hooks/useRealtorSearch";
+import { MLSProperty } from "@/types/property";
+import { toast } from "@/hooks/use-toast";
 
 interface PropertySearchTabProps {
   onSelectProperty: (property: MLSProperty) => void;
 }
 
 export function PropertySearchTab({ onSelectProperty }: PropertySearchTabProps) {
-  const { search, loadMore, results, totalResults, isSearching, isMockData } = useZillowSearch();
+  const { search, loadMore, results, totalResults, isSearching, isMockData, error } = useRealtorSearch();
   
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
@@ -36,17 +38,33 @@ export function PropertySearchTab({ onSelectProperty }: PropertySearchTabProps) 
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   const handleSearch = async () => {
-    if (!searchQuery.trim()) return;
+    if (!searchQuery.trim()) {
+      toast({
+        title: "Enter a location",
+        description: "Please enter a city and state (e.g., Austin, TX)",
+        variant: "destructive",
+      });
+      return;
+    }
     
-    await search({
-      location: searchQuery,
-      minPrice: minPrice ? parseInt(minPrice.replace(/,/g, "")) : undefined,
-      maxPrice: maxPrice ? parseInt(maxPrice.replace(/,/g, "")) : undefined,
-      minBeds: minBeds !== "any" ? parseInt(minBeds) : undefined,
-      minBaths: minBaths !== "any" ? parseInt(minBaths) : undefined,
-      propertyType: propertyTypes.length > 0 ? propertyTypes : undefined,
-      status: statusFilter,
-    });
+    try {
+      await search({
+        location: searchQuery,
+        minPrice: minPrice ? parseInt(minPrice.replace(/,/g, "")) : undefined,
+        maxPrice: maxPrice ? parseInt(maxPrice.replace(/,/g, "")) : undefined,
+        minBeds: minBeds !== "any" ? parseInt(minBeds) : undefined,
+        minBaths: minBaths !== "any" ? parseInt(minBaths) : undefined,
+        propertyType: propertyTypes.length > 0 ? propertyTypes : undefined,
+        status: statusFilter,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Search failed';
+      toast({
+        title: "Search Error",
+        description: message,
+        variant: "destructive",
+      });
+    }
   };
 
   const handleLoadMore = async () => {
@@ -113,7 +131,7 @@ export function PropertySearchTab({ onSelectProperty }: PropertySearchTabProps) 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-              placeholder="Search by address, city, or ZIP..."
+              placeholder="Enter city and state (e.g., Austin, TX)"
               className="pl-10 h-11"
             />
           </div>
@@ -325,6 +343,14 @@ interface PropertySearchCardProps {
 }
 
 function PropertySearchCard({ property, onSelect }: PropertySearchCardProps) {
+  const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+  
+  const photos = property.photos.length > 0 
+    ? property.photos 
+    : ["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&q=80"];
+  
+  const hasMultiplePhotos = photos.length > 1;
+
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
@@ -333,15 +359,54 @@ function PropertySearchCard({ property, onSelect }: PropertySearchCardProps) {
     }).format(price);
   };
 
+  const goToPrevPhoto = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCurrentPhotoIndex(prev => (prev === 0 ? photos.length - 1 : prev - 1));
+  };
+
+  const goToNextPhoto = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCurrentPhotoIndex(prev => (prev === photos.length - 1 ? 0 : prev + 1));
+  };
+
   return (
     <div className="group border border-border rounded-lg overflow-hidden bg-card hover:shadow-elevated transition-all duration-200 hover:scale-[1.02]">
-      {/* Property Image */}
+      {/* Property Image Carousel */}
       <div className="aspect-[4/3] relative overflow-hidden bg-muted">
         <img
-          src={property.photos[0] || "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&q=80"}
-          alt={property.address}
+          src={photos[currentPhotoIndex]}
+          alt={`${property.address} - Photo ${currentPhotoIndex + 1}`}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
         />
+        
+        {/* Photo Navigation Arrows */}
+        {hasMultiplePhotos && (
+          <>
+            <button
+              onClick={goToPrevPhoto}
+              className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-background/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-background"
+              aria-label="Previous photo"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button
+              onClick={goToNextPhoto}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-background/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-background"
+              aria-label="Next photo"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </>
+        )}
+        
+        {/* Photo Counter */}
+        {hasMultiplePhotos && (
+          <div className="absolute bottom-2 right-2 bg-background/80 backdrop-blur-sm px-2 py-1 rounded text-xs font-medium">
+            {currentPhotoIndex + 1} / {photos.length}
+          </div>
+        )}
+        
+        {/* Days on Market Badge */}
         {property.daysOnMarket !== undefined && (
           <div className="absolute top-2 left-2 bg-background/90 backdrop-blur-sm px-2 py-1 rounded text-xs font-medium">
             {property.daysOnMarket} days on market
