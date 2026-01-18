@@ -1,7 +1,6 @@
-// Mapbox Geocoding API utilities
+// Mapbox Geocoding API utilities - proxied through edge function
 
-const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
-const GEOCODING_API = 'https://api.mapbox.com/geocoding/v5/mapbox.places';
+import { supabase } from "@/integrations/supabase/client";
 
 export interface GeocodingResult {
   id: string;
@@ -37,37 +36,24 @@ export async function searchAddresses(
     proximity?: [number, number];
   }
 ): Promise<GeocodingResult[]> {
-  if (!MAPBOX_TOKEN) {
-    console.warn('Mapbox token not configured');
-    return [];
-  }
-
   if (!query || query.length < 2) return [];
 
-  const params = new URLSearchParams({
-    access_token: MAPBOX_TOKEN,
-    autocomplete: 'true',
-    country: options?.country || 'US',
-    types: options?.types?.join(',') || 'address,place,postcode',
-    limit: String(options?.limit || 5),
-    language: 'en',
-  });
-
-  if (options?.proximity) {
-    params.set('proximity', options.proximity.join(','));
-  }
-
   try {
-    const response = await fetch(
-      `${GEOCODING_API}/${encodeURIComponent(query)}.json?${params}`
-    );
+    const { data, error } = await supabase.functions.invoke('mapbox-geocoding', {
+      body: {
+        query,
+        country: options?.country || 'US',
+        types: options?.types?.join(',') || 'address,place,postcode',
+        limit: options?.limit || 5,
+      },
+    });
 
-    if (!response.ok) {
-      throw new Error(`Geocoding failed: ${response.status}`);
+    if (error) {
+      console.error('Geocoding function error:', error);
+      return [];
     }
 
-    const data = await response.json();
-    return data.features || [];
+    return data?.features || [];
   } catch (error) {
     console.error('Geocoding error:', error);
     return [];
