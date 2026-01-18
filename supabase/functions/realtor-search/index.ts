@@ -5,7 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const RAPIDAPI_KEY = Deno.env.get('RAPIDAPI_KEY')
+const RAPIDAPI_KEY = Deno.env.get('USREALLISTINGS')
 const RAPIDAPI_HOST = 'us-real-estate-listings.p.rapidapi.com'
 
 serve(async (req) => {
@@ -19,7 +19,7 @@ serve(async (req) => {
     console.log('Realtor search request:', { action, city, state_code, limit, offset })
 
     if (!RAPIDAPI_KEY) {
-      throw new Error('RAPIDAPI_KEY is not configured')
+      throw new Error('USREALLISTINGS API key is not configured')
     }
 
     if (action === 'search') {
@@ -40,7 +40,7 @@ serve(async (req) => {
       if (baths_min) params.append('baths_min', baths_min.toString())
 
       const url = `https://${RAPIDAPI_HOST}/for-sale?${params}`
-      console.log('Fetching from:', url)
+      console.log('Calling API:', url)
 
       const response = await fetch(url, {
         headers: {
@@ -56,10 +56,9 @@ serve(async (req) => {
       }
 
       const data = await response.json()
-      console.log('API response keys:', Object.keys(data))
-      
+      console.log('API Response:', { listingsCount: data.listings?.length, total: data.totalResultCount })
+
       const listings = data.listings || []
-      console.log('Listings count:', listings.length)
 
       const properties = listings.map((property: any) => {
         const address = property.location?.address || {}
@@ -69,6 +68,7 @@ serve(async (req) => {
           id: property.property_id || '',
           mlsId: property.property_id || '',
           mlsNumber: property.listing_id || '',
+          listingId: property.listing_id || '',
           address: address.line || '',
           city: address.city || '',
           state: address.state_code || '',
