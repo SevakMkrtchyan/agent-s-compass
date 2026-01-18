@@ -135,35 +135,28 @@ async function searchProperties(params: SearchParams): Promise<{ properties: MLS
     throw new Error('REALTOR_RAPIDAPI_KEY is not configured');
   }
 
+  // Use lowercase city and state_code as required by the API
   const queryParams = new URLSearchParams({
-    city: params.city,
-    state_code: params.state_code,
+    city: params.city.toLowerCase(),
+    state_code: params.state_code.toLowerCase(),
     limit: String(params.limit || 20),
     offset: String(params.offset || 0),
-    sort: params.sort || 'relevance',
   });
 
   if (params.price_min) queryParams.set('price_min', String(params.price_min));
   if (params.price_max) queryParams.set('price_max', String(params.price_max));
   if (params.beds_min) queryParams.set('beds_min', String(params.beds_min));
   if (params.baths_min) queryParams.set('baths_min', String(params.baths_min));
-  if (params.prop_type?.length) {
-    params.prop_type.forEach(type => queryParams.append('prop_type', type));
-  }
-  if (params.status?.length) {
-    params.status.forEach(s => queryParams.append('status', s));
-  } else {
-    queryParams.append('status', 'for_sale');
-  }
 
-  const url = `https://realtor-search.p.rapidapi.com/properties/search?${queryParams.toString()}`;
+  // Correct endpoint: /properties/v2/list-for-sale
+  const url = `https://realtor-search.p.rapidapi.com/properties/v2/list-for-sale?${queryParams.toString()}`;
   console.log("Searching Realtor API:", url);
 
   const response = await fetch(url, {
     method: 'GET',
     headers: {
-      'x-rapidapi-key': apiKey,
-      'x-rapidapi-host': 'realtor-search.p.rapidapi.com',
+      'X-RapidAPI-Key': apiKey,
+      'X-RapidAPI-Host': 'realtor-search.p.rapidapi.com',
     },
   });
 
@@ -175,10 +168,10 @@ async function searchProperties(params: SearchParams): Promise<{ properties: MLS
 
   const data = await response.json();
   console.log("Realtor API response keys:", Object.keys(data));
-  console.log("Total results:", data.matching_rows || data.total || 0);
+  console.log("Total results:", data.total || data.matching_rows || 0);
 
-  // The API may return properties under different keys
-  const rawProperties = data.properties || data.results || data.listings || [];
+  // The API returns properties under 'results' or 'properties'
+  const rawProperties = data.results || data.properties || data.listings || [];
   console.log("Raw properties count:", rawProperties.length);
 
   const properties = rawProperties
@@ -189,7 +182,7 @@ async function searchProperties(params: SearchParams): Promise<{ properties: MLS
 
   return {
     properties,
-    total: data.matching_rows || data.total || properties.length,
+    total: data.total || data.matching_rows || properties.length,
   };
 }
 
