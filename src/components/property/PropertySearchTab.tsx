@@ -274,28 +274,45 @@ export function PropertySearchTab({ onSelectProperty }: PropertySearchTabProps) 
 
       {/* Search Results */}
       {isSearching ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[1, 2, 3, 4, 5, 6].map(i => (
-            <div key={i} className="border border-border rounded-lg overflow-hidden bg-card">
-              <Skeleton className="aspect-[4/3]" />
-              <div className="p-4 space-y-2">
-                <Skeleton className="h-6 w-24" />
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-3/4" />
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground animate-pulse">
+            Searching properties...
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {[1, 2, 3, 4, 5, 6].map(i => (
+              <div key={i} className="border border-border rounded-xl overflow-hidden bg-card">
+                <Skeleton className="h-[280px]" />
+                <div className="p-5 space-y-3">
+                  <Skeleton className="h-7 w-28" />
+                  <Skeleton className="h-5 w-full" />
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-10 w-full mt-4" />
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
+        </div>
+      ) : error ? (
+        <div className="text-center py-16 border border-destructive/20 rounded-xl bg-destructive/5">
+          <div className="text-destructive mb-4">
+            <Home className="h-12 w-12 mx-auto opacity-50" />
+          </div>
+          <p className="text-lg font-medium text-destructive mb-2">Search Error</p>
+          <p className="text-sm text-muted-foreground mb-4">{error}</p>
+          <Button variant="outline" onClick={handleSearch}>
+            Try Again
+          </Button>
         </div>
       ) : results.length > 0 ? (
-        <div className="space-y-4">
+        <div className="space-y-6">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
               Showing {results.length} of {totalResults} properties
-              {isMockData && <span className="ml-2 text-xs">(demo data)</span>}
+              {isMockData && <span className="ml-2 text-xs bg-muted px-2 py-0.5 rounded">(demo data)</span>}
             </p>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {results.map((property) => (
               <PropertySearchCard 
                 key={property.id} 
@@ -306,29 +323,36 @@ export function PropertySearchTab({ onSelectProperty }: PropertySearchTabProps) 
           </div>
 
           {results.length < totalResults && (
-            <div className="flex justify-center pt-4">
+            <div className="flex justify-center pt-6">
               <Button
                 variant="outline"
+                size="lg"
                 onClick={handleLoadMore}
                 disabled={isLoadingMore}
               >
                 {isLoadingMore ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Loading...
+                    Loading more...
                   </>
                 ) : (
-                  "Load More"
+                  `Load More (${totalResults - results.length} remaining)`
                 )}
               </Button>
             </div>
           )}
         </div>
-      ) : (
-        <div className="text-center py-16 text-muted-foreground">
+      ) : searchQuery ? (
+        <div className="text-center py-16 text-muted-foreground border border-border rounded-xl bg-muted/30">
           <Home className="h-12 w-12 mx-auto mb-4 opacity-30" />
           <p className="text-lg font-medium mb-1">No properties found</p>
-          <p className="text-sm">Enter a location to search for properties</p>
+          <p className="text-sm">No properties found in this location. Try a different city or adjust your filters.</p>
+        </div>
+      ) : (
+        <div className="text-center py-16 text-muted-foreground border border-dashed border-border rounded-xl">
+          <MapPin className="h-12 w-12 mx-auto mb-4 opacity-30" />
+          <p className="text-lg font-medium mb-1">Enter a location to search</p>
+          <p className="text-sm">Search for properties by city and state (e.g., Austin, TX)</p>
         </div>
       )}
     </div>
@@ -342,10 +366,12 @@ interface PropertySearchCardProps {
 
 function PropertySearchCard({ property, onSelect }: PropertySearchCardProps) {
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+  const [imageError, setImageError] = useState(false);
   
-  const photos = property.photos.length > 0 
+  const defaultPhoto = "/placeholder.svg";
+  const photos = property.photos.length > 0 && !imageError
     ? property.photos 
-    : ["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&q=80"];
+    : [defaultPhoto];
   
   const hasMultiplePhotos = photos.length > 1;
 
@@ -367,84 +393,113 @@ function PropertySearchCard({ property, onSelect }: PropertySearchCardProps) {
     setCurrentPhotoIndex(prev => (prev === photos.length - 1 ? 0 : prev + 1));
   };
 
+  const handleImageError = () => {
+    setImageError(true);
+    setCurrentPhotoIndex(0);
+  };
+
   return (
-    <div className="group border border-border rounded-lg overflow-hidden bg-card hover:shadow-elevated transition-all duration-200 hover:scale-[1.02]">
+    <div className="group border border-border rounded-xl overflow-hidden bg-card hover:shadow-xl transition-all duration-300 hover:scale-[1.02] hover:border-primary/30">
       {/* Property Image Carousel */}
-      <div className="aspect-[4/3] relative overflow-hidden bg-muted">
+      <div className="h-[280px] relative overflow-hidden bg-muted">
         <img
           src={photos[currentPhotoIndex]}
           alt={`${property.address} - Photo ${currentPhotoIndex + 1}`}
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+          onError={handleImageError}
         />
+        
+        {/* Gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
         
         {/* Photo Navigation Arrows */}
         {hasMultiplePhotos && (
           <>
             <button
               onClick={goToPrevPhoto}
-              className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-background/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-background"
+              className="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-background/90 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-all duration-200 hover:bg-background hover:scale-110 shadow-lg"
               aria-label="Previous photo"
             >
-              <ChevronLeft className="h-4 w-4" />
+              <ChevronLeft className="h-5 w-5" />
             </button>
             <button
               onClick={goToNextPhoto}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-background/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-background"
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-background/90 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-all duration-200 hover:bg-background hover:scale-110 shadow-lg"
               aria-label="Next photo"
             >
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight className="h-5 w-5" />
             </button>
           </>
         )}
         
-        {/* Photo Counter */}
+        {/* Photo Counter Badge */}
         {hasMultiplePhotos && (
-          <div className="absolute bottom-2 right-2 bg-background/80 backdrop-blur-sm px-2 py-1 rounded text-xs font-medium">
+          <div className="absolute bottom-3 right-3 bg-background/90 backdrop-blur-sm px-2.5 py-1 rounded-full text-xs font-medium shadow-md">
             {currentPhotoIndex + 1} / {photos.length}
           </div>
         )}
         
         {/* Days on Market Badge */}
-        {property.daysOnMarket !== undefined && (
-          <div className="absolute top-2 left-2 bg-background/90 backdrop-blur-sm px-2 py-1 rounded text-xs font-medium">
-            {property.daysOnMarket} days on market
+        {property.daysOnMarket !== undefined && property.daysOnMarket >= 0 && (
+          <div className="absolute top-3 left-3 bg-background/95 backdrop-blur-sm px-2.5 py-1 rounded-full text-xs font-medium shadow-md">
+            {property.daysOnMarket === 0 ? 'New listing' : `${property.daysOnMarket} days`}
+          </div>
+        )}
+        
+        {/* Status Badge */}
+        {property.status && property.status !== 'active' && (
+          <div className={cn(
+            "absolute top-3 right-3 px-2.5 py-1 rounded-full text-xs font-semibold shadow-md uppercase tracking-wide",
+            property.status === 'pending' && "bg-yellow-500 text-white",
+            property.status === 'sold' && "bg-red-500 text-white",
+          )}>
+            {property.status}
           </div>
         )}
       </div>
 
       {/* Property Info */}
-      <div className="p-4 space-y-3">
+      <div className="p-5 space-y-4">
         <div>
-          <p className="text-xl font-semibold text-foreground">
+          <p className="text-2xl font-bold text-foreground tracking-tight">
             {formatPrice(property.price)}
           </p>
-          <p className="text-sm font-medium text-foreground mt-1">
+          {property.pricePerSqft && (
+            <p className="text-xs text-muted-foreground mt-0.5">
+              ${property.pricePerSqft.toLocaleString()}/sqft
+            </p>
+          )}
+        </div>
+        
+        <div>
+          <p className="text-sm font-medium text-foreground leading-tight">
             {property.address}
           </p>
-          <p className="text-sm text-muted-foreground flex items-center gap-1">
-            <MapPin className="h-3 w-3" />
+          <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
+            <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
             {property.city}, {property.state} {property.zipCode}
           </p>
         </div>
 
-        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-          <span className="flex items-center gap-1">
+        <div className="flex items-center gap-5 text-sm text-muted-foreground pt-1">
+          <span className="flex items-center gap-1.5">
             <Bed className="h-4 w-4" />
-            {property.bedrooms} bd
+            <span className="font-medium text-foreground">{property.bedrooms}</span> bd
           </span>
-          <span className="flex items-center gap-1">
+          <span className="flex items-center gap-1.5">
             <Bath className="h-4 w-4" />
-            {property.bathrooms} ba
+            <span className="font-medium text-foreground">{property.bathrooms}</span> ba
           </span>
-          <span className="flex items-center gap-1">
+          <span className="flex items-center gap-1.5">
             <Square className="h-4 w-4" />
-            {property.sqft.toLocaleString()} sqft
+            <span className="font-medium text-foreground">{property.sqft.toLocaleString()}</span> sqft
           </span>
         </div>
 
         <Button 
           onClick={onSelect} 
-          className="w-full"
+          className="w-full h-11 font-medium"
+          size="lg"
         >
           Select Property
         </Button>

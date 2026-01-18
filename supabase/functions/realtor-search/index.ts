@@ -14,9 +14,6 @@ interface SearchParams {
   price_max?: number;
   beds_min?: number;
   baths_min?: number;
-  prop_type?: string[];
-  status?: string[];
-  sort?: string;
 }
 
 interface MLSProperty {
@@ -49,22 +46,18 @@ interface MLSProperty {
   rawData?: any;
 }
 
-function normalizeRealtorProperty(property: any): MLSProperty | null {
+// Normalize US Real Estate Listings API response to MLSProperty format
+function normalizeProperty(property: any): MLSProperty | null {
   try {
-    const listing = property.listing || property;
     const location = property.location || {};
     const address = location.address || {};
     const description = property.description || {};
     const photos = property.photos || [];
     const primaryPhoto = property.primary_photo || {};
-    const source = property.source || {};
-    const advertisers = property.advertisers || [];
-    const listAgent = advertisers.find((a: any) => a.type === 'seller')?.broker || 
-                      property.branding?.[0] || {};
 
     // Extract status
     let status: 'active' | 'pending' | 'sold' | 'withdrawn' = 'active';
-    const rawStatus = property.status?.toLowerCase() || '';
+    const rawStatus = (property.status || '').toLowerCase();
     if (rawStatus.includes('pending')) status = 'pending';
     else if (rawStatus.includes('sold') || rawStatus.includes('closed')) status = 'sold';
     else if (rawStatus.includes('withdrawn') || rawStatus.includes('off')) status = 'withdrawn';
@@ -72,7 +65,7 @@ function normalizeRealtorProperty(property: any): MLSProperty | null {
     // Extract photos - prefer photo array, fallback to primary_photo
     let photoUrls: string[] = [];
     if (photos.length > 0) {
-      photoUrls = photos.map((p: any) => p.href).filter(Boolean);
+      photoUrls = photos.map((p: any) => typeof p === 'string' ? p : p.href).filter(Boolean);
     } else if (primaryPhoto.href) {
       photoUrls = [primaryPhoto.href];
     }
@@ -84,20 +77,24 @@ function normalizeRealtorProperty(property: any): MLSProperty | null {
       undefined;
 
     // Extract property type
-    const propType = description.type || property.prop_type || 'single_family';
-    const normalizedType = propType.toLowerCase()
-      .replace('single_family', 'single_family')
-      .replace('multi_family', 'multi_family')
-      .replace('townhome', 'townhouse')
-      .replace('apartment', 'condo');
+    const propType = description.type || property.prop_type || property.property_type || 'single_family';
 
     const sqft = description.sqft || property.sqft || 0;
-    const price = property.list_price || listing.price || 0;
+    const price = property.list_price || property.price || 0;
+
+    // Calculate lot size in acres if provided in sqft
+    const lotSqft = description.lot_sqft || property.lot_sqft;
+    const lotSize = lotSqft ? `${(lotSqft / 43560).toFixed(2)} acres` : undefined;
+
+    // Extract listing agent info
+    const advertisers = property.advertisers || [];
+    const listAgent = advertisers[0] || property.branding?.[0] || {};
 
     return {
-      id: property.property_id || `realtor-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      mlsId: source.id || property.mls_id || property.property_id,
-      address: address.line || property.line || 'Unknown Address',
+      id: property.property_id || `prop-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      mlsId: property.property_id,
+      mlsNumber: property.listing_id || property.mls_id,
+      address: address.line || property.address_line || 'Unknown Address',
       city: address.city || property.city || '',
       state: address.state_code || address.state || property.state_code || '',
       zipCode: address.postal_code || property.postal_code || '',
@@ -108,19 +105,18 @@ function normalizeRealtorProperty(property: any): MLSProperty | null {
       yearBuilt: description.year_built || property.year_built,
       pricePerSqft: sqft > 0 ? Math.round(price / sqft) : undefined,
       daysOnMarket,
-      propertyType: normalizedType,
+      propertyType: propType,
       status,
-      description: description.text || property.text || undefined,
+      description: description.text || property.description_text || undefined,
       features: property.tags || [],
       photos: photoUrls,
-      listingUrl: property.href || property.rdc_web_url,
-      mlsNumber: source.id || property.mls_id,
+      listingUrl: property.href || property.rdc_web_url || '#',
       listingAgent: listAgent.name ? {
         name: listAgent.name,
         phone: listAgent.phone || listAgent.phone1,
         email: listAgent.email,
       } : undefined,
-      lotSize: description.lot_sqft ? `${description.lot_sqft.toLocaleString()} sqft` : undefined,
+      lotSize,
       rawData: property,
     };
   } catch (error) {
@@ -130,15 +126,15 @@ function normalizeRealtorProperty(property: any): MLSProperty | null {
 }
 
 async function searchProperties(params: SearchParams): Promise<{ properties: MLSProperty[]; total: number }> {
-  const apiKey = Deno.env.get('REALTOR_RAPIDAPI_KEY');
+  // Try RAPIDAPI_KEY first, then fall back to REALTOR_RAPIDAPI_KEY
+  const apiKey = Deno.env.get('RAPIDAPI_KEY') || Deno.env.get('REALTOR_RAPIDAPI_KEY');
   if (!apiKey) {
-    throw new Error('REALTOR_RAPIDAPI_KEY is not configured');
+    throw new Error('RAPIDAPI_KEY is not configured');
   }
 
-  // Use lowercase city and state_code as required by the API
   const queryParams = new URLSearchParams({
-    city: params.city.toLowerCase(),
-    state_code: params.state_code.toLowerCase(),
+    city: params.city,
+    state_code: params.state_code,
     limit: String(params.limit || 20),
     offset: String(params.offset || 0),
   });
@@ -148,72 +144,72 @@ async function searchProperties(params: SearchParams): Promise<{ properties: MLS
   if (params.beds_min) queryParams.set('beds_min', String(params.beds_min));
   if (params.baths_min) queryParams.set('baths_min', String(params.baths_min));
 
-  // Correct endpoint: /properties/v2/list-for-sale
-  const url = `https://realtor-search.p.rapidapi.com/properties/v2/list-for-sale?${queryParams.toString()}`;
-  console.log("Searching Realtor API:", url);
+  // US Real Estate Listings API endpoint
+  const url = `https://us-real-estate-listings.p.rapidapi.com/v2/for-sale?${queryParams.toString()}`;
+  console.log("Searching US Real Estate API:", url);
 
   const response = await fetch(url, {
     method: 'GET',
     headers: {
       'X-RapidAPI-Key': apiKey,
-      'X-RapidAPI-Host': 'realtor-search.p.rapidapi.com',
+      'X-RapidAPI-Host': 'us-real-estate-listings.p.rapidapi.com',
     },
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error("Realtor API error:", response.status, errorText);
-    throw new Error(`Realtor API error: ${response.status} - ${errorText}`);
+    console.error("US Real Estate API error:", response.status, errorText);
+    throw new Error(`API error: ${response.status} - ${errorText}`);
   }
 
   const data = await response.json();
-  console.log("Realtor API response keys:", Object.keys(data));
-  console.log("Total results:", data.total || data.matching_rows || 0);
+  console.log("US Real Estate API response keys:", Object.keys(data));
+  console.log("Total results:", data.total || data.count || 0);
 
-  // The API returns properties under 'results' or 'properties'
-  const rawProperties = data.results || data.properties || data.listings || [];
+  // The API may return listings under different keys
+  const rawProperties = data.listings || data.results || data.properties || data.data || [];
   console.log("Raw properties count:", rawProperties.length);
 
   const properties = rawProperties
-    .map(normalizeRealtorProperty)
+    .map(normalizeProperty)
     .filter((p: MLSProperty | null): p is MLSProperty => p !== null);
 
   console.log("Normalized properties count:", properties.length);
 
   return {
     properties,
-    total: data.total || data.matching_rows || properties.length,
+    total: data.total || data.count || properties.length,
   };
 }
 
 async function getPropertyDetails(propertyId: string): Promise<MLSProperty | null> {
-  const apiKey = Deno.env.get('REALTOR_RAPIDAPI_KEY');
+  const apiKey = Deno.env.get('RAPIDAPI_KEY') || Deno.env.get('REALTOR_RAPIDAPI_KEY');
   if (!apiKey) {
-    throw new Error('REALTOR_RAPIDAPI_KEY is not configured');
+    throw new Error('RAPIDAPI_KEY is not configured');
   }
 
-  const url = `https://realtor-search.p.rapidapi.com/properties/detail?property_id=${propertyId}`;
+  const url = `https://us-real-estate-listings.p.rapidapi.com/v2/property?property_id=${propertyId}`;
   console.log("Fetching property details:", url);
 
   const response = await fetch(url, {
     method: 'GET',
     headers: {
-      'x-rapidapi-key': apiKey,
-      'x-rapidapi-host': 'realtor-search.p.rapidapi.com',
+      'X-RapidAPI-Key': apiKey,
+      'X-RapidAPI-Host': 'us-real-estate-listings.p.rapidapi.com',
     },
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error("Realtor API detail error:", response.status, errorText);
+    console.error("US Real Estate API detail error:", response.status, errorText);
     return null;
   }
 
   const data = await response.json();
   console.log("Property detail response keys:", Object.keys(data));
 
-  const property = data.property || data;
-  return normalizeRealtorProperty(property);
+  const property = data.property || data.listing || data;
+  return normalizeProperty(property);
 }
 
 serve(async (req) => {
@@ -224,10 +220,10 @@ serve(async (req) => {
 
   try {
     const { action, ...params } = await req.json();
-    console.log("Realtor search request:", action, params);
+    console.log("Property search request:", action, params);
 
     if (action === 'search') {
-      const { city, state_code, limit, offset, price_min, price_max, beds_min, baths_min, prop_type, status } = params;
+      const { city, state_code, limit, offset, price_min, price_max, beds_min, baths_min } = params;
 
       if (!city || !state_code) {
         return new Response(
@@ -245,8 +241,6 @@ serve(async (req) => {
         price_max,
         beds_min,
         baths_min,
-        prop_type,
-        status,
       });
 
       return new Response(
@@ -291,7 +285,7 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error("Realtor search error:", error);
+    console.error("Property search error:", error);
     const message = error instanceof Error ? error.message : 'Unknown error';
     return new Response(
       JSON.stringify({ success: false, error: message }),
