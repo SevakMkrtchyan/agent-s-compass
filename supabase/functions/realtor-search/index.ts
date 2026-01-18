@@ -6,7 +6,7 @@ const corsHeaders = {
 }
 
 const RAPIDAPI_KEY = Deno.env.get('USREALLISTINGS')
-const RAPIDAPI_HOST = 'us-real-estate.p.rapidapi.com'
+const RAPIDAPI_HOST = 'us-real-estate-listings.p.rapidapi.com'
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -39,7 +39,7 @@ serve(async (req) => {
       if (beds_min) params.append('beds_min', beds_min.toString())
       if (baths_min) params.append('baths_min', baths_min.toString())
 
-      const url = `https://${RAPIDAPI_HOST}/api/v3/for-sale?${params}`
+      const url = `https://${RAPIDAPI_HOST}/for-sale?${params}`
       console.log('Calling API:', url)
 
       const response = await fetch(url, {
@@ -56,45 +56,69 @@ serve(async (req) => {
       }
 
       const data = await response.json()
-      console.log('Raw API response keys:', JSON.stringify(Object.keys(data)))
       
-      // Handle nested structure from us-real-estate API
-      const homeSearch = data?.data?.home_search || {}
-      const listings = homeSearch.results || []
-      const total = homeSearch.total || 0
+      // Debug logging to discover response structure
+      console.log('Raw API response structure:', JSON.stringify(data).substring(0, 2000))
+      console.log('API response keys:', Object.keys(data))
+      if (data.data) console.log('data.data keys:', Object.keys(data.data))
       
-      console.log('API Response:', { listingsCount: listings.length, total })
+      // Try multiple possible response structures
+      const listings = data.listings 
+        || data.results 
+        || data.properties 
+        || data.data?.listings 
+        || data.data?.results 
+        || data.data?.home_search?.results 
+        || []
+
+      const total = data.totalResultCount 
+        || data.total 
+        || data.resultCount 
+        || data.count 
+        || data.data?.totalResultCount 
+        || data.data?.total
+        || listings.length
+      
+      console.log('Parsed listings count:', listings.length, 'Total:', total)
 
       const properties = listings.map((property: any) => {
-        const address = property.location?.address || {}
+        // Try multiple address structures
+        const address = property.location?.address || property.address || {}
         const description = property.description || {}
         
+        // Flexible field extraction
+        const propertyId = property.property_id || property.id || property.listingId || property.zpid || ''
+        const listPrice = property.list_price || property.price || property.listPrice || 0
+        const beds = description.beds || property.beds || property.bedrooms || 0
+        const baths = description.baths || property.baths || property.bathrooms || 0
+        const sqftVal = description.sqft || property.sqft || property.squareFeet || property.livingArea || 0
+        
         return {
-          id: property.property_id || '',
-          mlsId: property.property_id || '',
-          mlsNumber: property.listing_id || '',
-          listingId: property.listing_id || '',
-          address: address.line || '',
+          id: propertyId,
+          mlsId: propertyId,
+          mlsNumber: property.listing_id || property.mlsId || '',
+          listingId: property.listing_id || property.listingId || '',
+          address: address.line || address.street || address.streetAddress || address.full || '',
           city: address.city || '',
-          state: address.state_code || '',
-          zipCode: address.postal_code || '',
-          price: property.list_price || 0,
-          bedrooms: description.beds || 0,
-          bathrooms: description.baths || 0,
-          sqft: description.sqft || 0,
-          lotSize: description.lot_sqft ? `${(description.lot_sqft / 43560).toFixed(2)} acres` : undefined,
-          yearBuilt: description.year_built || undefined,
-          pricePerSqft: description.sqft ? Math.round(property.list_price / description.sqft) : undefined,
-          daysOnMarket: property.list_date ? Math.floor((Date.now() - new Date(property.list_date).getTime()) / (1000 * 60 * 60 * 24)) : undefined,
-          propertyType: description.type || 'Unknown',
+          state: address.state_code || address.state || '',
+          zipCode: address.postal_code || address.zip || address.zipcode || '',
+          price: listPrice,
+          bedrooms: beds,
+          bathrooms: baths,
+          sqft: sqftVal,
+          lotSize: description.lot_sqft ? `${(description.lot_sqft / 43560).toFixed(2)} acres` : (property.lotSize || undefined),
+          yearBuilt: description.year_built || property.yearBuilt || undefined,
+          pricePerSqft: sqftVal ? Math.round(listPrice / sqftVal) : undefined,
+          daysOnMarket: property.list_date ? Math.floor((Date.now() - new Date(property.list_date).getTime()) / (1000 * 60 * 60 * 24)) : (property.daysOnMarket || undefined),
+          propertyType: description.type || property.propertyType || property.homeType || 'Unknown',
           status: property.status === 'for_sale' ? 'active' : (property.status || 'active'),
-          description: description.text || undefined,
-          features: property.tags || [],
+          description: description.text || property.description || undefined,
+          features: property.tags || property.features || [],
           photos: property.primary_photo?.href 
-            ? [property.primary_photo.href, ...(property.photos?.map((p: any) => p.href) || [])]
-            : property.photos?.map((p: any) => p.href) || [],
-          listingUrl: property.href || '#',
-          listingAgent: property.advertisers?.[0]?.name ? { name: property.advertisers[0].name } : undefined,
+            ? [property.primary_photo.href, ...(property.photos?.map((p: any) => p.href || p) || [])]
+            : (property.photos?.map((p: any) => p.href || p) || property.images || []),
+          listingUrl: property.href || property.url || property.detailUrl || '#',
+          listingAgent: property.advertisers?.[0]?.name ? { name: property.advertisers[0].name } : (property.listingAgent || undefined),
           rawData: property,
         }
       })
@@ -116,7 +140,7 @@ serve(async (req) => {
       }
 
       const response = await fetch(
-        `https://${RAPIDAPI_HOST}/api/v3/property?property_id=${property_id}`,
+        `https://${RAPIDAPI_HOST}/property?property_id=${property_id}`,
         {
           headers: {
             'X-RapidAPI-Key': RAPIDAPI_KEY,
