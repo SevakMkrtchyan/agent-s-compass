@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.realtor-search]
 verify_jwt = false
+
+[functions.mapbox-geocoding]
+verify_jwt = false

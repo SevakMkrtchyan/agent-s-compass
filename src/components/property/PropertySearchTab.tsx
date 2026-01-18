@@ -424,18 +424,10 @@ function PropertySearchCard({ property, onSelect, onClick, isPinned, onTogglePin
   const [imageError, setImageError] = useState(false);
   const [isImageLoading, setIsImageLoading] = useState(true);
   
-  // Get high-res images
-  const getHighResImage = (url: string) => {
-    return url
-      .replace(/-m(\d+)/g, '-b$1')
-      .replace('l-m', 'l-b')
-      .replace('/s_', '/l_')
-      .replace('_s.', '_l.');
-  };
-  
+  // Use photos directly - edge function already handles HTTPS
   const defaultPhoto = "/placeholder.svg";
   const photos = property.photos.length > 0 && !imageError
-    ? property.photos.map(getHighResImage)
+    ? property.photos
     : [defaultPhoto];
   
   const hasMultiplePhotos = photos.length > 1;
