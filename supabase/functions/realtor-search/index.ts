@@ -116,9 +116,26 @@ serve(async (req) => {
           status: property.status === 'for_sale' ? 'active' : (property.status || 'active'),
           description: description.text || property.description || undefined,
           features: property.tags || property.features || [],
-          photos: property.primary_photo?.href 
-            ? [property.primary_photo.href, ...(property.photos?.map((p: any) => p.href || p) || [])]
-            : (property.photos?.map((p: any) => p.href || p) || property.images || []),
+          photos: (() => {
+            const upgradeImageUrl = (url: string): string => {
+              if (!url) return url;
+              // Upgrade to higher resolution: medium -> big, small -> original detail
+              return url
+                .replace(/-m(\d+)/g, '-b$1')  // medium to big
+                .replace(/s\.jpg/g, 'od.jpg') // small to original detail
+                .replace(/-t(\d+)/g, '-l$1'); // thumbnail to large
+            };
+            
+            const primaryPhoto = property.primary_photo?.href 
+              ? upgradeImageUrl(property.primary_photo.href) 
+              : null;
+            const otherPhotos = property.photos?.map((p: any) => upgradeImageUrl(p.href || p)) || [];
+            
+            if (primaryPhoto) {
+              return [primaryPhoto, ...otherPhotos];
+            }
+            return otherPhotos.length > 0 ? otherPhotos : (property.images || []);
+          })(),
           listingUrl: property.href || property.url || property.detailUrl || '#',
           listingAgent: property.advertisers?.[0]?.name ? { name: property.advertisers[0].name } : (property.listingAgent || undefined),
           rawData: property,
