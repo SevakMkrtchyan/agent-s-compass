@@ -117,21 +117,16 @@ serve(async (req) => {
           description: description.text || property.description || undefined,
           features: property.tags || property.features || [],
           photos: (() => {
-            const upgradeImageUrl = (url: string): string => {
+            // Just ensure HTTPS - the high-res upgrades break the URLs
+            const ensureHttps = (url: string): string => {
               if (!url) return url;
-              // First ensure HTTPS (API returns http:// which gets blocked by browsers)
-              let upgraded = url.replace(/^http:\/\//i, 'https://');
-              // Upgrade to higher resolution: medium -> big, small -> original detail
-              return upgraded
-                .replace(/-m(\d+)/g, '-b$1')  // medium to big
-                .replace(/s\.jpg$/i, 'od.jpg') // small to original detail (only at end)
-                .replace(/-t(\d+)/g, '-l$1'); // thumbnail to large
+              return url.replace(/^http:\/\//i, 'https://');
             };
             
             const primaryPhoto = property.primary_photo?.href 
-              ? upgradeImageUrl(property.primary_photo.href) 
+              ? ensureHttps(property.primary_photo.href) 
               : null;
-            const otherPhotos = property.photos?.map((p: any) => upgradeImageUrl(p.href || p)) || [];
+            const otherPhotos = property.photos?.map((p: any) => ensureHttps(p.href || p)) || [];
             
             if (primaryPhoto) {
               return [primaryPhoto, ...otherPhotos];
