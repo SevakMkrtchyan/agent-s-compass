@@ -1,6 +1,8 @@
 import { useState, useCallback } from "react";
 import { MLSProperty, PropertySearchFilters } from "@/types/property";
-import { supabase } from "@/integrations/supabase/client";
+
+const RAPIDAPI_KEY = import.meta.env.VITE_RAPIDAPI_KEY;
+const RAPIDAPI_HOST = 'us-real-estate-listings.p.rapidapi.com';
 
 interface SearchResult {
   properties: MLSProperty[];
@@ -44,9 +46,7 @@ export function useRealtorSearch() {
       }
     }
 
-    if (parts.length < 2) {
-      return null;
-    }
+    if (parts.length < 2) return null;
 
     const city = parts[0].trim();
     let stateCode = parts[1].trim().toUpperCase();
@@ -60,11 +60,49 @@ export function useRealtorSearch() {
       }
     }
 
-    if (!/^[A-Z]{2}$/.test(stateCode)) {
-      return null;
-    }
+    if (!/^[A-Z]{2}$/.test(stateCode)) return null;
 
     return { city, stateCode };
+  };
+
+  const normalizeProperty = (property: any): MLSProperty => {
+    const address = property.location?.address || {};
+    const description = property.description || {};
+    
+    return {
+      id: property.property_id || '',
+      mlsId: property.property_id || '',
+      mlsNumber: property.listing_id || '',
+      
+      address: address.line || '',
+      city: address.city || '',
+      state: address.state_code || '',
+      zipCode: address.postal_code || '',
+      
+      price: property.list_price || 0,
+      bedrooms: description.beds || 0,
+      bathrooms: description.baths || 0,
+      sqft: description.sqft || 0,
+      lotSize: description.lot_sqft ? `${(description.lot_sqft / 43560).toFixed(2)} acres` : undefined,
+      yearBuilt: description.year_built || undefined,
+      
+      pricePerSqft: description.sqft ? Math.round(property.list_price / description.sqft) : undefined,
+      daysOnMarket: property.list_date 
+        ? Math.floor((Date.now() - new Date(property.list_date).getTime()) / (1000 * 60 * 60 * 24)) 
+        : undefined,
+      
+      propertyType: description.type || 'Unknown',
+      status: property.status === 'for_sale' ? 'active' : (property.status || 'active'),
+      
+      description: description.text || undefined,
+      features: property.tags || [],
+      photos: property.photos?.map((p: any) => p.href) || [],
+      
+      listingUrl: property.href || '#',
+      listingAgent: property.advertisers?.[0]?.name ? { name: property.advertisers[0].name } : undefined,
+      
+      rawData: property,
+    };
   };
 
   const search = useCallback(async (filters: PropertySearchFilters, page: number = 1): Promise<SearchResult> => {
@@ -84,34 +122,42 @@ export function useRealtorSearch() {
       const limit = 20;
       const offset = (page - 1) * limit;
 
-      console.log("Calling realtor-search edge function:", parsedLocation);
-
-      const { data, error: fnError } = await supabase.functions.invoke('realtor-search', {
-        body: {
-          action: 'search',
-          city: parsedLocation.city,
-          state_code: parsedLocation.stateCode,
-          limit,
-          offset,
-          price_min: filters.minPrice,
-          price_max: filters.maxPrice,
-          beds_min: filters.minBeds,
-          baths_min: filters.minBaths,
-        },
+      const queryParams = new URLSearchParams({
+        city: parsedLocation.city.toLowerCase(),
+        state_code: parsedLocation.stateCode.toLowerCase(),
+        limit: limit.toString(),
+        offset: offset.toString(),
       });
 
-      if (fnError) {
-        console.error("Edge function error:", fnError);
-        throw new Error(fnError.message || 'Search failed');
+      if (filters.minPrice) queryParams.append('price_min', filters.minPrice.toString());
+      if (filters.maxPrice) queryParams.append('price_max', filters.maxPrice.toString());
+      if (filters.minBeds) queryParams.append('beds_min', filters.minBeds.toString());
+      if (filters.minBaths) queryParams.append('baths_min', filters.minBaths.toString());
+
+      console.log('Fetching from API:', `https://${RAPIDAPI_HOST}/for-sale?${queryParams}`);
+
+      const response = await fetch(
+        `https://${RAPIDAPI_HOST}/for-sale?${queryParams}`,
+        {
+          method: 'GET',
+          headers: {
+            'X-RapidAPI-Key': RAPIDAPI_KEY || '',
+            'X-RapidAPI-Host': RAPIDAPI_HOST
+          }
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        throw new Error(errorData.message || `API Error: ${response.status}`);
       }
 
-      if (!data.success) {
-        throw new Error(data.error || 'Search failed');
-      }
+      const data = await response.json();
+      const listings = data.listings || [];
+      
+      console.log('API returned:', listings.length, 'properties');
 
-      console.log("Edge function response:", data.properties?.length, "properties");
-
-      const newProperties = data.properties as MLSProperty[];
+      const newProperties = listings.map(normalizeProperty);
 
       if (page === 1) {
         setResults(newProperties);
@@ -119,15 +165,15 @@ export function useRealtorSearch() {
         setResults(prev => [...prev, ...newProperties]);
       }
 
-      setTotalResults(data.total || newProperties.length);
+      setTotalResults(data.totalResultCount || newProperties.length);
       setCurrentPage(page);
-      setIsMockData(data.isMock || false);
+      setIsMockData(false);
 
       return {
         properties: newProperties,
-        total: data.total || newProperties.length,
+        total: data.totalResultCount || newProperties.length,
         page,
-        isMock: data.isMock || false,
+        isMock: false,
       };
 
     } catch (err) {
@@ -146,19 +192,20 @@ export function useRealtorSearch() {
 
   const fetchPropertyDetails = useCallback(async (propertyId: string): Promise<MLSProperty | null> => {
     try {
-      const { data, error: fnError } = await supabase.functions.invoke('realtor-search', {
-        body: {
-          action: 'details',
-          property_id: propertyId,
-        },
-      });
+      const response = await fetch(
+        `https://${RAPIDAPI_HOST}/property?property_id=${propertyId}`,
+        {
+          headers: {
+            'X-RapidAPI-Key': RAPIDAPI_KEY || '',
+            'X-RapidAPI-Host': RAPIDAPI_HOST
+          }
+        }
+      );
 
-      if (fnError || !data.success) {
-        console.error("Property details fetch failed:", fnError || data.error);
-        return null;
-      }
+      if (!response.ok) return null;
 
-      return data.property as MLSProperty;
+      const data = await response.json();
+      return normalizeProperty(data);
     } catch (err) {
       console.error("Property details error:", err);
       return null;
