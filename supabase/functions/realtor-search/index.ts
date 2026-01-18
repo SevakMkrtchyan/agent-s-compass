@@ -144,9 +144,9 @@ async function searchProperties(params: SearchParams): Promise<{ properties: MLS
   if (params.beds_min) queryParams.set('beds_min', String(params.beds_min));
   if (params.baths_min) queryParams.set('baths_min', String(params.baths_min));
 
-  // US Real Estate API - correct host and endpoint
+  // US Real Estate API - use /api/for-sale endpoint (not v2)
   const host = 'us-real-estate.p.rapidapi.com';
-  const url = `https://${host}/api/v2/for-sale?${queryParams.toString()}`;
+  const url = `https://${host}/api/for-sale?${queryParams.toString()}`;
   console.log("Searching US Real Estate API:", url);
 
   const response = await fetch(url, {
@@ -164,10 +164,11 @@ async function searchProperties(params: SearchParams): Promise<{ properties: MLS
   }
 
   const data = await response.json();
-  console.log("US Real Estate API response keys:", Object.keys(data));
-  console.log("Total results:", data.total || data.count || data.matching_rows || 0);
+  console.log("US Real Estate Listings API response keys:", Object.keys(data));
+  console.log("Full response sample:", JSON.stringify(data).substring(0, 500));
+  console.log("Total results:", data.totalResultCount || data.total || data.count || 0);
 
-  // The API may return listings under different keys
+  // US Real Estate Listings API returns data under 'data.results' or similar
   const rawProperties = data.data?.results || data.results || data.listings || data.properties || data.data || [];
   console.log("Raw properties count:", Array.isArray(rawProperties) ? rawProperties.length : 0);
 
@@ -195,7 +196,7 @@ async function getPropertyDetails(propertyId: string): Promise<MLSProperty | nul
   }
 
   const host = 'us-real-estate.p.rapidapi.com';
-  const url = `https://${host}/property?property_id=${propertyId}`;
+  const url = `https://${host}/v3/property-detail?property_id=${propertyId}`;
   console.log("Fetching property details:", url);
 
   const response = await fetch(url, {
