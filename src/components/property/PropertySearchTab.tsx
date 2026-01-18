@@ -1,13 +1,14 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { 
   Filter, ChevronDown, ChevronUp, 
   Loader2, Home, Bed, Bath, Square, MapPin,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, Heart, ImageOff
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -17,9 +18,11 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useRealtorSearch } from "@/hooks/useRealtorSearch";
+import { usePinnedProperties } from "@/hooks/usePinnedProperties";
 import { MLSProperty } from "@/types/property";
 import { toast } from "@/hooks/use-toast";
-import { LocationAutocomplete } from "./LocationAutocomplete";
+import { MapboxLocationSearch } from "./MapboxLocationSearch";
+import { PropertyDetailModal } from "./PropertyDetailModal";
 
 interface PropertySearchTabProps {
   onSelectProperty: (property: MLSProperty) => void;
@@ -27,8 +30,10 @@ interface PropertySearchTabProps {
 
 export function PropertySearchTab({ onSelectProperty }: PropertySearchTabProps) {
   const { search, loadMore, results, totalResults, isSearching, isMockData, error } = useRealtorSearch();
+  const { isPinned, togglePin, pinnedCount } = usePinnedProperties();
   
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchLocation, setSearchLocation] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
@@ -38,11 +43,17 @@ export function PropertySearchTab({ onSelectProperty }: PropertySearchTabProps) 
   const [statusFilter, setStatusFilter] = useState<string>("active");
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) {
+  // Modal state
+  const [selectedPropertyForModal, setSelectedPropertyForModal] = useState<MLSProperty | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const handleSearch = useCallback(async () => {
+    const locationToSearch = searchLocation || searchQuery;
+    
+    if (!locationToSearch.trim()) {
       toast({
         title: "Enter a location",
-        description: "Please enter a city and state (e.g., Austin, TX)",
+        description: "Please enter a city, state, or address",
         variant: "destructive",
       });
       return;
@@ -50,7 +61,7 @@ export function PropertySearchTab({ onSelectProperty }: PropertySearchTabProps) 
     
     try {
       await search({
-        location: searchQuery,
+        location: locationToSearch,
         minPrice: minPrice ? parseInt(minPrice.replace(/,/g, "")) : undefined,
         maxPrice: maxPrice ? parseInt(maxPrice.replace(/,/g, "")) : undefined,
         minBeds: minBeds !== "any" ? parseInt(minBeds) : undefined,
@@ -66,12 +77,17 @@ export function PropertySearchTab({ onSelectProperty }: PropertySearchTabProps) 
         variant: "destructive",
       });
     }
-  };
+  }, [searchLocation, searchQuery, minPrice, maxPrice, minBeds, minBaths, propertyTypes, statusFilter, search]);
+
+  const handleLocationSelect = useCallback((location: string, _fullAddress: string) => {
+    setSearchLocation(location);
+  }, []);
 
   const handleLoadMore = async () => {
+    const locationToSearch = searchLocation || searchQuery;
     setIsLoadingMore(true);
     await loadMore({
-      location: searchQuery,
+      location: locationToSearch,
       minPrice: minPrice ? parseInt(minPrice.replace(/,/g, "")) : undefined,
       maxPrice: maxPrice ? parseInt(maxPrice.replace(/,/g, "")) : undefined,
       minBeds: minBeds !== "any" ? parseInt(minBeds) : undefined,
@@ -88,14 +104,6 @@ export function PropertySearchTab({ onSelectProperty }: PropertySearchTabProps) 
         ? prev.filter(t => t !== type)
         : [...prev, type]
     );
-  };
-
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      maximumFractionDigits: 0,
-    }).format(price);
   };
 
   const formatPriceInput = (value: string) => {
@@ -121,16 +129,38 @@ export function PropertySearchTab({ onSelectProperty }: PropertySearchTabProps) 
     setStatusFilter("active");
   };
 
+  const openPropertyModal = (property: MLSProperty) => {
+    setSelectedPropertyForModal(property);
+    setIsModalOpen(true);
+  };
+
+  const handleSelectFromModal = (property: MLSProperty) => {
+    setIsModalOpen(false);
+    onSelectProperty(property);
+  };
+
+  const handleQuickPin = (e: React.MouseEvent, property: MLSProperty) => {
+    e.stopPropagation();
+    togglePin(property);
+    toast({
+      title: isPinned(property.id) ? "Removed from saved" : "Saved to My Properties",
+      description: isPinned(property.id) 
+        ? "Property removed from your saved list" 
+        : "You can find it in your saved properties",
+    });
+  };
+
   return (
     <div className="space-y-6">
       {/* Search Interface */}
       <div className="space-y-4">
         <div className="flex items-center gap-3">
-          <LocationAutocomplete
+          <MapboxLocationSearch
             value={searchQuery}
             onChange={setSearchQuery}
             onSearch={handleSearch}
-            placeholder="Enter city and state (e.g., Austin, TX)"
+            onLocationSelect={handleLocationSelect}
+            placeholder="Search address, city, or ZIP code..."
             className="flex-1"
           />
           <Button onClick={handleSearch} disabled={isSearching} className="h-11 px-6">
@@ -145,21 +175,30 @@ export function PropertySearchTab({ onSelectProperty }: PropertySearchTabProps) 
           </Button>
         </div>
 
-        {/* Filter Toggle */}
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setShowFilters(!showFilters)}
-          className="gap-2 text-muted-foreground"
-        >
-          <Filter className="h-4 w-4" />
-          {showFilters ? "Hide Filters" : "Show Filters"}
-          {showFilters ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-        </Button>
+        {/* Filter Toggle with Pinned Count */}
+        <div className="flex items-center justify-between">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowFilters(!showFilters)}
+            className="gap-2 text-muted-foreground"
+          >
+            <Filter className="h-4 w-4" />
+            {showFilters ? "Hide Filters" : "Show Filters"}
+            {showFilters ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </Button>
+          
+          {pinnedCount > 0 && (
+            <Badge variant="secondary" className="gap-1.5">
+              <Heart className="h-3.5 w-3.5 fill-current text-destructive" />
+              {pinnedCount} saved
+            </Badge>
+          )}
+        </div>
 
         {/* Expandable Filters */}
         {showFilters && (
-          <div className="p-4 border border-border rounded-lg bg-card space-y-4">
+          <div className="p-4 border border-border rounded-lg bg-card space-y-4 animate-fade-in">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {/* Price Range */}
               <div>
@@ -318,6 +357,9 @@ export function PropertySearchTab({ onSelectProperty }: PropertySearchTabProps) 
                 key={property.id} 
                 property={property} 
                 onSelect={() => onSelectProperty(property)}
+                onClick={() => openPropertyModal(property)}
+                isPinned={isPinned(property.id)}
+                onTogglePin={(e) => handleQuickPin(e, property)}
               />
             ))}
           </div>
@@ -352,9 +394,19 @@ export function PropertySearchTab({ onSelectProperty }: PropertySearchTabProps) 
         <div className="text-center py-16 text-muted-foreground border border-dashed border-border rounded-xl">
           <MapPin className="h-12 w-12 mx-auto mb-4 opacity-30" />
           <p className="text-lg font-medium mb-1">Enter a location to search</p>
-          <p className="text-sm">Search for properties by city and state (e.g., Austin, TX)</p>
+          <p className="text-sm">Search for properties by address, city, or ZIP code</p>
         </div>
       )}
+
+      {/* Property Detail Modal */}
+      <PropertyDetailModal
+        property={selectedPropertyForModal}
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSelect={handleSelectFromModal}
+        isPinned={selectedPropertyForModal ? isPinned(selectedPropertyForModal.id) : false}
+        onTogglePin={togglePin}
+      />
     </div>
   );
 }
@@ -362,15 +414,28 @@ export function PropertySearchTab({ onSelectProperty }: PropertySearchTabProps) 
 interface PropertySearchCardProps {
   property: MLSProperty;
   onSelect: () => void;
+  onClick: () => void;
+  isPinned: boolean;
+  onTogglePin: (e: React.MouseEvent) => void;
 }
 
-function PropertySearchCard({ property, onSelect }: PropertySearchCardProps) {
+function PropertySearchCard({ property, onSelect, onClick, isPinned, onTogglePin }: PropertySearchCardProps) {
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [imageError, setImageError] = useState(false);
+  const [isImageLoading, setIsImageLoading] = useState(true);
+  
+  // Get high-res images
+  const getHighResImage = (url: string) => {
+    return url
+      .replace(/-m(\d+)/g, '-b$1')
+      .replace('l-m', 'l-b')
+      .replace('/s_', '/l_')
+      .replace('_s.', '_l.');
+  };
   
   const defaultPhoto = "/placeholder.svg";
   const photos = property.photos.length > 0 && !imageError
-    ? property.photos 
+    ? property.photos.map(getHighResImage)
     : [defaultPhoto];
   
   const hasMultiplePhotos = photos.length > 1;
@@ -386,45 +451,79 @@ function PropertySearchCard({ property, onSelect }: PropertySearchCardProps) {
   const goToPrevPhoto = (e: React.MouseEvent) => {
     e.stopPropagation();
     setCurrentPhotoIndex(prev => (prev === 0 ? photos.length - 1 : prev - 1));
+    setIsImageLoading(true);
   };
 
   const goToNextPhoto = (e: React.MouseEvent) => {
     e.stopPropagation();
     setCurrentPhotoIndex(prev => (prev === photos.length - 1 ? 0 : prev + 1));
+    setIsImageLoading(true);
   };
 
   const handleImageError = () => {
-    setImageError(true);
-    setCurrentPhotoIndex(0);
+    // Try medium res as fallback
+    if (!imageError) {
+      setImageError(true);
+      setCurrentPhotoIndex(0);
+    }
+    setIsImageLoading(false);
   };
 
   return (
-    <div className="group border border-border rounded-xl overflow-hidden bg-card hover:shadow-xl transition-all duration-300 hover:scale-[1.02] hover:border-primary/30">
+    <div 
+      className="group border border-border rounded-xl overflow-hidden bg-card hover:shadow-xl transition-all duration-300 hover:scale-[1.02] hover:border-primary/30 cursor-pointer"
+      onClick={onClick}
+    >
       {/* Property Image Carousel */}
       <div className="h-[280px] relative overflow-hidden bg-muted">
+        {/* Progressive loading blur effect */}
+        {isImageLoading && (
+          <div className="absolute inset-0 bg-muted animate-pulse flex items-center justify-center z-10">
+            <ImageOff className="h-8 w-8 text-muted-foreground/30" />
+          </div>
+        )}
+        
         <img
           src={photos[currentPhotoIndex]}
           alt={`${property.address} - Photo ${currentPhotoIndex + 1}`}
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+          className={cn(
+            "w-full h-full object-cover group-hover:scale-105 transition-all duration-500",
+            isImageLoading ? "opacity-0" : "opacity-100"
+          )}
+          onLoad={() => setIsImageLoading(false)}
           onError={handleImageError}
         />
         
         {/* Gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
         
+        {/* Pin/Save Button */}
+        <button
+          onClick={onTogglePin}
+          className={cn(
+            "absolute top-3 right-3 p-2.5 rounded-full backdrop-blur-sm shadow-lg transition-all duration-200 z-20",
+            isPinned 
+              ? "bg-destructive text-white" 
+              : "bg-background/90 text-muted-foreground hover:text-destructive hover:bg-background"
+          )}
+          aria-label={isPinned ? "Remove from saved" : "Save property"}
+        >
+          <Heart className={cn("h-4 w-4", isPinned && "fill-current")} />
+        </button>
+        
         {/* Photo Navigation Arrows */}
         {hasMultiplePhotos && (
           <>
             <button
               onClick={goToPrevPhoto}
-              className="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-background/90 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-all duration-200 hover:bg-background hover:scale-110 shadow-lg"
+              className="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-background/90 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-all duration-200 hover:bg-background hover:scale-110 shadow-lg z-20"
               aria-label="Previous photo"
             >
               <ChevronLeft className="h-5 w-5" />
             </button>
             <button
               onClick={goToNextPhoto}
-              className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-background/90 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-all duration-200 hover:bg-background hover:scale-110 shadow-lg"
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-background/90 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-all duration-200 hover:bg-background hover:scale-110 shadow-lg z-20"
               aria-label="Next photo"
             >
               <ChevronRight className="h-5 w-5" />
@@ -449,9 +548,9 @@ function PropertySearchCard({ property, onSelect }: PropertySearchCardProps) {
         {/* Status Badge */}
         {property.status && property.status !== 'active' && (
           <div className={cn(
-            "absolute top-3 right-3 px-2.5 py-1 rounded-full text-xs font-semibold shadow-md uppercase tracking-wide",
-            property.status === 'pending' && "bg-yellow-500 text-white",
-            property.status === 'sold' && "bg-red-500 text-white",
+            "absolute top-12 left-3 px-2.5 py-1 rounded-full text-xs font-semibold shadow-md uppercase tracking-wide",
+            property.status === 'pending' && "bg-warning text-warning-foreground",
+            property.status === 'sold' && "bg-destructive text-destructive-foreground",
           )}>
             {property.status}
           </div>
@@ -497,7 +596,10 @@ function PropertySearchCard({ property, onSelect }: PropertySearchCardProps) {
         </div>
 
         <Button 
-          onClick={onSelect} 
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelect();
+          }} 
           className="w-full h-11 font-medium"
           size="lg"
         >
