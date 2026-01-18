@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { 
-  Search, Filter, ChevronDown, ChevronUp, 
+  Filter, ChevronDown, ChevronUp, 
   Loader2, Home, Bed, Bath, Square, MapPin,
   ChevronLeft, ChevronRight
 } from "lucide-react";
@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { useRealtorSearch } from "@/hooks/useRealtorSearch";
 import { MLSProperty } from "@/types/property";
 import { toast } from "@/hooks/use-toast";
+import { LocationAutocomplete } from "./LocationAutocomplete";
 
 interface PropertySearchTabProps {
   onSelectProperty: (property: MLSProperty) => void;
@@ -125,16 +126,13 @@ export function PropertySearchTab({ onSelectProperty }: PropertySearchTabProps) 
       {/* Search Interface */}
       <div className="space-y-4">
         <div className="flex items-center gap-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-              placeholder="Enter city and state (e.g., Austin, TX)"
-              className="pl-10 h-11"
-            />
-          </div>
+          <LocationAutocomplete
+            value={searchQuery}
+            onChange={setSearchQuery}
+            onSearch={handleSearch}
+            placeholder="Enter city and state (e.g., Austin, TX)"
+            className="flex-1"
+          />
           <Button onClick={handleSearch} disabled={isSearching} className="h-11 px-6">
             {isSearching ? (
               <>
