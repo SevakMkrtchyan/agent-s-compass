@@ -119,10 +119,12 @@ serve(async (req) => {
           photos: (() => {
             const upgradeImageUrl = (url: string): string => {
               if (!url) return url;
+              // First ensure HTTPS (API returns http:// which gets blocked by browsers)
+              let upgraded = url.replace(/^http:\/\//i, 'https://');
               // Upgrade to higher resolution: medium -> big, small -> original detail
-              return url
+              return upgraded
                 .replace(/-m(\d+)/g, '-b$1')  // medium to big
-                .replace(/s\.jpg/g, 'od.jpg') // small to original detail
+                .replace(/s\.jpg$/i, 'od.jpg') // small to original detail (only at end)
                 .replace(/-t(\d+)/g, '-l$1'); // thumbnail to large
             };
             
