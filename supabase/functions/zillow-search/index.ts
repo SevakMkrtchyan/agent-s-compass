@@ -431,11 +431,36 @@ async function handlePropertyDetails(
     });
 
     if (!response.ok) {
-      throw new Error(`Zillow API error: ${response.status}`);
+      const errorText = await response.text();
+      console.error("Zillow property details API error:", response.status, errorText);
+      // Return a graceful error with suggestion to use scraping fallback
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: `Property not found (${response.status})`,
+          message: "The property could not be fetched from Zillow. Try using the link scraper as a fallback.",
+          isMock: false 
+        }),
+        { headers: { ...headers, "Content-Type": "application/json" }, status: 200 }
+      );
     }
 
     const data = await response.json();
     console.log("Property details received:", Object.keys(data));
+
+    // Check if we got valid property data
+    if (!data || (!data.zpid && !data.streetAddress && !data.address)) {
+      console.log("Empty property data received");
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: "Property data not available",
+          message: "No property details found. Try using the link scraper as a fallback.",
+          isMock: false 
+        }),
+        { headers: { ...headers, "Content-Type": "application/json" }, status: 200 }
+      );
+    }
 
     const property = transformSingleProperty(data);
 
@@ -446,9 +471,15 @@ async function handlePropertyDetails(
   } catch (error: unknown) {
     console.error("Property details fetch failed:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    // Graceful fallback - don't return 500, just indicate failure
     return new Response(
-      JSON.stringify({ success: false, error: errorMessage }),
-      { headers: { ...headers, "Content-Type": "application/json" }, status: 500 }
+      JSON.stringify({ 
+        success: false, 
+        error: errorMessage,
+        message: "Failed to fetch property details. Try using the link scraper as a fallback.",
+        isMock: false 
+      }),
+      { headers: { ...headers, "Content-Type": "application/json" }, status: 200 }
     );
   }
 }
