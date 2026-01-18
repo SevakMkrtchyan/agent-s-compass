@@ -23,13 +23,15 @@ serve(async (req) => {
     }
 
     if (action === 'search') {
-      if (!city || !state_code) {
-        throw new Error('city and state_code are required')
+      // Build location string from city and state
+      const location = city && state_code ? `${city}, ${state_code}` : (city || state_code || '')
+      
+      if (!location) {
+        throw new Error('Location (city/state) is required')
       }
 
       const params = new URLSearchParams({
-        city: city.toLowerCase(),
-        state_code: state_code.toLowerCase(),
+        location: location,
         limit: (limit || 20).toString(),
         offset: (offset || 0).toString(),
       })
