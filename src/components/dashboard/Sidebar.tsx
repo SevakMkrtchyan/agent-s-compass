@@ -15,6 +15,7 @@ import {
   Search,
   UserPlus,
   Building,
+  Users,
 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useState, useMemo } from "react";
@@ -44,6 +45,7 @@ interface SidebarProps {
 // Navigation items - without Workspace (consolidated into Agent)
 const globalNavItems = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
+  { title: "Buyers", url: "/buyers", icon: Users },
   { title: "Tasks", url: "/tasks", icon: FileText },
   { title: "Properties", url: "/properties", icon: HomeIcon },
   { title: "Offers", url: "/offers", icon: DollarSign },
