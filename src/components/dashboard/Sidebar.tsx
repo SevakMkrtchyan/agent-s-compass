@@ -16,6 +16,7 @@ import {
   UserPlus,
   Building,
   Users,
+  Loader2,
 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useState, useMemo } from "react";
@@ -32,8 +33,41 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { mockWorkspaces, currentUser } from "@/data/workspaceData";
+import { useBuyers, type Buyer } from "@/hooks/useBuyers";
 import { type WorkspaceStatus, type Workspace } from "@/types/workspace";
+
+// Map stage name from database to stage number
+const mapStageNameToNumber = (stageName: string | null): 0 | 1 | 2 | 3 | 4 | 5 => {
+  const stageMap: Record<string, 0 | 1 | 2 | 3 | 4 | 5> = {
+    "Readiness & Expectations": 0,
+    "Home Search": 1,
+    "Offer Strategy": 2,
+    "Under Contract": 3,
+    "Closing Preparation": 4,
+    "Closing & Post-Close": 5,
+  };
+  return stageMap[stageName || "Home Search"] ?? 1;
+};
+
+// Transform a Buyer record to Workspace format for UI compatibility
+const mapBuyerToWorkspace = (buyer: Buyer): Workspace => ({
+  id: buyer.id,
+  buyerId: buyer.id,
+  buyerName: buyer.name,
+  buyerEmail: buyer.email || "",
+  buyerPhone: buyer.phone || undefined,
+  currentStage: mapStageNameToNumber(buyer.current_stage),
+  status: "active" as WorkspaceStatus,
+  assignedAgents: [],
+  lastActivity: new Date(buyer.updated_at),
+  createdAt: new Date(buyer.created_at),
+  isPinned: false,
+  openTasks: 0,
+  totalProperties: 0,
+  totalOffers: 0,
+  buyerType: buyer.buyer_type as Workspace["buyerType"],
+  financingConfirmed: buyer.pre_approval_status === "Approved",
+});
 
 interface SidebarProps {
   collapsed: boolean;
@@ -59,20 +93,15 @@ export function Sidebar({ collapsed, agentExpanded = false, onAgentExpandedChang
   const [statusFilter, setStatusFilter] = useState<WorkspaceStatus | "all">("all");
   const [showFilters, setShowFilters] = useState(false);
 
-  const isBroker = (currentUser.role as string) === "broker";
+  const { buyers, isLoading } = useBuyers();
 
   // Check if we're on agent-related pages
   const isAgentActive = location.pathname === "/agentgpt" || location.pathname.startsWith("/workspace");
 
-  // Filter workspaces based on role
+  // Transform buyers to workspace format
   const accessibleWorkspaces = useMemo(() => {
-    if (isBroker) {
-      return mockWorkspaces;
-    }
-    return mockWorkspaces.filter((ws) =>
-      ws.assignedAgents.some((agent) => agent.id === currentUser.id)
-    );
-  }, [isBroker]);
+    return buyers.map(mapBuyerToWorkspace);
+  }, [buyers]);
 
   // Apply search and status filters
   const filteredWorkspaces = useMemo(() => {
@@ -256,8 +285,16 @@ export function Sidebar({ collapsed, agentExpanded = false, onAgentExpandedChang
         {/* Workspace List */}
         <ScrollArea className="flex-1">
           <div className="p-2">
+            {/* Loading state */}
+            {isLoading && (
+              <div className="p-4 flex items-center justify-center text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                <span className="text-sm">Loading...</span>
+              </div>
+            )}
+
             {/* Pinned Section */}
-            {pinnedWorkspaces.length > 0 && (
+            {!isLoading && pinnedWorkspaces.length > 0 && (
               <div className="mb-3">
                 <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">
                   <Pin className="h-3 w-3" />
@@ -272,7 +309,7 @@ export function Sidebar({ collapsed, agentExpanded = false, onAgentExpandedChang
             )}
 
             {/* Recent Section */}
-            {recentWorkspaces.length > 0 && (
+            {!isLoading && recentWorkspaces.length > 0 && (
               <div>
                 <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">
                   <Clock className="h-3 w-3" />
@@ -286,7 +323,7 @@ export function Sidebar({ collapsed, agentExpanded = false, onAgentExpandedChang
               </div>
             )}
 
-            {sortedWorkspaces.length === 0 && (
+            {!isLoading && sortedWorkspaces.length === 0 && (
               <div className="p-4 text-center text-muted-foreground/50 text-sm">
                 No buyers found
               </div>
