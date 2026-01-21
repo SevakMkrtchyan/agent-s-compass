@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { 
   Home, 
@@ -7,15 +7,15 @@ import {
   CheckSquare,
   Info,
   LayoutGrid,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { mockWorkspaces, currentUser } from "@/data/workspaceData";
-import { mockBuyers } from "@/data/mockData";
+import { useBuyer, type Buyer } from "@/hooks/useBuyers";
 import { generateMockConversation } from "@/data/conversationData";
 import type { StageGroup } from "@/types/conversation";
-import type { Stage } from "@/types";
+import type { Stage, Buyer as LocalBuyer } from "@/types";
 import { STAGES } from "@/types";
 
 // Layout Components
@@ -41,12 +41,39 @@ const WORKSPACE_TABS: { id: WorkspaceTab; label: string; icon: React.ElementType
   { id: "tasks", label: "Tasks", icon: CheckSquare },
 ];
 
+// Map stage name from database to stage number
+const mapStageNameToNumber = (stageName: string | null): 0 | 1 | 2 | 3 | 4 | 5 => {
+  const stageMap: Record<string, 0 | 1 | 2 | 3 | 4 | 5> = {
+    "Readiness & Expectations": 0,
+    "Home Search": 1,
+    "Offer Strategy": 2,
+    "Under Contract": 3,
+    "Closing Preparation": 4,
+    "Closing & Post-Close": 5,
+  };
+  return stageMap[stageName || "Home Search"] ?? 1;
+};
+
+// Transform DB Buyer to local Buyer type for components
+const mapDbBuyerToLocal = (dbBuyer: Buyer): LocalBuyer => ({
+  id: dbBuyer.id,
+  name: dbBuyer.name,
+  email: dbBuyer.email || "",
+  phone: dbBuyer.phone || undefined,
+  currentStage: mapStageNameToNumber(dbBuyer.current_stage),
+  createdAt: new Date(dbBuyer.created_at),
+  lastActivity: new Date(dbBuyer.updated_at),
+  financingConfirmed: dbBuyer.pre_approval_status === "Approved",
+  buyerType: dbBuyer.buyer_type as LocalBuyer["buyerType"],
+  marketContext: undefined,
+});
+
 export default function Workspace() {
   const { workspaceId } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [agentExpanded, setAgentExpanded] = useState(true); // Start expanded when in workspace
+  const [agentExpanded, setAgentExpanded] = useState(true);
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("agentgpt");
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [prefillCommand, setPrefillCommand] = useState("");
@@ -55,31 +82,20 @@ export default function Workspace() {
   const initialAction = searchParams.get('action') || undefined;
   const initialCommand = searchParams.get('command') || undefined;
 
-  // Find workspace
-  const workspace = useMemo(() => {
-    return mockWorkspaces.find((ws) => ws.id === workspaceId);
-  }, [workspaceId]);
+  // Fetch buyer from database
+  const { data: dbBuyer, isLoading } = useBuyer(workspaceId);
 
-  // Get buyer data
+  // Transform to local format
   const buyer = useMemo(() => {
-    if (!workspace) return mockBuyers[0];
-    return mockBuyers.find((b) => b.id === workspace.buyerId) || {
-      id: workspace.buyerId,
-      name: workspace.buyerName,
-      email: workspace.buyerEmail,
-      phone: workspace.buyerPhone,
-      currentStage: workspace.currentStage,
-      createdAt: workspace.createdAt,
-      lastActivity: workspace.lastActivity,
-      financingConfirmed: workspace.financingConfirmed,
-      buyerType: workspace.buyerType,
-      marketContext: workspace.marketContext,
-    };
-  }, [workspace]);
+    if (!dbBuyer) return null;
+    return mapDbBuyerToLocal(dbBuyer);
+  }, [dbBuyer]);
+
+  const currentStage = buyer?.currentStage ?? 1;
 
   // Initialize conversation stages
   const [conversationStages, setConversationStages] = useState<StageGroup[]>(() => 
-    generateMockConversation(workspaceId || "ws-1", workspace?.currentStage || 1)
+    generateMockConversation(workspaceId || "", currentStage)
   );
 
   // Handle stage expansion
@@ -92,25 +108,24 @@ export default function Workspace() {
 
   // Handle sending commands
   const handleSendCommand = useCallback((content: string) => {
-    const currentStageId = workspace?.currentStage || 1;
     const newMessage = {
       id: `msg-${Date.now()}`,
       type: "human-message" as const,
       timestamp: new Date(),
-      stageId: currentStageId,
+      stageId: currentStage,
       sender: "agent" as const,
-      senderId: currentUser.id,
-      senderName: currentUser.name,
+      senderId: "agent-1",
+      senderName: "Agent",
       content,
       isImmutable: false,
     };
 
     setConversationStages(prev => prev.map(stage => 
-      stage.stageId === currentStageId 
+      stage.stageId === currentStage 
         ? { ...stage, items: [...stage.items, newMessage] }
         : stage
     ));
-  }, [workspace?.currentStage]);
+  }, [currentStage]);
 
   // Handle approvals
   const handleApprove = useCallback((itemId: string) => {
@@ -125,7 +140,6 @@ export default function Workspace() {
   }, []);
 
   const handleReject = useCallback((itemId: string) => {
-    // In real app, this would open an edit modal
     console.log("Edit item:", itemId);
   }, []);
 
@@ -153,12 +167,33 @@ export default function Workspace() {
     navigate("/agentgpt");
   }, [navigate]);
 
-  // If no workspace found
-  if (!workspace) {
-    const firstWorkspace = mockWorkspaces[0];
-    if (firstWorkspace && !workspaceId) {
-      navigate(`/workspace/${firstWorkspace.id}`, { replace: true });
-    }
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Sidebar 
+          collapsed={sidebarCollapsed}
+          agentExpanded={agentExpanded}
+          onAgentExpandedChange={setAgentExpanded}
+        />
+        <div className={cn(
+          "transition-all duration-200 min-h-screen",
+          sidebarCollapsed ? "ml-[58px]" : "ml-[240px]"
+        )}>
+          <TopBar
+            onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
+            sidebarCollapsed={sidebarCollapsed}
+          />
+          <div className="flex items-center justify-center h-[calc(100vh-56px)]">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // If no buyer found
+  if (!buyer) {
     return (
       <div className="min-h-screen bg-background">
         <Sidebar 
@@ -176,16 +211,15 @@ export default function Workspace() {
           />
           <div className="flex items-center justify-center h-[calc(100vh-56px)]">
             <div className="text-center">
-              <h2 className="text-xl font-semibold text-foreground mb-2">No workspace selected</h2>
+              <h2 className="text-xl font-semibold text-foreground mb-2">Buyer not found</h2>
               <p className="text-muted-foreground mb-4">Select a buyer from the list to view their workspace.</p>
+              <Button onClick={() => navigate("/buyers")}>View Buyers</Button>
             </div>
           </div>
         </div>
       </div>
     );
   }
-
-  const userRole = currentUser.role;
 
   return (
     <div className="min-h-screen bg-background">
@@ -194,7 +228,7 @@ export default function Workspace() {
         collapsed={sidebarCollapsed}
         agentExpanded={agentExpanded}
         onAgentExpandedChange={setAgentExpanded}
-        selectedBuyerId={workspace.id}
+        selectedBuyerId={workspaceId}
       />
 
       {/* Main Content */}
@@ -217,13 +251,13 @@ export default function Workspace() {
             <div className="flex items-center gap-3">
               <div className="h-8 w-8 rounded-md bg-foreground/10 flex items-center justify-center">
                 <span className="text-xs font-medium text-foreground">
-                  {workspace.buyerName.split(" ").map((n) => n[0]).join("")}
+                  {buyer.name.split(" ").map((n) => n[0]).join("")}
                 </span>
               </div>
               <div>
-                <span className="text-sm font-medium text-foreground">{workspace.buyerName}</span>
+                <span className="text-sm font-medium text-foreground">{buyer.name}</span>
                 <span className="text-sm text-muted-foreground ml-2">
-                  · Stage {workspace.currentStage}: {STAGES[workspace.currentStage].title}
+                  · Stage {currentStage}: {STAGES[currentStage].title}
                 </span>
               </div>
             </div>
@@ -262,8 +296,8 @@ export default function Workspace() {
             <TabsContent value="agentgpt" className="flex-1 m-0 p-0 overflow-hidden">
               <GuidedAgentGPT
                 stages={conversationStages}
-                currentStage={workspace.currentStage}
-                buyerName={workspace.buyerName}
+                currentStage={currentStage}
+                buyerName={buyer.name}
                 buyer={buyer}
                 onExpandStage={handleExpandStage}
                 onSendCommand={handleSendCommand}
@@ -281,8 +315,8 @@ export default function Workspace() {
             <TabsContent value="progress" className="flex-1 m-0 overflow-hidden">
               <ProgressTab
                 stages={conversationStages}
-                currentStage={workspace.currentStage}
-                buyerName={workspace.buyerName}
+                currentStage={currentStage}
+                buyerName={buyer.name}
                 onPrefillAgentGPT={handlePrefillAgentGPT}
                 onOpenDetails={() => setDetailsOpen(true)}
               />
@@ -291,14 +325,14 @@ export default function Workspace() {
             {/* Properties & Comps Tab */}
             <TabsContent value="properties" className="flex-1 m-0 overflow-auto p-6">
               <WorkspaceProperties 
-                buyerId={workspace.buyerId} 
+                buyerId={buyer.id} 
                 onAgentCommand={handlePrefillAgentGPT}
               />
             </TabsContent>
 
             {/* Offers Tab */}
             <TabsContent value="offers" className="flex-1 m-0 overflow-auto p-6">
-              <WorkspaceOffers buyerId={workspace.buyerId} onAgentCommand={handlePrefillAgentGPT} />
+              <WorkspaceOffers buyerId={buyer.id} onAgentCommand={handlePrefillAgentGPT} />
             </TabsContent>
 
             {/* Tasks & Documents Tab */}
@@ -313,11 +347,11 @@ export default function Workspace() {
       <DetailsInspector
         open={detailsOpen}
         onClose={() => setDetailsOpen(false)}
-        currentStage={workspace.currentStage}
-        buyerName={workspace.buyerName}
-        buyerType={workspace.buyerType}
-        financingConfirmed={workspace.financingConfirmed}
-        marketContext={workspace.marketContext}
+        currentStage={currentStage}
+        buyerName={buyer.name}
+        buyerType={buyer.buyerType}
+        financingConfirmed={buyer.financingConfirmed}
+        marketContext={buyer.marketContext}
         stages={conversationStages}
         onApprove={handleApprove}
         onReject={handleReject}
