@@ -7,7 +7,8 @@ import {
   ChevronRight, 
   Filter,
   X,
-  ChevronLeft
+  ChevronLeft,
+  Loader2
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -21,9 +22,42 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { mockWorkspaces, currentUser } from "@/data/workspaceData";
+import { useBuyers, type Buyer } from "@/hooks/useBuyers";
 import { STAGES } from "@/types";
 import { WORKSPACE_STATUS_CONFIG, type WorkspaceStatus, type Workspace } from "@/types/workspace";
+
+// Map stage name from database to stage number
+const mapStageNameToNumber = (stageName: string | null): 0 | 1 | 2 | 3 | 4 | 5 => {
+  const stageMap: Record<string, 0 | 1 | 2 | 3 | 4 | 5> = {
+    "Readiness & Expectations": 0,
+    "Home Search": 1,
+    "Offer Strategy": 2,
+    "Under Contract": 3,
+    "Closing Preparation": 4,
+    "Closing & Post-Close": 5,
+  };
+  return stageMap[stageName || "Home Search"] ?? 1;
+};
+
+// Transform a Buyer record to Workspace format for UI compatibility
+const mapBuyerToWorkspace = (buyer: Buyer): Workspace => ({
+  id: buyer.id,
+  buyerId: buyer.id,
+  buyerName: buyer.name,
+  buyerEmail: buyer.email || "",
+  buyerPhone: buyer.phone || undefined,
+  currentStage: mapStageNameToNumber(buyer.current_stage),
+  status: "active" as WorkspaceStatus,
+  assignedAgents: [],
+  lastActivity: new Date(buyer.updated_at),
+  createdAt: new Date(buyer.created_at),
+  isPinned: false,
+  openTasks: 0,
+  totalProperties: 0,
+  totalOffers: 0,
+  buyerType: buyer.buyer_type as Workspace["buyerType"],
+  financingConfirmed: buyer.pre_approval_status === "Approved",
+});
 
 interface WorkspaceRolodexProps {
   collapsed: boolean;
@@ -37,17 +71,12 @@ export function WorkspaceRolodex({ collapsed, onToggle }: WorkspaceRolodexProps)
   const [statusFilter, setStatusFilter] = useState<WorkspaceStatus | "all">("all");
   const [showFilters, setShowFilters] = useState(false);
 
-  const isBroker = (currentUser.role as string) === "broker";
+  const { buyers, isLoading } = useBuyers();
 
-  // Filter workspaces based on role
+  // Transform buyers to workspace format
   const accessibleWorkspaces = useMemo(() => {
-    if (isBroker) {
-      return mockWorkspaces;
-    }
-    return mockWorkspaces.filter((ws) =>
-      ws.assignedAgents.some((agent) => agent.id === currentUser.id)
-    );
-  }, [isBroker]);
+    return buyers.map(mapBuyerToWorkspace);
+  }, [buyers]);
 
   // Apply search and status filters
   const filteredWorkspaces = useMemo(() => {
@@ -223,8 +252,16 @@ export function WorkspaceRolodex({ collapsed, onToggle }: WorkspaceRolodexProps)
       {/* Workspace List */}
       <ScrollArea className="flex-1">
         <div className="p-2">
+          {/* Loading state */}
+          {isLoading && (
+            <div className="p-4 flex items-center justify-center text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              {!collapsed && <span className="text-sm">Loading...</span>}
+            </div>
+          )}
+
           {/* Pinned Section */}
-          {pinnedWorkspaces.length > 0 && !collapsed && (
+          {!isLoading && pinnedWorkspaces.length > 0 && !collapsed && (
             <div className="mb-3">
               <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
                 <Pin className="h-3 w-3" />
@@ -239,7 +276,7 @@ export function WorkspaceRolodex({ collapsed, onToggle }: WorkspaceRolodexProps)
           )}
 
           {/* Recent Section */}
-          {recentWorkspaces.length > 0 && (
+          {!isLoading && recentWorkspaces.length > 0 && (
             <div>
               {!collapsed && (
                 <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
@@ -256,7 +293,7 @@ export function WorkspaceRolodex({ collapsed, onToggle }: WorkspaceRolodexProps)
           )}
 
           {/* Collapsed view */}
-          {collapsed && (
+          {!isLoading && collapsed && (
             <div className="space-y-1">
               {sortedWorkspaces.map((ws) => (
                 <WorkspaceItem key={ws.id} workspace={ws} />
@@ -264,9 +301,10 @@ export function WorkspaceRolodex({ collapsed, onToggle }: WorkspaceRolodexProps)
             </div>
           )}
 
-          {sortedWorkspaces.length === 0 && !collapsed && (
+          {/* Empty state */}
+          {!isLoading && sortedWorkspaces.length === 0 && !collapsed && (
             <div className="p-4 text-center text-muted-foreground text-sm">
-              No workspaces found
+              No buyers found
             </div>
           )}
         </div>
