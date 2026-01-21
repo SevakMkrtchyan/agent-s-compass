@@ -14,6 +14,7 @@ import Analytics from "./pages/Analytics";
 import AddBuyer from "./pages/AddBuyer";
 import AddProperty from "./pages/AddProperty";
 import WorkspaceList from "./pages/WorkspaceList";
+import Buyers from "./pages/Buyers";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -37,8 +38,9 @@ const App = () => (
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/add-buyer" element={<AddBuyer />} />
           <Route path="/add-property" element={<AddProperty />} />
-          {/* Legacy routes redirect to agentgpt */}
-          <Route path="/buyers" element={<Navigate to="/agentgpt" replace />} />
+          {/* Buyers page */}
+          <Route path="/buyers" element={<Buyers />} />
+          {/* Legacy buyer route */}
           <Route path="/buyer/:buyerId" element={<Navigate to="/agentgpt" replace />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

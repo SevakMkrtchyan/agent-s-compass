@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useBuyers } from "@/hooks/useBuyers";
 
 const propertyTypes = [
   { id: "single-family", label: "Single Family" },
@@ -27,8 +28,10 @@ const propertyTypes = [
 export default function AddBuyer() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { createBuyer } = useBuyers();
   const [copied, setCopied] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -109,26 +112,51 @@ export default function AddBuyer() {
     return new Intl.NumberFormat("en-US").format(parseInt(numbers));
   };
 
-  const handleSubmit = () => {
-    if (!formData.fullName.trim() || !formData.email.trim()) {
+  const parseCurrency = (value: string): number | undefined => {
+    const numbers = value.replace(/\D/g, "");
+    return numbers ? parseInt(numbers) : undefined;
+  };
+
+  const handleSubmit = async () => {
+    if (!formData.fullName.trim()) {
       toast({
         title: "Missing required fields",
-        description: "Please fill in the buyer's name and email.",
+        description: "Please fill in the buyer's name.",
         variant: "destructive",
       });
       return;
     }
 
-    // In a real app, this would save to the database
-    const newWorkspaceId = `ws-${Date.now()}`;
-    
-    toast({
-      title: "Workspace created",
-      description: `Workspace created for ${formData.fullName}`,
-    });
+    setIsSubmitting(true);
 
-    // Navigate to the new workspace
-    navigate(`/workspace/${newWorkspaceId}`);
+    try {
+      const newBuyer = await createBuyer.mutateAsync({
+        name: formData.fullName.trim(),
+        email: formData.email.trim() || undefined,
+        phone: formData.phone.trim() || undefined,
+        avatar_url: avatarPreview || undefined,
+        budget_min: parseCurrency(formData.budgetMin),
+        budget_max: parseCurrency(formData.budgetMax),
+        pre_approval_status: formData.loanStatus === "not-started" ? "Not Started" :
+                            formData.loanStatus === "in-progress" ? "In Progress" : "Pre-Approved",
+        pre_approval_amount: parseCurrency(formData.preApprovalAmount),
+        min_beds: formData.minBedrooms ? parseInt(formData.minBedrooms) : undefined,
+        min_baths: formData.minBathrooms ? parseFloat(formData.minBathrooms) : undefined,
+        preferred_cities: formData.preferredAreas.length > 0 ? formData.preferredAreas : undefined,
+        property_types: formData.propertyTypes.length > 0 ? formData.propertyTypes : undefined,
+        must_haves: formData.mustHaves.trim() || undefined,
+        nice_to_haves: formData.niceToHaves.trim() || undefined,
+        agent_notes: formData.agentNotes.trim() || undefined,
+        portal_link: portalLink,
+      });
+
+      // Navigate to the new workspace using the buyer's ID
+      navigate(`/workspace/${newBuyer.id}`);
+    } catch (error) {
+      console.error("Error creating buyer:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -195,7 +223,7 @@ export default function AddBuyer() {
                 </div>
                 <div>
                   <Label htmlFor="email" className="text-xs text-muted-foreground">
-                    Email *
+                    Email
                   </Label>
                   <Input
                     id="email"
@@ -434,8 +462,8 @@ export default function AddBuyer() {
           <Button variant="ghost" onClick={() => navigate(-1)}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit}>
-            Create Workspace
+          <Button onClick={handleSubmit} disabled={isSubmitting}>
+            {isSubmitting ? "Creating..." : "Create Workspace"}
           </Button>
         </div>
       </div>
