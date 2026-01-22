@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
 import { useAgentGPT } from "@/hooks/useAgentGPT";
 import { useAgentGPTStream } from "@/hooks/useAgentGPTStream";
 import { useRecommendationCache } from "@/hooks/useRecommendationCache";
-import { useStage, type NextAction } from "@/hooks/useStages";
+import { useStage, type NextAction, type NextActionShowIf } from "@/hooks/useStages";
 import { useArtifacts } from "@/hooks/useArtifacts";
 import { useToast } from "@/hooks/use-toast";
 import { StreamingText, ThinkingDots } from "./StreamingText";
@@ -97,6 +97,42 @@ export function GuidedAgentGPT({
 
   const currentStageData = STAGES[currentStage];
 
+  // Filter actions based on show_if conditions and buyer data
+  const filterActionsByBuyerData = useCallback((actions: NextAction[], buyerData: Buyer): NextAction[] => {
+    return actions.filter(action => {
+      // If no show_if conditions, always show
+      if (!action.show_if) return true;
+
+      // Check each condition in show_if
+      for (const [field, allowedValues] of Object.entries(action.show_if)) {
+        if (!allowedValues) continue;
+
+        // Map show_if field names to buyer object keys
+        const buyerFieldMap: Record<string, string> = {
+          pre_approval_status: "pre_approval_status",
+          loan_pre_approval_status: "pre_approval_status", // alias
+        };
+
+        const buyerKey = buyerFieldMap[field] || field;
+        // Access buyer data dynamically - buyer may have additional fields from DB
+        const buyerValue = (buyerData as unknown as Record<string, unknown>)[buyerKey];
+
+        // If buyer doesn't have this field or value doesn't match allowed values, hide action
+        if (buyerValue === undefined || buyerValue === null) {
+          // Treat undefined/null as not matching any condition
+          continue;
+        }
+
+        const valueAsString = String(buyerValue);
+        if (!allowedValues.includes(valueAsString)) {
+          return false; // Hide this action
+        }
+      }
+
+      return true; // All conditions passed
+    });
+  }, []);
+
   // Convert database next_actions to RecommendedAction format
   const mapDbActionsToRecommended = useCallback((dbActions: NextAction[], buyerName: string): RecommendedAction[] => {
     return dbActions.map((action, idx) => ({
@@ -114,7 +150,9 @@ export function GuidedAgentGPT({
     const loadActions = async () => {
       // First priority: Use database stage actions if available
       if (dbStage?.next_actions && dbStage.next_actions.length > 0) {
-        const dbActions = mapDbActionsToRecommended(dbStage.next_actions, buyerName);
+        // Filter actions based on buyer data before mapping
+        const filteredActions = filterActionsByBuyerData(dbStage.next_actions, buyer);
+        const dbActions = mapDbActionsToRecommended(filteredActions, buyerName);
         setRecommendedActions(dbActions);
         setShowActions(true);
         return;

@@ -1,10 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
+export interface NextActionShowIf {
+  pre_approval_status?: string[];
+  [key: string]: string[] | undefined;
+}
+
 export interface NextAction {
   id: string;
   label: string;
   type: "task" | "generate";
+  show_if?: NextActionShowIf;
 }
 
 export interface Artifact {
