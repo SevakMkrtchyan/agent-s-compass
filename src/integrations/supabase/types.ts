@@ -421,6 +421,45 @@ export type Database = {
         }
         Relationships: []
       }
+      stages: {
+        Row: {
+          artifacts: Json | null
+          completion_criteria: Json | null
+          created_at: string
+          icon: string | null
+          id: string
+          next_actions: Json | null
+          stage_name: string
+          stage_number: number
+          stage_objective: string | null
+          updated_at: string
+        }
+        Insert: {
+          artifacts?: Json | null
+          completion_criteria?: Json | null
+          created_at?: string
+          icon?: string | null
+          id?: string
+          next_actions?: Json | null
+          stage_name: string
+          stage_number: number
+          stage_objective?: string | null
+          updated_at?: string
+        }
+        Update: {
+          artifacts?: Json | null
+          completion_criteria?: Json | null
+          created_at?: string
+          icon?: string | null
+          id?: string
+          next_actions?: Json | null
+          stage_name?: string
+          stage_number?: number
+          stage_objective?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
