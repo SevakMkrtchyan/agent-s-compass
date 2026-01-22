@@ -55,7 +55,7 @@ const mapStageNameToNumber = (stageName: string | null): 0 | 1 | 2 | 3 | 4 | 5 =
 };
 
 // Transform DB Buyer to local Buyer type for components
-const mapDbBuyerToLocal = (dbBuyer: Buyer): LocalBuyer => ({
+const mapDbBuyerToLocal = (dbBuyer: Buyer): LocalBuyer & { pre_approval_status?: string | null } => ({
   id: dbBuyer.id,
   name: dbBuyer.name,
   email: dbBuyer.email || "",
@@ -66,6 +66,8 @@ const mapDbBuyerToLocal = (dbBuyer: Buyer): LocalBuyer => ({
   financingConfirmed: dbBuyer.pre_approval_status === "Approved",
   buyerType: dbBuyer.buyer_type as LocalBuyer["buyerType"],
   marketContext: undefined,
+  // Preserve pre_approval_status for conditional action filtering
+  pre_approval_status: dbBuyer.pre_approval_status,
 });
 
 export default function Workspace() {
