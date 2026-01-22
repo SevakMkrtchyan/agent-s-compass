@@ -197,7 +197,7 @@ export function GuidedAgentGPT({
     if (!isStreaming && streamedContent) {
       setMessages(prev =>
         prev.map(msg =>
-          msg.status === "streaming" ? { ...msg, status: "complete", content: streamedContent } : msg
+          msg.status === "streaming" ? { ...msg, status: "pending", content: streamedContent } : msg
         )
       );
     }
@@ -484,7 +484,7 @@ function MessageBlock({
   }
 
   if (message.type === "artifact") {
-    const isPending = message.status !== "complete" && message.status !== "saved" && !isStreaming;
+    const isPending = message.status === "pending";
     const isSaved = message.status === "saved";
     
     return (
