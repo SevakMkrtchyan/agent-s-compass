@@ -16,7 +16,7 @@ import AddProperty from "./pages/AddProperty";
 import WorkspaceList from "./pages/WorkspaceList";
 import Buyers from "./pages/Buyers";
 import NotFound from "./pages/NotFound";
-
+import { StagesTest } from "./components/dev/StagesTest";
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -42,6 +42,8 @@ const App = () => (
           <Route path="/buyers" element={<Buyers />} />
           {/* Legacy buyer route */}
           <Route path="/buyer/:buyerId" element={<Navigate to="/agentgpt" replace />} />
+          {/* Dev routes */}
+          <Route path="/dev/stages-test" element={<StagesTest />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
