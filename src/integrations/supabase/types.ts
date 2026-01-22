@@ -41,6 +41,60 @@ export type Database = {
         }
         Relationships: []
       }
+      artifacts: {
+        Row: {
+          artifact_type: string
+          buyer_id: string
+          content: string
+          created_at: string
+          created_by: string | null
+          id: string
+          shared_at: string | null
+          stage_id: string | null
+          title: string
+          visibility: string
+        }
+        Insert: {
+          artifact_type: string
+          buyer_id: string
+          content: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          shared_at?: string | null
+          stage_id?: string | null
+          title: string
+          visibility?: string
+        }
+        Update: {
+          artifact_type?: string
+          buyer_id?: string
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          shared_at?: string | null
+          stage_id?: string | null
+          title?: string
+          visibility?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "artifacts_buyer_id_fkey"
+            columns: ["buyer_id"]
+            isOneToOne: false
+            referencedRelation: "buyers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "artifacts_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       buyer_data: {
         Row: {
           buyer_id: string

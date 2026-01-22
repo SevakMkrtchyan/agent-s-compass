@@ -15,6 +15,9 @@ import {
   RefreshCw,
   ClipboardList,
   Loader2,
+  Eye,
+  Lock,
+  Share2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -22,6 +25,7 @@ import { useAgentGPT } from "@/hooks/useAgentGPT";
 import { useAgentGPTStream } from "@/hooks/useAgentGPTStream";
 import { useRecommendationCache } from "@/hooks/useRecommendationCache";
 import { useStage, type NextAction } from "@/hooks/useStages";
+import { useArtifacts } from "@/hooks/useArtifacts";
 import { useToast } from "@/hooks/use-toast";
 import { StreamingText, ThinkingDots } from "./StreamingText";
 import type { StageGroup } from "@/types/conversation";
@@ -42,7 +46,8 @@ interface ChatMessage {
   type: "user" | "artifact" | "thinking";
   content: string;
   timestamp: Date;
-  status?: "streaming" | "complete" | "pending";
+  status?: "streaming" | "complete" | "pending" | "saved";
+  savedVisibility?: "internal" | "shared";
 }
 
 interface GuidedAgentGPTProps {
@@ -84,6 +89,7 @@ export function GuidedAgentGPT({
   const { isLoading, fetchRecommendedActions } = useAgentGPT();
   const { isStreaming, streamedContent, streamArtifact, streamThinking, clearStream, error: streamError } = useAgentGPTStream();
   const { getCachedActions, setCachedActions, lastRefreshed, isCacheHit } = useRecommendationCache();
+  const { createArtifact, isCreating } = useArtifacts(buyer.id);
   const { toast } = useToast();
   
   // Fetch stage data from database
@@ -294,6 +300,36 @@ export function GuidedAgentGPT({
     setMessages(prev => prev.filter(msg => msg.id !== messageId));
   };
 
+  const handleSaveArtifact = async (messageId: string, visibility: "internal" | "shared") => {
+    const message = messages.find(m => m.id === messageId);
+    if (!message || !message.content) return;
+
+    try {
+      // Generate a title from the first line or first 50 chars
+      const firstLine = message.content.split('\n')[0];
+      const title = firstLine.length > 50 ? firstLine.slice(0, 50) + '...' : firstLine;
+
+      await createArtifact({
+        buyer_id: buyer.id,
+        stage_id: dbStage?.id || null,
+        artifact_type: "agent-generated",
+        title,
+        content: message.content,
+        visibility,
+      });
+
+      setMessages(prev =>
+        prev.map(msg =>
+          msg.id === messageId 
+            ? { ...msg, status: "saved" as const, savedVisibility: visibility } 
+            : msg
+        )
+      );
+    } catch {
+      // Error handled by hook
+    }
+  };
+
   return (
     <div className="flex flex-col h-full w-full bg-[#f9fafb]">
       {/* Scrollable Content */}
@@ -351,8 +387,11 @@ export function GuidedAgentGPT({
                 key={message.id}
                 message={message}
                 isStreaming={message.status === "streaming"}
+                isSaving={isCreating}
                 onApprove={() => handleApproveArtifact(message.id)}
                 onDiscard={() => handleDiscardArtifact(message.id)}
+                onSaveInternal={() => handleSaveArtifact(message.id, "internal")}
+                onSaveShared={() => handleSaveArtifact(message.id, "shared")}
               />
             ))}
           </div>
@@ -400,13 +439,19 @@ export function GuidedAgentGPT({
 function MessageBlock({
   message,
   isStreaming,
+  isSaving,
   onApprove,
   onDiscard,
+  onSaveInternal,
+  onSaveShared,
 }: {
   message: ChatMessage;
   isStreaming: boolean;
+  isSaving: boolean;
   onApprove: () => void;
   onDiscard: () => void;
+  onSaveInternal: () => void;
+  onSaveShared: () => void;
 }) {
   if (message.type === "user") {
     return (
@@ -439,13 +484,24 @@ function MessageBlock({
   }
 
   if (message.type === "artifact") {
-    const isPending = message.status !== "complete" && !isStreaming;
+    const isPending = message.status !== "complete" && message.status !== "saved" && !isStreaming;
+    const isSaved = message.status === "saved";
+    
     return (
       <div className="max-w-3xl">
         <p className="text-xs uppercase tracking-widest text-muted-foreground/40 mb-4">
           Draft
-          {isPending && <span className="ml-2 text-warning normal-case">· Pending approval</span>}
-          {message.status === "complete" && !isStreaming && <span className="ml-2 text-success normal-case">· Approved</span>}
+          {isPending && <span className="ml-2 text-warning normal-case">· Ready to save</span>}
+          {isSaved && message.savedVisibility === "internal" && (
+            <span className="ml-2 text-muted-foreground normal-case flex items-center gap-1 inline-flex">
+              · <Lock className="h-3 w-3" /> Saved (internal)
+            </span>
+          )}
+          {isSaved && message.savedVisibility === "shared" && (
+            <span className="ml-2 text-success normal-case flex items-center gap-1 inline-flex">
+              · <Eye className="h-3 w-3" /> Saved & shared with buyer
+            </span>
+          )}
         </p>
         
         <div className="text-base leading-[1.75] text-foreground mb-8">
@@ -462,21 +518,28 @@ function MessageBlock({
 
         {isPending && (
           <div className="flex items-center gap-4 pt-6 border-t border-border/10">
-            <button className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-2 transition-colors">
-              <Edit3 className="h-4 w-4" />
-              Edit
-            </button>
             <button 
-              className="text-sm bg-foreground text-background px-4 py-2 hover:bg-foreground/90 flex items-center gap-2 transition-colors" 
-              onClick={onApprove}
+              className="text-sm border border-border/30 text-foreground px-4 py-2 hover:bg-muted/50 flex items-center gap-2 transition-colors disabled:opacity-50" 
+              onClick={onSaveInternal}
+              disabled={isSaving}
               style={{ borderRadius: '2px' }}
             >
-              <CheckCircle className="h-4 w-4" />
-              Approve
+              <Lock className="h-4 w-4" />
+              Save as Internal
+            </button>
+            <button 
+              className="text-sm bg-foreground text-background px-4 py-2 hover:bg-foreground/90 flex items-center gap-2 transition-colors disabled:opacity-50" 
+              onClick={onSaveShared}
+              disabled={isSaving}
+              style={{ borderRadius: '2px' }}
+            >
+              <Share2 className="h-4 w-4" />
+              Save & Share with Buyer
             </button>
             <button
               className="text-sm text-muted-foreground/40 hover:text-destructive transition-colors"
               onClick={onDiscard}
+              disabled={isSaving}
             >
               <Trash2 className="h-4 w-4" />
             </button>
