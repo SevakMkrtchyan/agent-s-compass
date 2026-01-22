@@ -539,7 +539,7 @@ function getCommandForAction(action: string, buyerName: string): { command: stri
 function getFallbackActions(stage: Stage, buyerName: string): RecommendedAction[] {
   const firstName = buyerName.split(" ")[0];
 
-  const baseActions: Record<Stage, RecommendedAction[]> = {
+  const baseActions: Partial<Record<Stage, RecommendedAction[]>> = {
     0: [
       { id: "1", label: "Set buyer expectations", command: "Draft buyer introduction and set expectations for the home buying journey", type: "artifact", icon: MessageSquare },
       { id: "2", label: "Confirm financing status", command: "Create task to confirm financing and pre-approval status", type: "artifact", icon: FileText },
