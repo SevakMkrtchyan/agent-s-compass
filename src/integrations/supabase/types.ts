@@ -475,6 +475,47 @@ export type Database = {
         }
         Relationships: []
       }
+      stage_completion: {
+        Row: {
+          buyer_id: string
+          completed_at: string | null
+          created_at: string
+          criteria_index: number
+          id: string
+          is_completed: boolean
+          stage_number: number
+          updated_at: string
+        }
+        Insert: {
+          buyer_id: string
+          completed_at?: string | null
+          created_at?: string
+          criteria_index: number
+          id?: string
+          is_completed?: boolean
+          stage_number: number
+          updated_at?: string
+        }
+        Update: {
+          buyer_id?: string
+          completed_at?: string | null
+          created_at?: string
+          criteria_index?: number
+          id?: string
+          is_completed?: boolean
+          stage_number?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stage_completion_buyer_id_fkey"
+            columns: ["buyer_id"]
+            isOneToOne: false
+            referencedRelation: "buyers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stages: {
         Row: {
           artifacts: Json | null
