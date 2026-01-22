@@ -9,17 +9,22 @@ import {
   ArrowUpRight,
   Sparkles,
   ExternalLink,
+  Lock,
+  Eye,
+  Loader2,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import type { Stage } from "@/types";
 import { STAGES } from "@/types";
-import type { StageGroup, AIExplanation, SystemEvent } from "@/types/conversation";
+import type { StageGroup, SystemEvent } from "@/types/conversation";
+import { useArtifacts, type Artifact } from "@/hooks/useArtifacts";
 
 interface ProgressTabProps {
   stages: StageGroup[];
   currentStage: Stage;
   buyerName: string;
+  buyerId: string;
   onPrefillAgentGPT: (command: string) => void;
   onOpenDetails: () => void;
 }
@@ -28,20 +33,16 @@ export function ProgressTab({
   stages,
   currentStage,
   buyerName,
+  buyerId,
   onPrefillAgentGPT,
 }: ProgressTabProps) {
-  const [selectedArtifact, setSelectedArtifact] = useState<AIExplanation | null>(null);
+  const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(null);
   const currentStageData = STAGES[currentStage];
 
-  // Extract approved artifacts
-  const approvedArtifacts = stages.flatMap(stage => 
-    stage.items.filter(item => 
-      item.type === "ai-explanation" && 
-      (item as AIExplanation).approvalStatus === "approved"
-    )
-  ) as AIExplanation[];
+  // Fetch artifacts from database
+  const { artifacts, isLoading: artifactsLoading } = useArtifacts(buyerId);
 
-  // Extract system events
+  // Extract system events from stages (keep this for activity log)
   const systemEvents = stages.flatMap(stage =>
     stage.items.filter(item => item.type === "system-event")
   ) as SystemEvent[];
@@ -77,7 +78,7 @@ export function ProgressTab({
     }
   };
 
-  const handleArtifactClick = (artifact: AIExplanation) => {
+  const handleArtifactClick = (artifact: Artifact) => {
     setSelectedArtifact(artifact);
   };
 
@@ -204,20 +205,30 @@ export function ProgressTab({
           </div>
         </div>
 
-        {/* Published Artifacts */}
-        {approvedArtifacts.length > 0 && (
-          <div className="max-w-3xl mb-12">
-            <div className="flex items-center justify-between mb-6">
-              <p className="text-xs uppercase tracking-wider" style={{ color: '#9ca3af' }}>
-                Published Artifacts
-              </p>
+        {/* Saved Artifacts */}
+        <div className="max-w-3xl mb-12">
+          <div className="flex items-center justify-between mb-6">
+            <p className="text-xs uppercase tracking-wider" style={{ color: '#9ca3af' }}>
+              Saved Artifacts
+            </p>
+            {artifactsLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" style={{ color: '#9ca3af' }} />
+            ) : (
               <span className="text-xs" style={{ color: '#9ca3af' }}>
-                {approvedArtifacts.length} visible to buyer
+                {artifacts?.filter(a => a.visibility === "shared").length || 0} shared with buyer
               </span>
+            )}
+          </div>
+          
+          {artifactsLoading ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-16 bg-muted/30 rounded animate-pulse" />
+              ))}
             </div>
-            
+          ) : artifacts && artifacts.length > 0 ? (
             <div className="space-y-0">
-              {approvedArtifacts.slice(0, 5).map((artifact) => (
+              {artifacts.slice(0, 10).map((artifact) => (
                 <button
                   key={artifact.id}
                   onClick={() => handleArtifactClick(artifact)}
@@ -225,14 +236,23 @@ export function ProgressTab({
                   style={{ borderBottom: '1px solid #f3f4f6' }}
                 >
                   <div className="flex items-start gap-4 flex-1 min-w-0">
-                    <CheckCircle className="h-4 w-4 mt-0.5 shrink-0" style={{ color: '#10b981' }} />
+                    {artifact.visibility === "shared" ? (
+                      <Eye className="h-4 w-4 mt-0.5 shrink-0" style={{ color: '#10b981' }} />
+                    ) : (
+                      <Lock className="h-4 w-4 mt-0.5 shrink-0" style={{ color: '#9ca3af' }} />
+                    )}
                     <div className="min-w-0">
-                      <p className="text-base line-clamp-2" style={{ color: '#374151' }}>
-                        {artifact.content.slice(0, 100)}...
+                      <p className="text-base" style={{ color: '#374151' }}>
+                        {artifact.title}
                       </p>
-                      <p className="text-sm mt-1" style={{ color: '#9ca3af' }}>
-                        Published {formatTime(artifact.approvedAt || artifact.timestamp)}
-                      </p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-sm" style={{ color: '#9ca3af' }}>
+                          {formatTime(new Date(artifact.created_at))}
+                        </span>
+                        <span className="text-sm" style={{ color: artifact.visibility === "shared" ? '#10b981' : '#9ca3af' }}>
+                          · {artifact.visibility === "shared" ? "Visible to buyer" : "Internal only"}
+                        </span>
+                      </div>
                     </div>
                   </div>
                   <ExternalLink 
@@ -242,18 +262,22 @@ export function ProgressTab({
                 </button>
               ))}
             </div>
+          ) : (
+            <p className="text-sm py-4" style={{ color: '#9ca3af' }}>
+              No artifacts saved yet. Generate content in AgentGPT and save it here.
+            </p>
+          )}
 
-            {approvedArtifacts.length > 5 && (
-              <button
-                onClick={() => onPrefillAgentGPT("Show all published artifacts and their status")}
-                className="mt-4 text-sm transition-colors hover:underline underline-offset-4"
-                style={{ color: '#6b7280' }}
-              >
-                View all {approvedArtifacts.length} artifacts →
-              </button>
-            )}
-          </div>
-        )}
+          {artifacts && artifacts.length > 10 && (
+            <button
+              onClick={() => onPrefillAgentGPT("Show all saved artifacts and their status")}
+              className="mt-4 text-sm transition-colors hover:underline underline-offset-4"
+              style={{ color: '#6b7280' }}
+            >
+              View all {artifacts.length} artifacts →
+            </button>
+          )}
+        </div>
 
         {/* Artifact Preview Modal */}
         {selectedArtifact && (
@@ -268,9 +292,16 @@ export function ProgressTab({
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-6">
-                <p className="text-xs uppercase tracking-wider" style={{ color: '#9ca3af' }}>
-                  Published Artifact
-                </p>
+                <div className="flex items-center gap-2">
+                  {selectedArtifact.visibility === "shared" ? (
+                    <Eye className="h-4 w-4" style={{ color: '#10b981' }} />
+                  ) : (
+                    <Lock className="h-4 w-4" style={{ color: '#9ca3af' }} />
+                  )}
+                  <p className="text-xs uppercase tracking-wider" style={{ color: '#9ca3af' }}>
+                    {selectedArtifact.visibility === "shared" ? "Shared with buyer" : "Internal only"}
+                  </p>
+                </div>
                 <button
                   onClick={() => setSelectedArtifact(null)}
                   className="text-sm hover:underline"
@@ -279,13 +310,20 @@ export function ProgressTab({
                   Close
                 </button>
               </div>
+              <h3 className="text-lg font-medium mb-4" style={{ color: '#111827' }}>
+                {selectedArtifact.title}
+              </h3>
               <div className="prose prose-sm max-w-none" style={{ color: '#374151' }}>
                 <p className="whitespace-pre-wrap leading-relaxed">{selectedArtifact.content}</p>
               </div>
+              <p className="text-sm mt-6" style={{ color: '#9ca3af' }}>
+                Created {formatTime(new Date(selectedArtifact.created_at))}
+                {selectedArtifact.shared_at && ` · Shared ${formatTime(new Date(selectedArtifact.shared_at))}`}
+              </p>
               <div className="mt-8 pt-6 flex gap-4" style={{ borderTop: '1px solid #e5e7eb' }}>
                 <button
                   onClick={() => {
-                    onPrefillAgentGPT(`Edit and update this artifact: "${selectedArtifact.content.slice(0, 50)}..."`);
+                    onPrefillAgentGPT(`Edit and update this artifact: "${selectedArtifact.title}"`);
                     setSelectedArtifact(null);
                   }}
                   className="text-sm hover:underline underline-offset-4"

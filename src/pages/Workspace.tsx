@@ -317,6 +317,7 @@ export default function Workspace() {
                 stages={conversationStages}
                 currentStage={currentStage}
                 buyerName={buyer.name}
+                buyerId={buyer.id}
                 onPrefillAgentGPT={handlePrefillAgentGPT}
                 onOpenDetails={() => setDetailsOpen(true)}
               />
