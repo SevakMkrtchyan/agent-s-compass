@@ -13,12 +13,15 @@ import {
   MessageSquare,
   DollarSign,
   RefreshCw,
+  ClipboardList,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAgentGPT } from "@/hooks/useAgentGPT";
 import { useAgentGPTStream } from "@/hooks/useAgentGPTStream";
 import { useRecommendationCache } from "@/hooks/useRecommendationCache";
+import { useStage, type NextAction } from "@/hooks/useStages";
 import { useToast } from "@/hooks/use-toast";
 import { StreamingText, ThinkingDots } from "./StreamingText";
 import type { StageGroup } from "@/types/conversation";
@@ -31,6 +34,7 @@ interface RecommendedAction {
   command: string;
   type: "artifact" | "thinking";
   icon?: React.ElementType;
+  dbType?: "task" | "generate";
 }
 
 interface ChatMessage {
@@ -81,50 +85,46 @@ export function GuidedAgentGPT({
   const { isStreaming, streamedContent, streamArtifact, streamThinking, clearStream, error: streamError } = useAgentGPTStream();
   const { getCachedActions, setCachedActions, lastRefreshed, isCacheHit } = useRecommendationCache();
   const { toast } = useToast();
+  
+  // Fetch stage data from database
+  const { data: dbStage, isLoading: stageLoading } = useStage(currentStage);
 
   const currentStageData = STAGES[currentStage];
 
-  // Load actions on mount or buyer change
+  // Convert database next_actions to RecommendedAction format
+  const mapDbActionsToRecommended = useCallback((dbActions: NextAction[], buyerName: string): RecommendedAction[] => {
+    return dbActions.map((action, idx) => ({
+      id: action.id || `action-${idx}`,
+      label: action.label,
+      command: generateCommandFromDbAction(action, buyerName),
+      type: "artifact" as const,
+      dbType: action.type,
+      icon: getIconForDbAction(action),
+    }));
+  }, []);
+
+  // Load actions on mount, buyer change, or when stage data loads
   useEffect(() => {
     const loadActions = async () => {
-      const fallback = getFallbackActions(currentStage, buyerName);
-      setRecommendedActions(fallback);
-      setShowActions(true);
-
-      const cached = getCachedActions(buyer.id);
-
-      if (cached && !cached.isStale) {
-        const actionsWithIcons = cached.actions.map(action => ({
-          ...action,
-          icon: getIconForAction(action),
-        }));
-        setRecommendedActions(actionsWithIcons);
+      // First priority: Use database stage actions if available
+      if (dbStage?.next_actions && dbStage.next_actions.length > 0) {
+        const dbActions = mapDbActionsToRecommended(dbStage.next_actions, buyerName);
+        setRecommendedActions(dbActions);
+        setShowActions(true);
         return;
       }
 
-      setIsRefreshing(true);
-      try {
-        const actions = await fetchRecommendedActions(buyer);
-        if (actions.length > 0) {
-          const actionsWithIcons = actions.map(action => ({
-            ...action,
-            icon: getIconForAction(action),
-          }));
-          setRecommendedActions(actionsWithIcons);
-          await setCachedActions(buyer.id, actions);
-        }
-      } catch (err) {
-        console.error("Failed to fetch actions:", err);
-      } finally {
-        setIsRefreshing(false);
-      }
+      // Fallback to hardcoded actions while DB loads
+      const fallback = getFallbackActions(currentStage, buyerName);
+      setRecommendedActions(fallback);
+      setShowActions(true);
     };
 
     setMessages([]);
     setShowActions(true);
     setHasTriggeredInitial(false);
     loadActions();
-  }, [buyer.id, currentStage, buyerName]);
+  }, [buyer.id, currentStage, buyerName, dbStage, mapDbActionsToRecommended]);
 
   // Handle initial action/command from URL params
   useEffect(() => {
@@ -300,11 +300,13 @@ export function GuidedAgentGPT({
       <div ref={scrollRef} className="flex-1 overflow-y-auto">
         <div className="w-full px-4 sm:px-6 md:px-8 lg:px-12 py-8 md:py-12">
           
-          {/* Minimal Context */}
+          {/* Stage Context */}
           <p className="text-xs text-muted-foreground/40 mb-8">
-            {lastRefreshed && (
-              <span>{isCacheHit ? "Cached" : "Updated"} {formatTime(lastRefreshed)}</span>
-            )}
+            {dbStage ? (
+              <span>Stage {currentStage}: {dbStage.stage_name}</span>
+            ) : stageLoading ? (
+              <span>Loading stage data...</span>
+            ) : null}
           </p>
 
           {/* Recommended Actions - Plain Text */}
@@ -312,31 +314,33 @@ export function GuidedAgentGPT({
             <div className="mb-16">
               <div className="flex items-center gap-3 mb-10">
                 <h2 className="text-2xl md:text-3xl font-medium text-foreground">What would you like to do for {buyerName}?</h2>
-                <button
-                  onClick={handleRefresh}
-                  disabled={isRefreshing || isLoading}
-                  className="text-muted-foreground/30 hover:text-muted-foreground transition-colors"
-                >
-                  <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
-                </button>
+                {stageLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
               </div>
 
-              <div className="space-y-0">
-                {recommendedActions.slice(0, 4).map((action, idx) => (
-                  <button
-                    key={action.id}
-                    onClick={() => handleRecommendationClick(action)}
-                    disabled={isStreaming}
-                    className={cn(
-                      "w-full text-left py-4 text-lg text-foreground/70 hover:text-foreground transition-colors",
-                      "disabled:opacity-50 disabled:cursor-not-allowed",
-                      idx < 3 && "border-b border-border/10"
-                    )}
-                  >
-                    {action.label}
-                  </button>
-                ))}
-              </div>
+              {stageLoading ? (
+                <div className="space-y-4">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="h-6 bg-muted/30 rounded animate-pulse w-3/4" />
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-0">
+                  {recommendedActions.slice(0, 4).map((action, idx) => (
+                    <button
+                      key={action.id}
+                      onClick={() => handleRecommendationClick(action)}
+                      disabled={isStreaming}
+                      className={cn(
+                        "w-full text-left py-4 text-lg text-foreground/70 hover:text-foreground transition-colors",
+                        "disabled:opacity-50 disabled:cursor-not-allowed",
+                        idx < 3 && "border-b border-border/10"
+                      )}
+                    >
+                      {action.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -509,6 +513,44 @@ function getIconForAction(action: RecommendedAction): React.ElementType {
   if (action.type === "thinking") return Info;
 
   return Sparkles;
+}
+
+// Generate command string from database action
+function generateCommandFromDbAction(action: NextAction, buyerName: string): string {
+  const firstName = buyerName.split(" ")[0];
+  
+  // Map action IDs to specific commands
+  const commandMap: Record<string, string> = {
+    "schedule-consultation": `Create a task to schedule a consultation call with ${buyerName}`,
+    "prep-consultation": `Prepare a consultation agenda for my upcoming call with ${firstName}`,
+    "create-strategy-brief": `Create a buyer strategy brief for ${buyerName} based on their preferences and goals`,
+    "share-process-overview": `Draft a home buying process overview to share with ${firstName}`,
+  };
+
+  // Check if we have a specific command for this action ID
+  if (commandMap[action.id]) {
+    return commandMap[action.id];
+  }
+
+  // Generate command from label if no specific mapping
+  const actionVerb = action.type === "task" ? "Create a task to" : "Generate";
+  return `${actionVerb} ${action.label.toLowerCase()} for ${buyerName}`;
+}
+
+// Get icon based on database action type and label
+function getIconForDbAction(action: NextAction): React.ElementType {
+  const label = action.label.toLowerCase();
+  
+  if (label.includes("schedule") || label.includes("call")) return MessageSquare;
+  if (label.includes("prep") || label.includes("agenda") || label.includes("checklist")) return ClipboardList;
+  if (label.includes("strategy") || label.includes("brief")) return FileText;
+  if (label.includes("overview") || label.includes("process")) return Info;
+  if (label.includes("offer") || label.includes("price")) return DollarSign;
+  if (label.includes("property") || label.includes("home")) return Home;
+  if (label.includes("market") || label.includes("comp")) return BarChart3;
+  
+  // Default icons by type
+  return action.type === "task" ? ClipboardList : Sparkles;
 }
 
 function getCommandForAction(action: string, buyerName: string): { command: string; type: "artifact" | "thinking" } | null {
