@@ -12,13 +12,20 @@ import {
   Lock,
   Eye,
   Loader2,
+  Square,
+  CheckSquare,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import type { Stage } from "@/types";
 import { STAGES } from "@/types";
 import type { StageGroup, SystemEvent } from "@/types/conversation";
 import { useArtifacts, type Artifact } from "@/hooks/useArtifacts";
+import { useStage } from "@/hooks/useStages";
+import { useStageCompletion } from "@/hooks/useStageCompletion";
+import { useBuyers } from "@/hooks/useBuyers";
+import { useToast } from "@/hooks/use-toast";
 
 interface ProgressTabProps {
   stages: StageGroup[];
@@ -38,10 +45,24 @@ export function ProgressTab({
 }: ProgressTabProps) {
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(null);
   const currentStageData = STAGES[currentStage];
+  const { toast } = useToast();
 
   // Fetch artifacts from database
   const { artifacts, isLoading: artifactsLoading } = useArtifacts(buyerId);
-
+  
+  // Fetch stage data from database for completion criteria
+  const { data: dbStage, isLoading: stageLoading } = useStage(currentStage);
+  
+  // Fetch stage completion status
+  const { 
+    isCriterionCompleted, 
+    allCriteriaCompleted, 
+    toggleCriterion,
+    isLoading: completionLoading 
+  } = useStageCompletion(buyerId, currentStage);
+  
+  // Get buyer mutation for advancing stage
+  const { updateBuyer } = useBuyers();
   // Extract system events from stages (keep this for activity log)
   const systemEvents = stages.flatMap(stage =>
     stage.items.filter(item => item.type === "system-event")
@@ -69,14 +90,50 @@ export function ProgressTab({
     onPrefillAgentGPT(command);
   };
 
-  const handleAdvanceStage = () => {
+  const handleAdvanceStage = async () => {
     const nextStageIndex = currentStage + 1;
-    if (nextStageIndex <= 5) {
-      const nextStage = STAGES[nextStageIndex as Stage];
-      const command = `Check CA compliance prerequisites and advance ${buyerName} from ${currentStageData.title} to ${nextStage.title}. Verify all required documents are complete (BR-11, disclosures) and generate a stage transition confirmation draft for the buyer.`;
-      onPrefillAgentGPT(command);
+    if (nextStageIndex <= 9) {
+      // Get the next stage name from the stages array
+      const stageNames = [
+        "Readiness & Expectations",
+        "Home Search", 
+        "Showings",
+        "Making an Offer",
+        "Under Contract",
+        "Closing",
+        "Post-Closing",
+        "Nurture",
+        "Referral",
+        "Archived"
+      ];
+      const nextStageName = stageNames[nextStageIndex];
+      
+      try {
+        await updateBuyer.mutateAsync({
+          id: buyerId,
+          current_stage: nextStageName,
+        });
+        toast({
+          title: "Stage advanced",
+          description: `${buyerName} has been moved to ${nextStageName}`,
+        });
+      } catch (error) {
+        toast({
+          title: "Error advancing stage",
+          description: "Please try again.",
+          variant: "destructive",
+        });
+      }
     }
   };
+
+  const handleToggleCriterion = (index: number) => {
+    const currentValue = isCriterionCompleted(index);
+    toggleCriterion.mutate({ criteriaIndex: index, isCompleted: !currentValue });
+  };
+
+  const completionCriteria = dbStage?.completion_criteria || [];
+  const canAdvanceStage = allCriteriaCompleted(completionCriteria.length);
 
   const handleArtifactClick = (artifact: Artifact) => {
     setSelectedArtifact(artifact);
@@ -123,17 +180,85 @@ export function ProgressTab({
               <Sparkles className="h-4 w-4" />
               Generate next steps
             </button>
-            {currentStage < 5 && (
+            {currentStage < 9 && (
               <button
                 onClick={handleAdvanceStage}
-                className="inline-flex items-center gap-2 text-base transition-colors hover:underline underline-offset-4"
-                style={{ color: '#374151' }}
+                disabled={!canAdvanceStage || updateBuyer.isPending}
+                className={cn(
+                  "inline-flex items-center gap-2 text-base transition-colors",
+                  canAdvanceStage 
+                    ? "hover:underline underline-offset-4" 
+                    : "opacity-50 cursor-not-allowed"
+                )}
+                style={{ color: canAdvanceStage ? '#374151' : '#9ca3af' }}
               >
                 <ArrowUpRight className="h-4 w-4" />
-                Advance stage
+                {updateBuyer.isPending ? "Advancing..." : "Advance stage"}
               </button>
             )}
           </div>
+        </div>
+
+        <hr className="max-w-3xl mb-10" style={{ borderColor: '#e5e7eb' }} />
+
+        {/* Stage Completion Section */}
+        <div className="max-w-3xl mb-12">
+          <p className="text-xs uppercase tracking-wider mb-6" style={{ color: '#9ca3af' }}>
+            Stage Completion
+          </p>
+          
+          {stageLoading || completionLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-6 bg-muted/30 rounded animate-pulse" />
+              ))}
+            </div>
+          ) : completionCriteria.length > 0 ? (
+            <div className="space-y-3">
+              {completionCriteria.map((criterion, index) => {
+                const isCompleted = isCriterionCompleted(index);
+                return (
+                  <button
+                    key={index}
+                    onClick={() => handleToggleCriterion(index)}
+                    disabled={toggleCriterion.isPending}
+                    className="w-full flex items-start gap-3 py-2 text-left group transition-colors hover:bg-muted/20 rounded px-2 -mx-2"
+                  >
+                    <Checkbox
+                      checked={isCompleted}
+                      className="mt-0.5"
+                      onCheckedChange={() => handleToggleCriterion(index)}
+                    />
+                    <span 
+                      className={cn(
+                        "text-base leading-relaxed",
+                        isCompleted && "line-through"
+                      )}
+                      style={{ color: isCompleted ? '#9ca3af' : '#374151' }}
+                    >
+                      {criterion}
+                    </span>
+                  </button>
+                );
+              })}
+              
+              {/* Progress summary */}
+              <div className="pt-4 flex items-center justify-between">
+                <span className="text-sm" style={{ color: '#9ca3af' }}>
+                  {completionCriteria.filter((_, i) => isCriterionCompleted(i)).length} of {completionCriteria.length} completed
+                </span>
+                {canAdvanceStage && (
+                  <span className="text-sm font-medium" style={{ color: '#10b981' }}>
+                    ✓ Ready to advance
+                  </span>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm py-2" style={{ color: '#9ca3af' }}>
+              No completion criteria defined for this stage.
+            </p>
+          )}
         </div>
 
         <hr className="max-w-3xl mb-10" style={{ borderColor: '#e5e7eb' }} />

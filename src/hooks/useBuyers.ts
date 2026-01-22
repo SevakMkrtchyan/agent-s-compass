@@ -45,6 +45,7 @@ export interface CreateBuyerInput {
   nice_to_haves?: string;
   agent_notes?: string;
   portal_link?: string;
+  current_stage?: string;
 }
 
 export interface UpdateBuyerInput extends Partial<CreateBuyerInput> {
