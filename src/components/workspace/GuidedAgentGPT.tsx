@@ -168,7 +168,7 @@ export function GuidedAgentGPT({
     setShowActions(true);
     setHasTriggeredInitial(false);
     loadActions();
-  }, [buyer.id, currentStage, buyerName, dbStage, mapDbActionsToRecommended]);
+  }, [buyer, currentStage, buyerName, dbStage, filterActionsByBuyerData, mapDbActionsToRecommended]);
 
   // Handle initial action/command from URL params
   useEffect(() => {
