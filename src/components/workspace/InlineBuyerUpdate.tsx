@@ -169,29 +169,60 @@ export function InlineBuyerUpdate({
 export function detectMissingField(content: string): MissingField | null {
   const lowerContent = content.toLowerCase();
   
+  console.log("[detectMissingField] Checking content:", lowerContent.slice(0, 200));
+  
   // Patterns that indicate missing pre-approval amount
-  if (
-    lowerContent.includes("pre-approval amount") ||
-    lowerContent.includes("preapproval amount") ||
-    lowerContent.includes("need") && lowerContent.includes("approval") && lowerContent.includes("amount")
-  ) {
+  const preApprovalPatterns = [
+    "pre-approval amount",
+    "preapproval amount",
+    "pre approval amount",
+    "compliance blocker",
+    "need the pre-approval",
+    "require pre-approval",
+    "missing pre-approval",
+    "no pre-approval",
+    "without pre-approval",
+    "pre-approval letter",
+    "financing information",
+    "pre-approval data",
+    "buyer's pre-approval",
+    "buyer pre-approval",
+  ];
+  
+  const hasPreApprovalMissing = preApprovalPatterns.some(pattern => lowerContent.includes(pattern));
+  
+  // Also check for combination patterns
+  const needsPreApproval = (
+    (lowerContent.includes("need") || lowerContent.includes("require") || lowerContent.includes("missing")) &&
+    (lowerContent.includes("pre-approval") || lowerContent.includes("preapproval") || lowerContent.includes("approval amount"))
+  );
+  
+  if (hasPreApprovalMissing || needsPreApproval) {
+    console.log("[detectMissingField] Detected missing: pre_approval_amount");
     return "pre_approval_amount";
   }
 
   // Patterns for missing budget
-  if (
-    (lowerContent.includes("maximum budget") || lowerContent.includes("budget max")) &&
-    (lowerContent.includes("need") || lowerContent.includes("missing") || lowerContent.includes("provide"))
-  ) {
+  const hasBudgetMaxMissing = (
+    (lowerContent.includes("maximum budget") || lowerContent.includes("budget max") || lowerContent.includes("max budget")) &&
+    (lowerContent.includes("need") || lowerContent.includes("missing") || lowerContent.includes("provide") || lowerContent.includes("require"))
+  );
+  
+  if (hasBudgetMaxMissing) {
+    console.log("[detectMissingField] Detected missing: budget_max");
     return "budget_max";
   }
 
-  if (
-    (lowerContent.includes("minimum budget") || lowerContent.includes("budget min")) &&
-    (lowerContent.includes("need") || lowerContent.includes("missing") || lowerContent.includes("provide"))
-  ) {
+  const hasBudgetMinMissing = (
+    (lowerContent.includes("minimum budget") || lowerContent.includes("budget min") || lowerContent.includes("min budget")) &&
+    (lowerContent.includes("need") || lowerContent.includes("missing") || lowerContent.includes("provide") || lowerContent.includes("require"))
+  );
+  
+  if (hasBudgetMinMissing) {
+    console.log("[detectMissingField] Detected missing: budget_min");
     return "budget_min";
   }
 
+  console.log("[detectMissingField] No missing field detected");
   return null;
 }
