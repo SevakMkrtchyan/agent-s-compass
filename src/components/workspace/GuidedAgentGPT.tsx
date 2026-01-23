@@ -324,27 +324,33 @@ export function GuidedAgentGPT({
     setIsUpdatingBuyer(true);
     
     try {
-      // Map field name to database column
-      const fieldMap: Record<MissingField, string> = {
-        pre_approval_amount: "pre_approval_amount",
-        budget_max: "budget_max",
-        budget_min: "budget_min",
-      };
-
-      const dbField = fieldMap[field];
+      // Build the update payload
+      const updatePayload: Record<string, unknown> = {};
+      
+      // Map field name to database column and add to payload
+      if (field === "pre_approval_amount") {
+        updatePayload.pre_approval_amount = value;
+        // Automatically set status to Pre-Approved when amount is entered
+        updatePayload.pre_approval_status = "Pre-Approved";
+      } else if (field === "budget_max") {
+        updatePayload.budget_max = value;
+      } else if (field === "budget_min") {
+        updatePayload.budget_min = value;
+      }
       
       // Update buyer in database
       const { error } = await supabase
         .from("buyers")
-        .update({ [dbField]: value })
+        .update(updatePayload)
         .eq("id", buyer.id);
 
       if (error) throw error;
 
-      // Create updated buyer object
+      // Create updated buyer object with all changed fields
       const updatedBuyer: Buyer = {
         ...buyerRef.current,
         [field]: value,
+        ...(field === "pre_approval_amount" ? { pre_approval_status: "Pre-Approved" } : {}),
       };
 
       // Notify parent to update buyer state
