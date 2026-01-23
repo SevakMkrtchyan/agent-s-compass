@@ -11,6 +11,18 @@ export interface Buyer {
   financingConfirmed: boolean;
   buyerType?: 'first-time' | 'move-up' | 'investor' | 'downsizing';
   marketContext?: string;
+  // Extended profile fields for AgentGPT context
+  pre_approval_status?: string | null;
+  pre_approval_amount?: number | null;
+  budget_min?: number | null;
+  budget_max?: number | null;
+  preferred_cities?: string[] | null;
+  property_types?: string[] | null;
+  min_beds?: number | null;
+  min_baths?: number | null;
+  must_haves?: string | null;
+  nice_to_haves?: string | null;
+  agent_notes?: string | null;
 }
 
 export interface Property {

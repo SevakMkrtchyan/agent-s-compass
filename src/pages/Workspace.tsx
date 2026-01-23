@@ -55,7 +55,7 @@ const mapStageNameToNumber = (stageName: string | null): 0 | 1 | 2 | 3 | 4 | 5 =
 };
 
 // Transform DB Buyer to local Buyer type for components
-const mapDbBuyerToLocal = (dbBuyer: Buyer): LocalBuyer & { pre_approval_status?: string | null } => ({
+const mapDbBuyerToLocal = (dbBuyer: Buyer): LocalBuyer => ({
   id: dbBuyer.id,
   name: dbBuyer.name,
   email: dbBuyer.email || "",
@@ -66,8 +66,18 @@ const mapDbBuyerToLocal = (dbBuyer: Buyer): LocalBuyer & { pre_approval_status?:
   financingConfirmed: dbBuyer.pre_approval_status === "Approved",
   buyerType: dbBuyer.buyer_type as LocalBuyer["buyerType"],
   marketContext: undefined,
-  // Preserve pre_approval_status for conditional action filtering
+  // Extended profile fields for AgentGPT context
   pre_approval_status: dbBuyer.pre_approval_status,
+  pre_approval_amount: dbBuyer.pre_approval_amount,
+  budget_min: dbBuyer.budget_min,
+  budget_max: dbBuyer.budget_max,
+  preferred_cities: dbBuyer.preferred_cities,
+  property_types: dbBuyer.property_types,
+  min_beds: dbBuyer.min_beds,
+  min_baths: dbBuyer.min_baths,
+  must_haves: dbBuyer.must_haves,
+  nice_to_haves: dbBuyer.nice_to_haves,
+  agent_notes: dbBuyer.agent_notes,
 });
 
 export default function Workspace() {
