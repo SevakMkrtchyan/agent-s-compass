@@ -244,22 +244,30 @@ export function GuidedAgentGPT({
 
   useEffect(() => {
     if (!isStreaming && streamedContent) {
+      console.log("[GuidedAgentGPT] Stream complete, detecting missing fields...");
+      console.log("[GuidedAgentGPT] Content length:", streamedContent.length);
+      
       // Detect if AI response indicates missing data
       const missingField = detectMissingField(streamedContent);
       
-      setMessages(prev =>
-        prev.map(msg =>
+      console.log("[GuidedAgentGPT] Missing field result:", missingField);
+      console.log("[GuidedAgentGPT] Pending command:", pendingCommand?.command);
+      
+      setMessages(prev => {
+        const updated = prev.map(msg =>
           msg.status === "streaming" 
             ? { 
                 ...msg, 
-                status: "pending", 
+                status: "pending" as const, 
                 content: streamedContent,
                 missingField,
                 originalCommand: pendingCommand?.command,
               } 
             : msg
-        )
-      );
+        );
+        console.log("[GuidedAgentGPT] Updated messages:", updated.map(m => ({ id: m.id, status: m.status, missingField: m.missingField })));
+        return updated;
+      });
     }
   }, [isStreaming, streamedContent, pendingCommand]);
 
@@ -625,6 +633,13 @@ function MessageBlock({
     const isPending = message.status === "pending";
     const isSaved = message.status === "saved";
     const hasMissingField = message.missingField && isPending;
+    
+    console.log("[MessageBlock] Rendering artifact:", { 
+      messageId: message.id, 
+      isPending, 
+      missingField: message.missingField, 
+      hasMissingField 
+    });
     
     return (
       <div className="max-w-3xl">
