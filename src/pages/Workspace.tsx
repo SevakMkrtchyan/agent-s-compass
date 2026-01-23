@@ -97,11 +97,24 @@ export default function Workspace() {
   // Fetch buyer from database
   const { data: dbBuyer, isLoading } = useBuyer(workspaceId);
 
-  // Transform to local format
+  // State to hold the buyer with potential inline updates
+  const [localBuyerOverrides, setLocalBuyerOverrides] = useState<Partial<LocalBuyer>>({});
+
+  // Transform to local format and merge with local overrides
   const buyer = useMemo(() => {
     if (!dbBuyer) return null;
-    return mapDbBuyerToLocal(dbBuyer);
-  }, [dbBuyer]);
+    return { ...mapDbBuyerToLocal(dbBuyer), ...localBuyerOverrides };
+  }, [dbBuyer, localBuyerOverrides]);
+
+  // Handler for inline buyer updates from AgentGPT
+  const handleBuyerUpdated = useCallback((updatedBuyer: LocalBuyer) => {
+    setLocalBuyerOverrides(prev => ({
+      ...prev,
+      pre_approval_amount: updatedBuyer.pre_approval_amount,
+      budget_min: updatedBuyer.budget_min,
+      budget_max: updatedBuyer.budget_max,
+    }));
+  }, []);
 
   const currentStage = buyer?.currentStage ?? 1;
 
@@ -320,6 +333,7 @@ export default function Workspace() {
                 onPrefillFromProgress={(cmd) => setPrefillCommand(cmd)}
                 initialAction={initialAction}
                 initialCommand={initialCommand}
+                onBuyerUpdated={handleBuyerUpdated}
               />
             </TabsContent>
 

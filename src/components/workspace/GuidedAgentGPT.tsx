@@ -28,9 +28,11 @@ import { useStage, type NextAction, type NextActionShowIf } from "@/hooks/useSta
 import { useArtifacts } from "@/hooks/useArtifacts";
 import { useToast } from "@/hooks/use-toast";
 import { StreamingText, ThinkingDots } from "./StreamingText";
+import { InlineBuyerUpdate, detectMissingField, type MissingField } from "./InlineBuyerUpdate";
 import type { StageGroup } from "@/types/conversation";
 import type { Stage, Buyer } from "@/types";
 import { STAGES } from "@/types";
+import { supabase } from "@/integrations/supabase/client";
 
 interface RecommendedAction {
   id: string;
@@ -48,6 +50,8 @@ interface ChatMessage {
   timestamp: Date;
   status?: "streaming" | "complete" | "pending" | "saved";
   savedVisibility?: "internal" | "shared";
+  missingField?: MissingField | null;
+  originalCommand?: string;
 }
 
 interface GuidedAgentGPTProps {
@@ -65,6 +69,7 @@ interface GuidedAgentGPTProps {
   prefillCommand?: string;
   initialAction?: string;
   initialCommand?: string;
+  onBuyerUpdated?: (updatedBuyer: Buyer) => void;
 }
 
 export function GuidedAgentGPT({
@@ -76,6 +81,7 @@ export function GuidedAgentGPT({
   prefillCommand,
   initialAction,
   initialCommand,
+  onBuyerUpdated,
 }: GuidedAgentGPTProps) {
   const [searchParams] = useSearchParams();
   const [commandInput, setCommandInput] = useState("");
@@ -84,7 +90,12 @@ export function GuidedAgentGPT({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showActions, setShowActions] = useState(true);
   const [hasTriggeredInitial, setHasTriggeredInitial] = useState(false);
+  const [isUpdatingBuyer, setIsUpdatingBuyer] = useState(false);
+  const [pendingCommand, setPendingCommand] = useState<{ command: string; type: "artifact" | "thinking" } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Mutable ref to hold latest buyer for callbacks
+  const buyerRef = useRef(buyer);
+  buyerRef.current = buyer;
 
   const { isLoading, fetchRecommendedActions } = useAgentGPT();
   const { isStreaming, streamedContent, streamArtifact, streamThinking, clearStream, error: streamError } = useAgentGPTStream();
@@ -233,13 +244,24 @@ export function GuidedAgentGPT({
 
   useEffect(() => {
     if (!isStreaming && streamedContent) {
+      // Detect if AI response indicates missing data
+      const missingField = detectMissingField(streamedContent);
+      
       setMessages(prev =>
         prev.map(msg =>
-          msg.status === "streaming" ? { ...msg, status: "pending", content: streamedContent } : msg
+          msg.status === "streaming" 
+            ? { 
+                ...msg, 
+                status: "pending", 
+                content: streamedContent,
+                missingField,
+                originalCommand: pendingCommand?.command,
+              } 
+            : msg
         )
       );
     }
-  }, [isStreaming, streamedContent]);
+  }, [isStreaming, streamedContent, pendingCommand]);
 
   const determineIntent = (command: string): "artifact" | "thinking" => {
     const lowerCommand = command.toLowerCase();
@@ -254,6 +276,7 @@ export function GuidedAgentGPT({
   const triggerCommand = useCallback(async (command: string, type: "artifact" | "thinking") => {
     clearStream();
     setShowActions(false);
+    setPendingCommand({ command, type });
 
     setMessages(prev => [...prev, {
       id: `user-${Date.now()}`,
@@ -269,18 +292,81 @@ export function GuidedAgentGPT({
       content: "",
       timestamp: new Date(),
       status: "streaming",
+      originalCommand: command,
     }]);
 
     try {
       if (type === "thinking") {
-        await streamThinking(command, buyer);
+        await streamThinking(command, buyerRef.current);
       } else {
-        await streamArtifact(command, buyer);
+        await streamArtifact(command, buyerRef.current);
       }
     } catch {
       // Error handled by hook
     }
-  }, [buyer, streamArtifact, streamThinking, clearStream]);
+  }, [streamArtifact, streamThinking, clearStream]);
+
+  // Handler for inline buyer updates
+  const handleInlineBuyerUpdate = useCallback(async (
+    messageId: string,
+    field: MissingField,
+    value: number,
+    originalCommand?: string
+  ) => {
+    setIsUpdatingBuyer(true);
+    
+    try {
+      // Map field name to database column
+      const fieldMap: Record<MissingField, string> = {
+        pre_approval_amount: "pre_approval_amount",
+        budget_max: "budget_max",
+        budget_min: "budget_min",
+      };
+
+      const dbField = fieldMap[field];
+      
+      // Update buyer in database
+      const { error } = await supabase
+        .from("buyers")
+        .update({ [dbField]: value })
+        .eq("id", buyer.id);
+
+      if (error) throw error;
+
+      // Create updated buyer object
+      const updatedBuyer: Buyer = {
+        ...buyerRef.current,
+        [field]: value,
+      };
+
+      // Notify parent to update buyer state
+      onBuyerUpdated?.(updatedBuyer);
+      buyerRef.current = updatedBuyer;
+
+      toast({ title: "Buyer profile updated" });
+
+      // Remove the message with missing field indicator
+      setMessages(prev => prev.filter(msg => msg.id !== messageId));
+
+      // Re-trigger the original command with updated buyer
+      if (originalCommand) {
+        const type = determineIntent(originalCommand);
+        // Small delay to ensure state is updated
+        setTimeout(() => {
+          triggerCommand(originalCommand, type);
+        }, 100);
+      }
+    } catch (err) {
+      console.error("Failed to update buyer:", err);
+      toast({ 
+        title: "Failed to update buyer", 
+        description: "Please try again or update from the profile page",
+        variant: "destructive" 
+      });
+    } finally {
+      setIsUpdatingBuyer(false);
+    }
+  }, [buyer.id, onBuyerUpdated, toast, triggerCommand]);
 
   const handleSend = useCallback(async () => {
     if (!commandInput.trim() || isStreaming) return;
@@ -426,10 +512,16 @@ export function GuidedAgentGPT({
                 message={message}
                 isStreaming={message.status === "streaming"}
                 isSaving={isCreating}
+                buyerId={buyer.id}
+                buyerName={buyerName}
+                isUpdatingBuyer={isUpdatingBuyer}
                 onApprove={() => handleApproveArtifact(message.id)}
                 onDiscard={() => handleDiscardArtifact(message.id)}
                 onSaveInternal={() => handleSaveArtifact(message.id, "internal")}
                 onSaveShared={() => handleSaveArtifact(message.id, "shared")}
+                onInlineUpdate={(field, value) => 
+                  handleInlineBuyerUpdate(message.id, field, value, message.originalCommand)
+                }
               />
             ))}
           </div>
@@ -478,18 +570,26 @@ function MessageBlock({
   message,
   isStreaming,
   isSaving,
+  buyerId,
+  buyerName,
+  isUpdatingBuyer,
   onApprove,
   onDiscard,
   onSaveInternal,
   onSaveShared,
+  onInlineUpdate,
 }: {
   message: ChatMessage;
   isStreaming: boolean;
   isSaving: boolean;
+  buyerId: string;
+  buyerName: string;
+  isUpdatingBuyer: boolean;
   onApprove: () => void;
   onDiscard: () => void;
   onSaveInternal: () => void;
   onSaveShared: () => void;
+  onInlineUpdate: (field: MissingField, value: number) => Promise<void>;
 }) {
   if (message.type === "user") {
     return (
@@ -524,12 +624,13 @@ function MessageBlock({
   if (message.type === "artifact") {
     const isPending = message.status === "pending";
     const isSaved = message.status === "saved";
+    const hasMissingField = message.missingField && isPending;
     
     return (
       <div className="max-w-3xl">
         <p className="text-xs uppercase tracking-widest text-muted-foreground/40 mb-4">
-          Draft
-          {isPending && <span className="ml-2 text-warning normal-case">· Ready to save</span>}
+          {hasMissingField ? "AgentGPT" : "Draft"}
+          {isPending && !hasMissingField && <span className="ml-2 text-warning normal-case">· Ready to save</span>}
           {isSaved && message.savedVisibility === "internal" && (
             <span className="ml-2 text-muted-foreground normal-case flex items-center gap-1 inline-flex">
               · <Lock className="h-3 w-3" /> Saved (internal)
@@ -554,7 +655,19 @@ function MessageBlock({
           )}
         </div>
 
-        {isPending && (
+        {/* Inline Update Form when missing field detected */}
+        {hasMissingField && message.missingField && (
+          <InlineBuyerUpdate
+            buyerId={buyerId}
+            buyerName={buyerName}
+            missingField={message.missingField}
+            onSave={async () => {}}
+            onSaveAndGenerate={(field, value) => onInlineUpdate(field, value)}
+            isUpdating={isUpdatingBuyer}
+          />
+        )}
+
+        {isPending && !hasMissingField && (
           <div className="flex items-center gap-4 pt-6 border-t border-border/10">
             <button 
               className="text-sm border border-border/30 text-foreground px-4 py-2 hover:bg-muted/50 flex items-center gap-2 transition-colors disabled:opacity-50" 
