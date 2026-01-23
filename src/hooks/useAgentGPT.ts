@@ -18,6 +18,18 @@ interface BuyerContext {
   marketContext?: string;
   recentActivity?: string[];
   buyerId?: string;
+  // Extended profile fields for context-aware artifacts
+  preApprovalStatus?: string | null;
+  preApprovalAmount?: number | null;
+  budgetMin?: number | null;
+  budgetMax?: number | null;
+  preferredCities?: string[] | null;
+  propertyTypes?: string[] | null;
+  minBeds?: number | null;
+  minBaths?: number | null;
+  mustHaves?: string | null;
+  niceToHaves?: string | null;
+  agentNotes?: string | null;
 }
 
 interface UseAgentGPTReturn {
@@ -39,6 +51,18 @@ function buyerToContext(buyer: Buyer): BuyerContext {
     marketContext: buyer.marketContext,
     recentActivity: [],
     buyerId: buyer.id,
+    // Extended profile fields
+    preApprovalStatus: buyer.pre_approval_status,
+    preApprovalAmount: buyer.pre_approval_amount,
+    budgetMin: buyer.budget_min,
+    budgetMax: buyer.budget_max,
+    preferredCities: buyer.preferred_cities,
+    propertyTypes: buyer.property_types,
+    minBeds: buyer.min_beds,
+    minBaths: buyer.min_baths,
+    mustHaves: buyer.must_haves,
+    niceToHaves: buyer.nice_to_haves,
+    agentNotes: buyer.agent_notes,
   };
 }
 

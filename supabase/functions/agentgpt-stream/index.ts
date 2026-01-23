@@ -44,6 +44,18 @@ interface BuyerContext {
   marketContext?: string;
   recentActivity?: string[];
   buyerId?: string;
+  // Extended profile fields
+  preApprovalStatus?: string | null;
+  preApprovalAmount?: number | null;
+  budgetMin?: number | null;
+  budgetMax?: number | null;
+  preferredCities?: string[] | null;
+  propertyTypes?: string[] | null;
+  minBeds?: number | null;
+  minBaths?: number | null;
+  mustHaves?: string | null;
+  niceToHaves?: string | null;
+  agentNotes?: string | null;
 }
 
 interface RequestBody {
@@ -183,14 +195,50 @@ serve(async (req) => {
         ? `\nMARKET DATA:\n${ragContext.marketFeeds.slice(0, 3).join("\n")}`
         : "";
 
+    // Build financial context string
+    const financialContext = [];
+    if (buyerContext.preApprovalAmount) {
+      financialContext.push(`Pre-Approval Amount: $${buyerContext.preApprovalAmount.toLocaleString()}`);
+    }
+    if (buyerContext.budgetMin || buyerContext.budgetMax) {
+      const min = buyerContext.budgetMin ? `$${buyerContext.budgetMin.toLocaleString()}` : "N/A";
+      const max = buyerContext.budgetMax ? `$${buyerContext.budgetMax.toLocaleString()}` : "N/A";
+      financialContext.push(`Budget Range: ${min} - ${max}`);
+    }
+
+    // Build preferences context
+    const preferencesContext = [];
+    if (buyerContext.preferredCities?.length) {
+      preferencesContext.push(`Preferred Cities: ${buyerContext.preferredCities.join(", ")}`);
+    }
+    if (buyerContext.propertyTypes?.length) {
+      preferencesContext.push(`Property Types: ${buyerContext.propertyTypes.join(", ")}`);
+    }
+    if (buyerContext.minBeds) {
+      preferencesContext.push(`Minimum Bedrooms: ${buyerContext.minBeds}`);
+    }
+    if (buyerContext.minBaths) {
+      preferencesContext.push(`Minimum Bathrooms: ${buyerContext.minBaths}`);
+    }
+    if (buyerContext.mustHaves) {
+      preferencesContext.push(`Must-Haves: ${buyerContext.mustHaves}`);
+    }
+    if (buyerContext.niceToHaves) {
+      preferencesContext.push(`Nice-to-Haves: ${buyerContext.niceToHaves}`);
+    }
+
     const contextString = `
 BUYER CONTEXT:
 - Name: ${buyerContext.name}
 - Current Stage: Stage ${buyerContext.currentStage} - ${stageNames[buyerContext.currentStage] || "Unknown"}
+- Pre-Approval Status: ${buyerContext.preApprovalStatus || "Not Started"}
 - Financing: ${buyerContext.financingConfirmed ? "Confirmed" : "Not Confirmed"}
 - Buyer Type: ${buyerContext.buyerType || "Not specified"}
 - Market Context: ${buyerContext.marketContext || "General market"}
-${buyerContext.recentActivity?.length ? `- Recent Activity: ${buyerContext.recentActivity.join(", ")}` : ""}
+${financialContext.length ? `\nFINANCIAL INFO:\n- ${financialContext.join("\n- ")}` : ""}
+${preferencesContext.length ? `\nBUYER PREFERENCES:\n- ${preferencesContext.join("\n- ")}` : ""}
+${buyerContext.agentNotes ? `\nAGENT NOTES:\n${buyerContext.agentNotes}` : ""}
+${buyerContext.recentActivity?.length ? `\n- Recent Activity: ${buyerContext.recentActivity.join(", ")}` : ""}
 ${ragDataContext}
 ${marketContext}
 ${complianceContext}
