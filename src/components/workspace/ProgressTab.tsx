@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { 
   CheckCircle, 
   Clock, 
@@ -22,10 +22,11 @@ import type { Stage } from "@/types";
 import { STAGES } from "@/types";
 import type { StageGroup, SystemEvent } from "@/types/conversation";
 import { useArtifacts, type Artifact } from "@/hooks/useArtifacts";
-import { useStage } from "@/hooks/useStages";
+import { useStage, useStages } from "@/hooks/useStages";
 import { useStageCompletion } from "@/hooks/useStageCompletion";
 import { useBuyers } from "@/hooks/useBuyers";
 import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface ProgressTabProps {
   stages: StageGroup[];
@@ -46,9 +47,13 @@ export function ProgressTab({
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(null);
   const currentStageData = STAGES[currentStage];
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   // Fetch artifacts from database
   const { artifacts, isLoading: artifactsLoading } = useArtifacts(buyerId);
+  
+  // Fetch all stages from database (to get next stage name)
+  const { data: allDbStages } = useStages();
   
   // Fetch stage data from database for completion criteria
   const { data: dbStage, isLoading: stageLoading } = useStage(currentStage);
@@ -91,39 +96,58 @@ export function ProgressTab({
   };
 
   const handleAdvanceStage = async () => {
+    console.log("[ProgressTab] Advance stage button clicked");
+    console.log("[ProgressTab] Current stage:", currentStage);
+    
     const nextStageIndex = currentStage + 1;
-    if (nextStageIndex <= 9) {
-      // Get the next stage name from the stages array
-      const stageNames = [
-        "Readiness & Expectations",
-        "Home Search", 
-        "Showings",
-        "Making an Offer",
-        "Under Contract",
-        "Closing",
-        "Post-Closing",
-        "Nurture",
-        "Referral",
-        "Archived"
-      ];
-      const nextStageName = stageNames[nextStageIndex];
+    console.log("[ProgressTab] Target next stage index:", nextStageIndex);
+    
+    if (nextStageIndex > 9) {
+      console.log("[ProgressTab] Cannot advance: already at max stage");
+      return;
+    }
+    
+    // Find next stage name from database stages
+    const nextDbStage = allDbStages?.find(s => s.stage_number === nextStageIndex);
+    const nextStageName = nextDbStage?.stage_name;
+    
+    if (!nextStageName) {
+      console.error("[ProgressTab] Next stage not found in database for index:", nextStageIndex);
+      toast({
+        title: "Stage not found",
+        description: `Stage ${nextStageIndex} is not yet configured in the system.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    console.log("[ProgressTab] Advancing to stage:", nextStageName);
+    
+    try {
+      await updateBuyer.mutateAsync({
+        id: buyerId,
+        current_stage: nextStageName,
+      });
       
-      try {
-        await updateBuyer.mutateAsync({
-          id: buyerId,
-          current_stage: nextStageName,
-        });
-        toast({
-          title: "Stage advanced",
-          description: `${buyerName} has been moved to ${nextStageName}`,
-        });
-      } catch (error) {
-        toast({
-          title: "Error advancing stage",
-          description: "Please try again.",
-          variant: "destructive",
-        });
-      }
+      console.log("[ProgressTab] Database update successful");
+      
+      // Invalidate buyer queries to refresh UI across all components
+      await queryClient.invalidateQueries({ queryKey: ["buyers"] });
+      await queryClient.invalidateQueries({ queryKey: ["buyers", buyerId] });
+      
+      console.log("[ProgressTab] Query cache invalidated, UI should refresh");
+      
+      toast({
+        title: "Stage advanced",
+        description: `${buyerName} has been moved to ${nextStageName}`,
+      });
+    } catch (error) {
+      console.error("[ProgressTab] Error advancing stage:", error);
+      toast({
+        title: "Error advancing stage",
+        description: "Please try again.",
+        variant: "destructive",
+      });
     }
   };
 

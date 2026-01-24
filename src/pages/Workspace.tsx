@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { 
   Home, 
@@ -99,6 +99,15 @@ export default function Workspace() {
 
   // State to hold the buyer with potential inline updates
   const [localBuyerOverrides, setLocalBuyerOverrides] = useState<Partial<LocalBuyer>>({});
+
+  // Clear local overrides when dbBuyer changes (e.g., after stage advancement)
+  useEffect(() => {
+    if (dbBuyer) {
+      console.log("[Workspace] dbBuyer updated from database:", dbBuyer.current_stage);
+      // Reset overrides when the database buyer changes
+      setLocalBuyerOverrides({});
+    }
+  }, [dbBuyer?.id, dbBuyer?.current_stage]);
 
   // Transform to local format and merge with local overrides
   const buyer = useMemo(() => {
