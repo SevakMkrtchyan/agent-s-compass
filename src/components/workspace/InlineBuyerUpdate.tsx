@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertTriangle, ArrowRight, Loader2, Check } from "lucide-react";
+import { AlertTriangle, ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -43,7 +43,6 @@ export function InlineBuyerUpdate({
 }: InlineBuyerUpdateProps) {
   const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
 
   const config = FIELD_CONFIG[missingField];
   const firstName = buyerName.split(" ")[0];
@@ -83,21 +82,12 @@ export function InlineBuyerUpdate({
     }
 
     try {
+      // Parent handles removal and re-triggering - no need to track saved state
       await onSaveAndGenerate(missingField, numericValue);
-      setSaved(true);
     } catch {
       setError("Failed to save. Please try again.");
     }
   };
-
-  if (saved) {
-    return (
-      <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
-        <Check className="h-4 w-4 text-green-600" />
-        <span>Updated {firstName}'s {config.label.toLowerCase()}. Generating...</span>
-      </div>
-    );
-  }
 
   return (
     <div className="py-6 space-y-4 max-w-md">
