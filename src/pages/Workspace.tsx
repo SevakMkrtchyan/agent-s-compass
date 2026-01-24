@@ -108,8 +108,10 @@ export default function Workspace() {
 
   // Handler for inline buyer updates from AgentGPT
   const handleBuyerUpdated = useCallback((updatedBuyer: LocalBuyer) => {
+    // Update ALL relevant fields including pre_approval_status for conditional action filtering
     setLocalBuyerOverrides(prev => ({
       ...prev,
+      pre_approval_status: updatedBuyer.pre_approval_status,
       pre_approval_amount: updatedBuyer.pre_approval_amount,
       budget_min: updatedBuyer.budget_min,
       budget_max: updatedBuyer.budget_max,
