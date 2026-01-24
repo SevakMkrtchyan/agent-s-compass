@@ -321,6 +321,14 @@ export function GuidedAgentGPT({
     value: number,
     originalCommand?: string
   ) => {
+    console.log("[handleInlineBuyerUpdate] Called with:", {
+      messageId,
+      field,
+      value,
+      originalCommand,
+      buyerId: buyer.id
+    });
+    
     setIsUpdatingBuyer(true);
     
     try {
@@ -338,11 +346,16 @@ export function GuidedAgentGPT({
         updatePayload.budget_min = value;
       }
       
+      console.log("[handleInlineBuyerUpdate] Update payload:", updatePayload);
+      
       // Update buyer in database
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("buyers")
         .update(updatePayload)
-        .eq("id", buyer.id);
+        .eq("id", buyer.id)
+        .select();
+
+      console.log("[handleInlineBuyerUpdate] Supabase response:", { data, error });
 
       if (error) throw error;
 
