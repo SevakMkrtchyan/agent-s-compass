@@ -245,7 +245,16 @@ export function GuidedAgentGPT({
   useEffect(() => {
     if (!isStreaming && streamedContent) {
       // Detect if AI response indicates missing data
-      const missingField = detectMissingField(streamedContent);
+      let detectedMissing = detectMissingField(streamedContent);
+      
+      // Only show inline form if the field is actually missing from buyer object
+      if (detectedMissing) {
+        const fieldValue = buyer[detectedMissing];
+        if (fieldValue !== null && fieldValue !== undefined) {
+          // Buyer already has this field populated, don't show the form
+          detectedMissing = null;
+        }
+      }
       
       setMessages(prev => {
         return prev.map(msg =>
@@ -254,14 +263,14 @@ export function GuidedAgentGPT({
                 ...msg, 
                 status: "pending" as const, 
                 content: streamedContent,
-                missingField,
+                missingField: detectedMissing,
                 originalCommand: pendingCommand?.command,
               } 
             : msg
         );
       });
     }
-  }, [isStreaming, streamedContent, pendingCommand]);
+  }, [isStreaming, streamedContent, pendingCommand, buyer]);
 
   const determineIntent = (command: string): "artifact" | "thinking" => {
     const lowerCommand = command.toLowerCase();
