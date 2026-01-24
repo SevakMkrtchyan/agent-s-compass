@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { useBuyer, type Buyer } from "@/hooks/useBuyers";
+import { useStages } from "@/hooks/useStages";
 import { generateMockConversation } from "@/data/conversationData";
 import type { StageGroup } from "@/types/conversation";
 import type { Stage, Buyer as LocalBuyer } from "@/types";
@@ -104,6 +105,9 @@ export default function Workspace() {
 
   // Fetch buyer from database
   const { data: dbBuyer, isLoading } = useBuyer(workspaceId);
+  
+  // Fetch all stages for header display
+  const { data: allDbStages } = useStages();
 
   // State to hold the buyer with potential inline updates
   const [localBuyerOverrides, setLocalBuyerOverrides] = useState<Partial<LocalBuyer>>({});
@@ -136,6 +140,11 @@ export default function Workspace() {
   }, []);
 
   const currentStage = buyer?.currentStage ?? 1;
+  
+  // Get current stage data from database
+  const currentDbStage = useMemo(() => {
+    return allDbStages?.find(s => s.stage_number === currentStage);
+  }, [allDbStages, currentStage]);
 
   // Initialize conversation stages
   const [conversationStages, setConversationStages] = useState<StageGroup[]>(() => 
@@ -301,7 +310,7 @@ export default function Workspace() {
               <div>
                 <span className="text-sm font-medium text-foreground">{buyer.name}</span>
                 <span className="text-sm text-muted-foreground ml-2">
-                  · Stage {currentStage}: {STAGES[currentStage].title}
+                  · {currentDbStage?.icon || '📋'} Stage {currentStage}: {currentDbStage?.stage_name || STAGES[currentStage]?.title || 'Unknown'}
                 </span>
               </div>
             </div>

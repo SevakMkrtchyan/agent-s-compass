@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useMemo, forwardRef } from "react";
 import { 
   CheckCircle, 
   Clock, 
@@ -12,21 +12,18 @@ import {
   Lock,
   Eye,
   Loader2,
-  Square,
-  CheckSquare,
+  Circle,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import type { Stage } from "@/types";
-import { STAGES } from "@/types";
 import type { StageGroup, SystemEvent } from "@/types/conversation";
 import { useArtifacts, type Artifact } from "@/hooks/useArtifacts";
-import { useStage, useStages } from "@/hooks/useStages";
+import { useStages, type DbStage } from "@/hooks/useStages";
 import { useStageCompletion } from "@/hooks/useStageCompletion";
 import { useBuyers } from "@/hooks/useBuyers";
 import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
 
 interface ProgressTabProps {
   stages: StageGroup[];
@@ -37,26 +34,27 @@ interface ProgressTabProps {
   onOpenDetails: () => void;
 }
 
-export function ProgressTab({
+export const ProgressTab = forwardRef<HTMLDivElement, ProgressTabProps>(function ProgressTab({
   stages,
   currentStage,
   buyerName,
   buyerId,
   onPrefillAgentGPT,
-}: ProgressTabProps) {
+}, ref) {
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(null);
-  const currentStageData = STAGES[currentStage];
+  const [showAllArtifacts, setShowAllArtifacts] = useState(false);
   const { toast } = useToast();
-  const queryClient = useQueryClient();
 
   // Fetch artifacts from database
   const { artifacts, isLoading: artifactsLoading } = useArtifacts(buyerId);
   
-  // Fetch all stages from database (to get next stage name)
-  const { data: allDbStages } = useStages();
+  // Fetch ALL stages from database ordered by stage_number
+  const { data: allDbStages, isLoading: stagesLoading } = useStages();
   
-  // Fetch stage data from database for completion criteria
-  const { data: dbStage, isLoading: stageLoading } = useStage(currentStage);
+  // Get current stage data from database (by stage number)
+  const currentDbStage = useMemo(() => {
+    return allDbStages?.find(s => s.stage_number === currentStage);
+  }, [allDbStages, currentStage]);
   
   // Fetch stage completion status
   const { 
@@ -68,6 +66,7 @@ export function ProgressTab({
   
   // Get buyer mutation for advancing stage
   const { updateBuyer } = useBuyers();
+
   // Extract system events from stages (keep this for activity log)
   const systemEvents = stages.flatMap(stage =>
     stage.items.filter(item => item.type === "system-event")
@@ -89,11 +88,27 @@ export function ProgressTab({
     }).format(date);
   };
 
-  const handleStageClick = (stage: StageGroup) => {
-    const stageInfo = STAGES[stage.stageId];
-    const command = `Generate ${stageInfo.title.toLowerCase()} strategy and next steps for ${buyerName} - include 3-4 actionable recommendations`;
-    onPrefillAgentGPT(command);
-  };
+  // Filter artifacts to show only recent stages (current stage - 2 to current stage)
+  const filteredArtifacts = useMemo(() => {
+    if (!artifacts || !allDbStages) return [];
+    
+    const minStage = Math.max(0, currentStage - 2);
+    const maxStage = currentStage;
+    
+    // Get stage IDs for stages in range
+    const stageIdsInRange = allDbStages
+      .filter(s => s.stage_number >= minStage && s.stage_number <= maxStage)
+      .map(s => s.id);
+    
+    // Filter artifacts that belong to stages in range (or have no stage_id)
+    return artifacts.filter(artifact => {
+      if (!artifact.stage_id) return true; // Include artifacts without stage
+      return stageIdsInRange.includes(artifact.stage_id);
+    });
+  }, [artifacts, allDbStages, currentStage]);
+
+  const minDisplayStage = Math.max(0, currentStage - 2);
+  const totalArtifactCount = artifacts?.length || 0;
 
   const handleAdvanceStage = async () => {
     console.log("[ProgressTab] Advance stage button clicked");
@@ -130,7 +145,6 @@ export function ProgressTab({
       });
       
       console.log("[ProgressTab] Database update successful");
-      console.log("[ProgressTab] Cache invalidation handled by mutation onSuccess");
       
       toast({
         title: "Stage advanced",
@@ -151,7 +165,7 @@ export function ProgressTab({
     toggleCriterion.mutate({ criteriaIndex: index, isCompleted: !currentValue });
   };
 
-  const completionCriteria = dbStage?.completion_criteria || [];
+  const completionCriteria = currentDbStage?.completion_criteria || [];
   const canAdvanceStage = allCriteriaCompleted(completionCriteria.length);
 
   const handleArtifactClick = (artifact: Artifact) => {
@@ -164,8 +178,39 @@ export function ProgressTab({
   };
 
   const handleGenerateNextSteps = () => {
-    const command = `Generate 3-4 prioritized next actions for ${buyerName} in the ${currentStageData.title} stage. Include one artifact draft, one internal analysis, and stage-specific recommendations.`;
+    const stageName = currentDbStage?.stage_name || `Stage ${currentStage}`;
+    const command = `Generate 3-4 prioritized next actions for ${buyerName} in the ${stageName} stage. Include one artifact draft, one internal analysis, and stage-specific recommendations.`;
     onPrefillAgentGPT(command);
+  };
+
+  const handleStageJourneyClick = (stage: DbStage) => {
+    const command = `Generate ${stage.stage_name.toLowerCase()} strategy and next steps for ${buyerName} - include 3-4 actionable recommendations`;
+    onPrefillAgentGPT(command);
+  };
+
+  // Get stage status for Stage Journey
+  const getStageStatus = (stageNumber: number): 'completed' | 'current' | 'upcoming' => {
+    if (stageNumber < currentStage) return 'completed';
+    if (stageNumber === currentStage) return 'current';
+    return 'upcoming';
+  };
+
+  // Get mock dates for stages (in a real app, these would come from buyer history)
+  const getStageDates = (stageNumber: number): { startedAt?: Date; completedAt?: Date } => {
+    // For now, use mock dates based on buyer creation
+    // In production, this would come from a stage_history table
+    const baseDate = new Date();
+    baseDate.setDate(baseDate.getDate() - (currentStage - stageNumber) * 7);
+    
+    if (stageNumber < currentStage) {
+      const completedDate = new Date(baseDate);
+      completedDate.setDate(completedDate.getDate() + 5);
+      return { startedAt: baseDate, completedAt: completedDate };
+    }
+    if (stageNumber === currentStage) {
+      return { startedAt: baseDate };
+    }
+    return {};
   };
 
   return (
@@ -177,19 +222,36 @@ export function ProgressTab({
           <p className="text-xs uppercase tracking-wider mb-4" style={{ color: '#9ca3af' }}>
             Current Stage
           </p>
-          <div className="flex items-center gap-4 mb-6">
-            <span className="text-3xl">{currentStageData.icon}</span>
-            <div>
-              <h2 className="text-2xl md:text-3xl font-medium" style={{ color: '#111827' }}>
-                {currentStageData.title}
-              </h2>
-              <p className="text-base mt-1" style={{ color: '#6b7280' }}>
-                {buyerName} is in the {currentStageData.title.toLowerCase()} phase
-              </p>
+          
+          {stagesLoading ? (
+            <div className="flex items-center gap-4 mb-6">
+              <div className="h-10 w-10 bg-muted/30 rounded animate-pulse" />
+              <div className="space-y-2">
+                <div className="h-7 w-64 bg-muted/30 rounded animate-pulse" />
+                <div className="h-5 w-96 bg-muted/30 rounded animate-pulse" />
+              </div>
             </div>
-          </div>
+          ) : currentDbStage ? (
+            <>
+              <div className="flex items-center gap-4 mb-4">
+                <span className="text-3xl">{currentDbStage.icon || '📋'}</span>
+                <h2 className="text-2xl md:text-3xl font-medium" style={{ color: '#111827' }}>
+                  Stage {currentDbStage.stage_number}: {currentDbStage.stage_name}
+                </h2>
+              </div>
+              {currentDbStage.stage_objective && (
+                <p className="text-base mb-6" style={{ color: '#6b7280' }}>
+                  {currentDbStage.stage_objective}
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="text-base" style={{ color: '#9ca3af' }}>
+              Stage data not available
+            </p>
+          )}
 
-          {/* Action Buttons - Plain text style */}
+          {/* Action Buttons */}
           <div className="flex flex-wrap gap-6">
             <button
               onClick={handleGenerateNextSteps}
@@ -226,7 +288,7 @@ export function ProgressTab({
             Stage Completion
           </p>
           
-          {stageLoading || completionLoading ? (
+          {stagesLoading || completionLoading ? (
             <div className="space-y-3">
               {[1, 2, 3, 4].map((i) => (
                 <div key={i} className="h-6 bg-muted/30 rounded animate-pulse" />
@@ -237,16 +299,15 @@ export function ProgressTab({
               {completionCriteria.map((criterion, index) => {
                 const isCompleted = isCriterionCompleted(index);
                 return (
-                  <button
+                  <div
                     key={index}
                     onClick={() => handleToggleCriterion(index)}
-                    disabled={toggleCriterion.isPending}
-                    className="w-full flex items-start gap-3 py-2 text-left group transition-colors hover:bg-muted/20 rounded px-2 -mx-2"
+                    className="w-full flex items-start gap-3 py-2 text-left group transition-colors hover:bg-muted/20 rounded px-2 -mx-2 cursor-pointer"
                   >
                     <Checkbox
                       checked={isCompleted}
                       className="mt-0.5"
-                      onCheckedChange={() => handleToggleCriterion(index)}
+                      disabled={toggleCriterion.isPending}
                     />
                     <span 
                       className={cn(
@@ -257,7 +318,7 @@ export function ProgressTab({
                     >
                       {criterion}
                     </span>
-                  </button>
+                  </div>
                 );
               })}
               
@@ -282,76 +343,95 @@ export function ProgressTab({
 
         <hr className="max-w-3xl mb-10" style={{ borderColor: '#e5e7eb' }} />
 
-        {/* Stage Journey - Interactive Timeline */}
+        {/* Stage Journey - Rebuilt with Database Stages */}
         <div className="max-w-3xl mb-12">
           <p className="text-xs uppercase tracking-wider mb-6" style={{ color: '#9ca3af' }}>
             Stage Journey
           </p>
-          <div className="space-y-0">
-            {stages.map((stage) => {
-              const stageInfo = STAGES[stage.stageId];
-              const isComplete = stage.status === "completed";
-              const isCurrent = stage.status === "current";
-              const isLocked = stage.status === "locked";
+          
+          {stagesLoading ? (
+            <div className="space-y-4">
+              {[0, 1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="flex items-center gap-4 py-3">
+                  <div className="h-6 w-6 bg-muted/30 rounded-full animate-pulse" />
+                  <div className="h-5 w-48 bg-muted/30 rounded animate-pulse" />
+                </div>
+              ))}
+            </div>
+          ) : allDbStages && allDbStages.length > 0 ? (
+            <div className="space-y-0">
+              {allDbStages.map((stage) => {
+                const status = getStageStatus(stage.stage_number);
+                const dates = getStageDates(stage.stage_number);
+                const isCompleted = status === 'completed';
+                const isCurrent = status === 'current';
+                const isUpcoming = status === 'upcoming';
 
-              return (
-                <button
-                  key={stage.stageId}
-                  onClick={() => !isLocked && handleStageClick(stage)}
-                  disabled={isLocked}
-                  className={cn(
-                    "w-full flex items-center justify-between py-4 text-left group transition-colors",
-                    isLocked && "opacity-40 cursor-not-allowed"
-                  )}
-                  style={{ borderBottom: '1px solid #f3f4f6' }}
-                >
-                  <div className="flex items-center gap-4">
-                    <div className={cn(
-                      "h-8 w-8 flex items-center justify-center text-lg",
-                      isComplete && "opacity-60",
-                      isCurrent && "opacity-100"
-                    )}>
-                      {isComplete ? (
-                        <CheckCircle className="h-5 w-5" style={{ color: '#10b981' }} />
-                      ) : (
-                        <span>{stageInfo.icon}</span>
-                      )}
-                    </div>
-                    <div>
-                      <span 
-                        className={cn(
-                          "text-base font-medium",
-                          isCurrent && "font-semibold"
+                return (
+                  <button
+                    key={stage.id}
+                    onClick={() => !isUpcoming && handleStageJourneyClick(stage)}
+                    disabled={isUpcoming}
+                    className={cn(
+                      "w-full flex items-center justify-between py-4 text-left group transition-colors",
+                      isUpcoming && "opacity-40 cursor-not-allowed"
+                    )}
+                    style={{ borderBottom: '1px solid #f3f4f6' }}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="h-8 w-8 flex items-center justify-center text-lg">
+                        {isCompleted ? (
+                          <CheckCircle className="h-5 w-5" style={{ color: '#10b981' }} />
+                        ) : isUpcoming ? (
+                          <Circle className="h-5 w-5" style={{ color: '#d1d5db' }} />
+                        ) : (
+                          <span>{stage.icon || '📋'}</span>
                         )}
-                        style={{ color: isCurrent ? '#111827' : '#374151' }}
-                      >
-                        {stageInfo.title}
-                      </span>
-                      {stage.startedAt && (
-                        <p className="text-sm" style={{ color: '#9ca3af' }}>
-                          {stage.completedAt 
-                            ? `Completed ${formatDate(stage.completedAt)}`
-                            : `Started ${formatDate(stage.startedAt)}`
-                          }
-                        </p>
-                      )}
+                      </div>
+                      <div>
+                        <span 
+                          className={cn(
+                            "text-base",
+                            isCurrent && "font-semibold"
+                          )}
+                          style={{ color: isCurrent ? '#111827' : isUpcoming ? '#9ca3af' : '#374151' }}
+                        >
+                          Stage {stage.stage_number}: {stage.stage_name}
+                        </span>
+                        {dates.completedAt && (
+                          <p className="text-sm" style={{ color: '#9ca3af' }}>
+                            Completed {formatDate(dates.completedAt)}
+                          </p>
+                        )}
+                        {isCurrent && dates.startedAt && (
+                          <p className="text-sm font-medium" style={{ color: '#6366f1' }}>
+                            Started {formatDate(dates.startedAt)}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                  {!isLocked && (
-                    <ChevronRight 
-                      className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" 
-                      style={{ color: '#9ca3af' }} 
-                    />
-                  )}
-                </button>
-              );
-            })}
-          </div>
+                    {!isUpcoming && (
+                      <ChevronRight 
+                        className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" 
+                        style={{ color: '#9ca3af' }} 
+                      />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-sm py-2" style={{ color: '#9ca3af' }}>
+              No stages configured in the system.
+            </p>
+          )}
         </div>
 
-        {/* Saved Artifacts */}
+        <hr className="max-w-3xl mb-10" style={{ borderColor: '#e5e7eb' }} />
+
+        {/* Saved Artifacts - Filtered by Stage Range */}
         <div className="max-w-3xl mb-12">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-4">
             <p className="text-xs uppercase tracking-wider" style={{ color: '#9ca3af' }}>
               Saved Artifacts
             </p>
@@ -359,10 +439,17 @@ export function ProgressTab({
               <Loader2 className="h-4 w-4 animate-spin" style={{ color: '#9ca3af' }} />
             ) : (
               <span className="text-xs" style={{ color: '#9ca3af' }}>
-                {artifacts?.filter(a => a.visibility === "shared").length || 0} shared with buyer
+                {filteredArtifacts.filter(a => a.visibility === "shared").length || 0} shared with buyer
               </span>
             )}
           </div>
+          
+          {/* Stage range indicator */}
+          {!showAllArtifacts && !artifactsLoading && (
+            <p className="text-sm mb-4" style={{ color: '#9ca3af' }}>
+              Showing artifacts from Stages {minDisplayStage}-{currentStage}
+            </p>
+          )}
           
           {artifactsLoading ? (
             <div className="space-y-4">
@@ -370,9 +457,9 @@ export function ProgressTab({
                 <div key={i} className="h-16 bg-muted/30 rounded animate-pulse" />
               ))}
             </div>
-          ) : artifacts && artifacts.length > 0 ? (
+          ) : (showAllArtifacts ? artifacts : filteredArtifacts)?.length ? (
             <div className="space-y-0">
-              {artifacts.slice(0, 10).map((artifact) => (
+              {(showAllArtifacts ? artifacts : filteredArtifacts)?.slice(0, 10).map((artifact) => (
                 <button
                   key={artifact.id}
                   onClick={() => handleArtifactClick(artifact)}
@@ -412,13 +499,24 @@ export function ProgressTab({
             </p>
           )}
 
-          {artifacts && artifacts.length > 10 && (
+          {/* View all artifacts link */}
+          {!showAllArtifacts && totalArtifactCount > filteredArtifacts.length && (
             <button
-              onClick={() => onPrefillAgentGPT("Show all saved artifacts and their status")}
+              onClick={() => setShowAllArtifacts(true)}
               className="mt-4 text-sm transition-colors hover:underline underline-offset-4"
               style={{ color: '#6b7280' }}
             >
-              View all {artifacts.length} artifacts →
+              View all artifacts ({totalArtifactCount} total) →
+            </button>
+          )}
+          
+          {showAllArtifacts && (
+            <button
+              onClick={() => setShowAllArtifacts(false)}
+              className="mt-4 text-sm transition-colors hover:underline underline-offset-4"
+              style={{ color: '#6b7280' }}
+            >
+              ← Show recent stages only
             </button>
           )}
         </div>
@@ -556,4 +654,4 @@ export function ProgressTab({
       </div>
     </ScrollArea>
   );
-}
+});
