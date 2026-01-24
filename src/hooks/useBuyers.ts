@@ -129,6 +129,7 @@ export function useBuyers() {
 
   const updateBuyer = useMutation({
     mutationFn: async (input: UpdateBuyerInput) => {
+      console.log("[useBuyers] Starting update mutation for:", input.id);
       const { id, ...updates } = input;
       const { data, error } = await supabase
         .from("buyers")
@@ -138,14 +139,31 @@ export function useBuyers() {
         .single();
 
       if (error) throw error;
+      console.log("[useBuyers] Update successful, returning data");
       return data as Buyer;
     },
-    onSuccess: (updatedBuyer) => {
-      queryClient.invalidateQueries({ queryKey: ["buyers"] });
-      toast({
-        title: "Buyer updated",
-        description: `${updatedBuyer.name}'s profile has been updated.`,
-      });
+    onSuccess: async (updatedBuyer) => {
+      console.log("[useBuyers] onSuccess - invalidating queries for buyer:", updatedBuyer.id);
+      console.log("[useBuyers] Updated buyer stage:", updatedBuyer.current_stage);
+      
+      // Invalidate and immediately refetch the specific buyer query
+      // Use refetchType: 'all' to ensure active queries are refetched
+      await Promise.all([
+        queryClient.invalidateQueries({ 
+          queryKey: ["buyers"], 
+          refetchType: 'all' 
+        }),
+        queryClient.invalidateQueries({ 
+          queryKey: ["buyers", updatedBuyer.id], 
+          refetchType: 'all' 
+        }),
+        queryClient.invalidateQueries({ 
+          queryKey: ["stage-completion", updatedBuyer.id],
+          refetchType: 'all'
+        }),
+      ]);
+      
+      console.log("[useBuyers] Query invalidation complete");
     },
     onError: (error) => {
       console.error("Error updating buyer:", error);
