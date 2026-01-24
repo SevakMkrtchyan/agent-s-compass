@@ -350,26 +350,64 @@ export function GuidedAgentGPT({
 
       if (error) throw error;
 
-      // Create updated buyer object with all changed fields
-      const updatedBuyer: Buyer = {
-        ...buyerRef.current,
-        [field]: value,
-        ...(field === "pre_approval_amount" ? { pre_approval_status: "Pre-Approved" } : {}),
+      // Fetch the FRESH buyer data from database after update
+      const { data: freshDbBuyer, error: fetchError } = await supabase
+        .from("buyers")
+        .select("*")
+        .eq("id", buyer.id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // Map fresh DB data to local Buyer type (same pattern as Workspace.tsx)
+      const stageMap: Record<string, 0 | 1 | 2 | 3 | 4 | 5> = {
+        "Readiness & Expectations": 0,
+        "Home Search": 1,
+        "Offer Strategy": 2,
+        "Under Contract": 3,
+        "Closing Preparation": 4,
+        "Closing & Post-Close": 5,
       };
+      
+      const updatedBuyer: Buyer = {
+        id: freshDbBuyer.id,
+        name: freshDbBuyer.name,
+        email: freshDbBuyer.email || "",
+        phone: freshDbBuyer.phone || undefined,
+        currentStage: stageMap[freshDbBuyer.current_stage || "Home Search"] ?? 1,
+        createdAt: new Date(freshDbBuyer.created_at),
+        lastActivity: new Date(freshDbBuyer.updated_at),
+        financingConfirmed: freshDbBuyer.pre_approval_status === "Approved",
+        buyerType: freshDbBuyer.buyer_type as Buyer["buyerType"],
+        // Extended profile fields for AgentGPT context
+        pre_approval_status: freshDbBuyer.pre_approval_status,
+        pre_approval_amount: freshDbBuyer.pre_approval_amount,
+        budget_min: freshDbBuyer.budget_min,
+        budget_max: freshDbBuyer.budget_max,
+        preferred_cities: freshDbBuyer.preferred_cities,
+        property_types: freshDbBuyer.property_types,
+        min_beds: freshDbBuyer.min_beds,
+        min_baths: freshDbBuyer.min_baths,
+        must_haves: freshDbBuyer.must_haves,
+        nice_to_haves: freshDbBuyer.nice_to_haves,
+        agent_notes: freshDbBuyer.agent_notes,
+      };
+
+      // Update the ref immediately so triggerCommand uses fresh data
+      buyerRef.current = updatedBuyer;
 
       // Notify parent to update buyer state
       onBuyerUpdated?.(updatedBuyer);
-      buyerRef.current = updatedBuyer;
 
       toast({ title: "Buyer profile updated" });
 
       // Remove the message with missing field indicator
       setMessages(prev => prev.filter(msg => msg.id !== messageId));
 
-      // Re-trigger the original command with updated buyer
+      // Re-trigger the original command with updated buyer (ref already has fresh data)
       if (originalCommand) {
         const type = determineIntent(originalCommand);
-        // Small delay to ensure state is updated
+        // Small delay to ensure React state has propagated
         setTimeout(() => {
           triggerCommand(originalCommand, type);
         }, 100);
