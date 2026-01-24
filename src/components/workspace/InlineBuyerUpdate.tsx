@@ -72,6 +72,13 @@ export function InlineBuyerUpdate({
   const handleSaveAndGenerate = async () => {
     const numericValue = parseCurrency(value);
     
+    console.log("[InlineBuyerUpdate] handleSaveAndGenerate called with:", {
+      rawValue: value,
+      numericValue,
+      missingField,
+      buyerId
+    });
+    
     if (numericValue === null || numericValue <= 0) {
       setError("Please enter a valid amount");
       return;
@@ -83,9 +90,12 @@ export function InlineBuyerUpdate({
     }
 
     try {
+      console.log("[InlineBuyerUpdate] Calling onSaveAndGenerate...");
       await onSaveAndGenerate(missingField, numericValue);
+      console.log("[InlineBuyerUpdate] onSaveAndGenerate completed");
       setSaved(true);
-    } catch {
+    } catch (err) {
+      console.error("[InlineBuyerUpdate] Error:", err);
       setError("Failed to save. Please try again.");
     }
   };
