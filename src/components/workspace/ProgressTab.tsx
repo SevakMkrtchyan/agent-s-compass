@@ -130,12 +130,7 @@ export function ProgressTab({
       });
       
       console.log("[ProgressTab] Database update successful");
-      
-      // Invalidate buyer queries to refresh UI across all components
-      await queryClient.invalidateQueries({ queryKey: ["buyers"] });
-      await queryClient.invalidateQueries({ queryKey: ["buyers", buyerId] });
-      
-      console.log("[ProgressTab] Query cache invalidated, UI should refresh");
+      console.log("[ProgressTab] Cache invalidation handled by mutation onSuccess");
       
       toast({
         title: "Stage advanced",
