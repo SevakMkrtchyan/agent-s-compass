@@ -62,6 +62,7 @@ interface RequestBody {
   command: string;
   intent: "artifact" | "thinking";
   buyerContext: BuyerContext;
+  visibility?: "internal" | "buyer_approval_required";
 }
 
 interface RAGContext {
@@ -160,7 +161,7 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
-    const { command, intent, buyerContext }: RequestBody = await req.json();
+    const { command, intent, buyerContext, visibility }: RequestBody = await req.json();
 
     // Fetch RAG context
     const ragContext = await fetchRAGContext(
@@ -245,22 +246,55 @@ ${complianceContext}
 `;
 
     let userPrompt = "";
+    const firstName = buyerContext.name.split(" ")[0];
 
     if (intent === "artifact") {
-      userPrompt = `${contextString}
+      // Determine if this is an internal or buyer-facing artifact
+      const isInternal = visibility === "internal";
+      
+      if (isInternal) {
+        // Internal artifacts: Agent-only tools, concise, tactical, no buyer greeting
+        userPrompt = `${contextString}
+
+AGENT COMMAND: ${command}
+
+Generate an INTERNAL artifact for the agent's use only. This will NOT be shared with the buyer.
+
+CRITICAL FORMAT RULES:
+- This is a TOOL for the agent, not a letter to the buyer
+- NO greeting like "Hi ${firstName}" or "Dear ${buyerContext.name}"
+- NO sign-off like "Best regards" or "[Agent Name]"
+- Be concise, tactical, and actionable
+- Use clear headers with ## for sections
+- Use bullet points and checklists where appropriate
+- Format as a template, rubric, checklist, or analysis tool
+- Focus on what the agent needs to execute effectively
+- Keep it under 300 words
+
+Examples of internal artifact formats:
+- Scoring rubric with criteria and point values
+- Checklist with actionable items
+- Comparison template with evaluation columns
+- Strategy brief with decision points
+- Analysis with key metrics and recommendations`;
+      } else {
+        // Buyer-facing artifacts: Professional letter format
+        userPrompt = `${contextString}
 
 AGENT COMMAND: ${command}
 
 Generate a client-facing artifact that the agent will send to ${buyerContext.name}. This will be shown to the buyer after agent approval.
 
 Rules:
-- Write directly to ${buyerContext.name} using their first name
+- Write directly to ${firstName} using their first name
 - Professional but warm tone
 - Clear structure with headers (use ## for headers)
 - Actionable information with bullet points
 - No legal advice
 - No commitments the agent hasn't approved
-- Keep it concise (under 250 words)`;
+- Keep it concise (under 250 words)
+- End with a professional sign-off`;
+      }
     } else if (intent === "thinking") {
       userPrompt = `${contextString}
 
