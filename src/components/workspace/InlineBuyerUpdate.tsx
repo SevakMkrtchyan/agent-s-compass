@@ -72,13 +72,6 @@ export function InlineBuyerUpdate({
   const handleSaveAndGenerate = async () => {
     const numericValue = parseCurrency(value);
     
-    console.log("[InlineBuyerUpdate] handleSaveAndGenerate called with:", {
-      rawValue: value,
-      numericValue,
-      missingField,
-      buyerId
-    });
-    
     if (numericValue === null || numericValue <= 0) {
       setError("Please enter a valid amount");
       return;
@@ -90,12 +83,9 @@ export function InlineBuyerUpdate({
     }
 
     try {
-      console.log("[InlineBuyerUpdate] Calling onSaveAndGenerate...");
       await onSaveAndGenerate(missingField, numericValue);
-      console.log("[InlineBuyerUpdate] onSaveAndGenerate completed");
       setSaved(true);
-    } catch (err) {
-      console.error("[InlineBuyerUpdate] Error:", err);
+    } catch {
       setError("Failed to save. Please try again.");
     }
   };
@@ -179,8 +169,6 @@ export function InlineBuyerUpdate({
 export function detectMissingField(content: string): MissingField | null {
   const lowerContent = content.toLowerCase();
   
-  console.log("[detectMissingField] Checking content:", lowerContent.slice(0, 200));
-  
   // Patterns that indicate missing pre-approval amount
   const preApprovalPatterns = [
     "pre-approval amount",
@@ -208,7 +196,6 @@ export function detectMissingField(content: string): MissingField | null {
   );
   
   if (hasPreApprovalMissing || needsPreApproval) {
-    console.log("[detectMissingField] Detected missing: pre_approval_amount");
     return "pre_approval_amount";
   }
 
@@ -219,7 +206,6 @@ export function detectMissingField(content: string): MissingField | null {
   );
   
   if (hasBudgetMaxMissing) {
-    console.log("[detectMissingField] Detected missing: budget_max");
     return "budget_max";
   }
 
@@ -229,10 +215,8 @@ export function detectMissingField(content: string): MissingField | null {
   );
   
   if (hasBudgetMinMissing) {
-    console.log("[detectMissingField] Detected missing: budget_min");
     return "budget_min";
   }
 
-  console.log("[detectMissingField] No missing field detected");
   return null;
 }
