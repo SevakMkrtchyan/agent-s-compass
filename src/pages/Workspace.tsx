@@ -43,24 +43,28 @@ const WORKSPACE_TABS: { id: WorkspaceTab; label: string; icon: React.ElementType
 ];
 
 // Map stage name from database to stage number
+// MUST match actual stage names in the 'stages' table
 const mapStageNameToNumber = (stageName: string | null): 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 => {
   const stageMap: Record<string, 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9> = {
+    // Current database stage names (must match exactly)
     "Readiness & Expectations": 0,
     "Financing & Capability": 1,
     "Market Intelligence & Search Setup": 2,
-    "Property Touring & Evaluation": 3,
-    "Offer Strategy & Negotiation": 4,
-    "Under Contract": 5,
-    "Inspection & Due Diligence": 6,
-    "Closing Preparation": 7,
-    "Closing": 8,
-    "Post-Close": 9,
+    "Touring, Filtering & Convergence": 3,
+    "Offer Strategy & Submission": 4,
+    "Negotiation & Contract": 5,
+    "Due Diligence & Inspections": 6,
+    "Appraisal & Lending": 7,
+    "Final Walkthrough & Preparation": 8,
+    "Closing & Post-Close": 9,
     // Legacy fallbacks for compatibility
     "Home Search": 1,
     "Offer Strategy": 4,
-    "Closing & Post-Close": 9,
+    "Post-Close": 9,
   };
-  return stageMap[stageName || "Financing & Capability"] ?? 1;
+  const result = stageMap[stageName || "Financing & Capability"] ?? 1;
+  console.log(`[mapStageNameToNumber] "${stageName}" → stage ${result}`);
+  return result;
 };
 
 // Transform DB Buyer to local Buyer type for components
