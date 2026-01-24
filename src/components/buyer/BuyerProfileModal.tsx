@@ -83,9 +83,9 @@ export function BuyerProfileModal({ buyer, open, onOpenChange }: BuyerProfileMod
     return new Intl.NumberFormat("en-US").format(parseInt(numbers));
   };
 
-  const parseCurrency = (value: string): number | undefined => {
+  const parseCurrency = (value: string): number | null => {
     const numbers = value.replace(/\D/g, "");
-    return numbers ? parseInt(numbers) : undefined;
+    return numbers ? parseInt(numbers) : null;
   };
 
   const formatPhoneNumber = (value: string) => {
@@ -128,19 +128,19 @@ export function BuyerProfileModal({ buyer, open, onOpenChange }: BuyerProfileMod
       await updateBuyer.mutateAsync({
         id: buyer.id,
         name: formData.name.trim(),
-        email: formData.email.trim() || undefined,
-        phone: formData.phone.trim() || undefined,
+        email: formData.email.trim() || null,
+        phone: formData.phone.trim() || null,
         budget_min: parseCurrency(formData.budgetMin),
         budget_max: parseCurrency(formData.budgetMax),
         pre_approval_status: formData.preApprovalStatus,
         pre_approval_amount: parseCurrency(formData.preApprovalAmount),
-        min_beds: formData.minBeds ? parseInt(formData.minBeds) : undefined,
-        min_baths: formData.minBaths ? parseFloat(formData.minBaths) : undefined,
-        preferred_cities: formData.preferredCities.length > 0 ? formData.preferredCities : undefined,
-        property_types: formData.propertyTypes.length > 0 ? formData.propertyTypes : undefined,
-        must_haves: formData.mustHaves.trim() || undefined,
-        nice_to_haves: formData.niceToHaves.trim() || undefined,
-        agent_notes: formData.agentNotes.trim() || undefined,
+        min_beds: formData.minBeds ? parseInt(formData.minBeds) : null,
+        min_baths: formData.minBaths ? parseFloat(formData.minBaths) : null,
+        preferred_cities: formData.preferredCities.length > 0 ? formData.preferredCities : null,
+        property_types: formData.propertyTypes.length > 0 ? formData.propertyTypes : null,
+        must_haves: formData.mustHaves.trim() || null,
+        nice_to_haves: formData.niceToHaves.trim() || null,
+        agent_notes: formData.agentNotes.trim() || null,
       });
 
       onOpenChange(false);

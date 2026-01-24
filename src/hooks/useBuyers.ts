@@ -48,8 +48,26 @@ export interface CreateBuyerInput {
   current_stage?: string;
 }
 
-export interface UpdateBuyerInput extends Partial<CreateBuyerInput> {
+export interface UpdateBuyerInput {
   id: string;
+  name?: string;
+  email?: string | null;
+  phone?: string | null;
+  avatar_url?: string | null;
+  buyer_type?: string | null;
+  budget_min?: number | null;
+  budget_max?: number | null;
+  pre_approval_status?: string | null;
+  pre_approval_amount?: number | null;
+  min_beds?: number | null;
+  min_baths?: number | null;
+  preferred_cities?: string[] | null;
+  property_types?: string[] | null;
+  must_haves?: string | null;
+  nice_to_haves?: string | null;
+  agent_notes?: string | null;
+  portal_link?: string | null;
+  current_stage?: string | null;
 }
 
 // Placeholder agent ID - in a real app this would come from auth
