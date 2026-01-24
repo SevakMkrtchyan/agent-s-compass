@@ -7,6 +7,7 @@ import {
   DollarSign,
   ChevronRight,
   ArrowUpRight,
+  ArrowDownLeft,
   Sparkles,
   ExternalLink,
   Lock,
@@ -24,6 +25,16 @@ import { useStages, type DbStage } from "@/hooks/useStages";
 import { useStageCompletion } from "@/hooks/useStageCompletion";
 import { useBuyers } from "@/hooks/useBuyers";
 import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface ProgressTabProps {
   stages: StageGroup[];
@@ -43,6 +54,7 @@ export const ProgressTab = forwardRef<HTMLDivElement, ProgressTabProps>(function
 }, ref) {
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(null);
   const [showAllArtifacts, setShowAllArtifacts] = useState(false);
+  const [stageJumpTarget, setStageJumpTarget] = useState<DbStage | null>(null);
   const { toast } = useToast();
 
   // Fetch artifacts from database
@@ -110,54 +122,79 @@ export const ProgressTab = forwardRef<HTMLDivElement, ProgressTabProps>(function
   const minDisplayStage = Math.max(0, currentStage - 2);
   const totalArtifactCount = artifacts?.length || 0;
 
-  const handleAdvanceStage = async () => {
-    console.log("[ProgressTab] Advance stage button clicked");
+  // Generic stage change handler - can move forward or backward
+  const handleStageChange = async (targetStageNumber: number, direction: 'forward' | 'backward' | 'jump') => {
+    console.log(`[ProgressTab] Stage change: ${direction}`);
     console.log("[ProgressTab] Current stage:", currentStage);
+    console.log("[ProgressTab] Target stage:", targetStageNumber);
     
-    const nextStageIndex = currentStage + 1;
-    console.log("[ProgressTab] Target next stage index:", nextStageIndex);
-    
-    if (nextStageIndex > 9) {
-      console.log("[ProgressTab] Cannot advance: already at max stage");
+    if (targetStageNumber < 0 || targetStageNumber > 9) {
+      console.log("[ProgressTab] Cannot change: stage out of range");
       return;
     }
     
-    // Find next stage name from database stages
-    const nextDbStage = allDbStages?.find(s => s.stage_number === nextStageIndex);
-    const nextStageName = nextDbStage?.stage_name;
+    // Find target stage name from database
+    const targetDbStage = allDbStages?.find(s => s.stage_number === targetStageNumber);
+    const targetStageName = targetDbStage?.stage_name;
     
-    if (!nextStageName) {
-      console.error("[ProgressTab] Next stage not found in database for index:", nextStageIndex);
+    if (!targetStageName) {
+      console.error("[ProgressTab] Target stage not found in database for index:", targetStageNumber);
       toast({
         title: "Stage not found",
-        description: `Stage ${nextStageIndex} is not yet configured in the system.`,
+        description: `Stage ${targetStageNumber} is not yet configured in the system.`,
         variant: "destructive",
       });
       return;
     }
     
-    console.log("[ProgressTab] Advancing to stage:", nextStageName);
+    console.log(`[ProgressTab] Changing to stage: ${targetStageName}`);
     
     try {
       await updateBuyer.mutateAsync({
         id: buyerId,
-        current_stage: nextStageName,
+        current_stage: targetStageName,
       });
       
       console.log("[ProgressTab] Database update successful");
       
+      const actionText = direction === 'forward' 
+        ? 'advanced to' 
+        : direction === 'backward' 
+          ? 'moved back to' 
+          : 'jumped to';
+      
       toast({
-        title: "Stage advanced",
-        description: `${buyerName} has been moved to ${nextStageName}`,
+        title: direction === 'forward' ? "Stage advanced" : direction === 'backward' ? "Stage moved back" : "Stage changed",
+        description: `${buyerName} has been ${actionText} Stage ${targetStageNumber}: ${targetStageName}`,
       });
     } catch (error) {
-      console.error("[ProgressTab] Error advancing stage:", error);
+      console.error("[ProgressTab] Error changing stage:", error);
       toast({
-        title: "Error advancing stage",
+        title: "Error changing stage",
         description: "Please try again.",
         variant: "destructive",
       });
     }
+  };
+
+  const handleAdvanceStage = () => handleStageChange(currentStage + 1, 'forward');
+  const handlePreviousStage = () => handleStageChange(currentStage - 1, 'backward');
+  
+  const handleStageJumpConfirm = async () => {
+    if (!stageJumpTarget) return;
+    await handleStageChange(stageJumpTarget.stage_number, 'jump');
+    setStageJumpTarget(null);
+  };
+
+  const handleStageJourneyClick = (stage: DbStage) => {
+    // If clicking on current stage, generate strategy instead
+    if (stage.stage_number === currentStage) {
+      const command = `Generate ${stage.stage_name.toLowerCase()} strategy and next steps for ${buyerName} - include 3-4 actionable recommendations`;
+      onPrefillAgentGPT(command);
+      return;
+    }
+    // Otherwise, prompt to jump to that stage
+    setStageJumpTarget(stage);
   };
 
   const handleToggleCriterion = (index: number) => {
@@ -180,11 +217,6 @@ export const ProgressTab = forwardRef<HTMLDivElement, ProgressTabProps>(function
   const handleGenerateNextSteps = () => {
     const stageName = currentDbStage?.stage_name || `Stage ${currentStage}`;
     const command = `Generate 3-4 prioritized next actions for ${buyerName} in the ${stageName} stage. Include one artifact draft, one internal analysis, and stage-specific recommendations.`;
-    onPrefillAgentGPT(command);
-  };
-
-  const handleStageJourneyClick = (stage: DbStage) => {
-    const command = `Generate ${stage.stage_name.toLowerCase()} strategy and next steps for ${buyerName} - include 3-4 actionable recommendations`;
     onPrefillAgentGPT(command);
   };
 
@@ -261,6 +293,17 @@ export const ProgressTab = forwardRef<HTMLDivElement, ProgressTabProps>(function
               <Sparkles className="h-4 w-4" />
               Generate next steps
             </button>
+            {currentStage > 0 && (
+              <button
+                onClick={handlePreviousStage}
+                disabled={updateBuyer.isPending}
+                className="inline-flex items-center gap-2 text-base transition-colors hover:underline underline-offset-4"
+                style={{ color: '#9ca3af' }}
+              >
+                <ArrowDownLeft className="h-4 w-4" />
+                {updateBuyer.isPending ? "Moving..." : "Previous stage"}
+              </button>
+            )}
             {currentStage < 9 && (
               <button
                 onClick={handleAdvanceStage}
@@ -370,11 +413,10 @@ export const ProgressTab = forwardRef<HTMLDivElement, ProgressTabProps>(function
                 return (
                   <button
                     key={stage.id}
-                    onClick={() => !isUpcoming && handleStageJourneyClick(stage)}
-                    disabled={isUpcoming}
+                    onClick={() => handleStageJourneyClick(stage)}
                     className={cn(
-                      "w-full flex items-center justify-between py-4 text-left group transition-colors",
-                      isUpcoming && "opacity-40 cursor-not-allowed"
+                      "w-full flex items-center justify-between py-4 text-left group transition-colors hover:bg-muted/30 rounded px-2 -mx-2",
+                      isCurrent && "bg-muted/20"
                     )}
                     style={{ borderBottom: '1px solid #f3f4f6' }}
                   >
@@ -391,14 +433,14 @@ export const ProgressTab = forwardRef<HTMLDivElement, ProgressTabProps>(function
                       <div>
                         <span 
                           className={cn(
-                            "text-base",
+                            "text-base group-hover:underline underline-offset-4",
                             isCurrent && "font-semibold"
                           )}
-                          style={{ color: isCurrent ? '#111827' : isUpcoming ? '#9ca3af' : '#374151' }}
+                          style={{ color: isCurrent ? '#111827' : isUpcoming ? '#6b7280' : '#374151' }}
                         >
                           Stage {stage.stage_number}: {stage.stage_name}
                         </span>
-                        {dates.completedAt && (
+                        {dates.completedAt && isCompleted && (
                           <p className="text-sm" style={{ color: '#9ca3af' }}>
                             Completed {formatDate(dates.completedAt)}
                           </p>
@@ -408,14 +450,17 @@ export const ProgressTab = forwardRef<HTMLDivElement, ProgressTabProps>(function
                             Started {formatDate(dates.startedAt)}
                           </p>
                         )}
+                        {isUpcoming && (
+                          <p className="text-sm" style={{ color: '#9ca3af' }}>
+                            Click to jump ahead
+                          </p>
+                        )}
                       </div>
                     </div>
-                    {!isUpcoming && (
-                      <ChevronRight 
-                        className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" 
-                        style={{ color: '#9ca3af' }} 
-                      />
-                    )}
+                    <ChevronRight 
+                      className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" 
+                      style={{ color: '#9ca3af' }} 
+                    />
                   </button>
                 );
               })}
@@ -425,6 +470,40 @@ export const ProgressTab = forwardRef<HTMLDivElement, ProgressTabProps>(function
               No stages configured in the system.
             </p>
           )}
+          
+          {/* Stage Jump Confirmation Dialog */}
+          <AlertDialog open={!!stageJumpTarget} onOpenChange={(open) => !open && setStageJumpTarget(null)}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Move buyer to different stage?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {stageJumpTarget && (
+                    <>
+                      This will move <strong>{buyerName}</strong> from{" "}
+                      <strong>Stage {currentStage}: {currentDbStage?.stage_name}</strong> to{" "}
+                      <strong>Stage {stageJumpTarget.stage_number}: {stageJumpTarget.stage_name}</strong>.
+                      {stageJumpTarget.stage_number < currentStage && (
+                        <span className="block mt-2 text-amber-600">
+                          ⚠️ This will move the buyer backward in the process.
+                        </span>
+                      )}
+                      {stageJumpTarget.stage_number > currentStage && (
+                        <span className="block mt-2 text-blue-600">
+                          ℹ️ This will skip ahead in the process.
+                        </span>
+                      )}
+                    </>
+                  )}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleStageJumpConfirm} disabled={updateBuyer.isPending}>
+                  {updateBuyer.isPending ? "Moving..." : "Confirm Move"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
 
         <hr className="max-w-3xl mb-10" style={{ borderColor: '#e5e7eb' }} />
