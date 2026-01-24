@@ -28,7 +28,7 @@ interface UseAgentGPTStreamReturn {
   isStreaming: boolean;
   streamedContent: string;
   error: string | null;
-  streamArtifact: (command: string, buyer: Buyer) => Promise<void>;
+  streamArtifact: (command: string, buyer: Buyer, visibility?: "internal" | "buyer_approval_required") => Promise<void>;
   streamThinking: (command: string, buyer: Buyer) => Promise<void>;
   cancelStream: () => void;
   clearStream: () => void;
@@ -85,7 +85,8 @@ export function useAgentGPTStream(): UseAgentGPTStreamReturn {
   const streamFromClaude = async (
     command: string,
     intent: "artifact" | "thinking",
-    buyerContext: BuyerContext
+    buyerContext: BuyerContext,
+    visibility?: "internal" | "buyer_approval_required"
   ) => {
     // Cancel any existing stream
     cancelStream();
@@ -105,7 +106,7 @@ export function useAgentGPTStream(): UseAgentGPTStreamReturn {
             "Content-Type": "application/json",
             Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           },
-          body: JSON.stringify({ command, intent, buyerContext }),
+          body: JSON.stringify({ command, intent, buyerContext, visibility }),
           signal: abortControllerRef.current.signal,
         }
       );
@@ -180,14 +181,14 @@ export function useAgentGPTStream(): UseAgentGPTStreamReturn {
     }
   };
 
-  const streamArtifact = useCallback(async (command: string, buyer: Buyer) => {
+  const streamArtifact = useCallback(async (command: string, buyer: Buyer, visibility?: "internal" | "buyer_approval_required") => {
     const context = buyerToContext(buyer);
-    await streamFromClaude(command, "artifact", context);
+    await streamFromClaude(command, "artifact", context, visibility);
   }, []);
 
   const streamThinking = useCallback(async (command: string, buyer: Buyer) => {
     const context = buyerToContext(buyer);
-    await streamFromClaude(command, "thinking", context);
+    await streamFromClaude(command, "thinking", context, "internal"); // Thinking is always internal
   }, []);
 
   return {

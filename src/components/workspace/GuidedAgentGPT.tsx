@@ -41,6 +41,7 @@ interface RecommendedAction {
   type: "artifact" | "thinking";
   icon?: React.ElementType;
   dbType?: "task" | "generate";
+  visibility?: "internal" | "buyer_approval_required";
 }
 
 interface ChatMessage {
@@ -145,15 +146,46 @@ export function GuidedAgentGPT({
   }, []);
 
   // Convert database next_actions to RecommendedAction format
-  const mapDbActionsToRecommended = useCallback((dbActions: NextAction[], buyerName: string): RecommendedAction[] => {
-    return dbActions.map((action, idx) => ({
-      id: action.id || `action-${idx}`,
-      label: action.label,
-      command: generateCommandFromDbAction(action, buyerName),
-      type: "artifact" as const,
-      dbType: action.type,
-      icon: getIconForDbAction(action),
-    }));
+  // Look up visibility from the stage artifacts array by matching action ID patterns
+  const mapDbActionsToRecommended = useCallback((dbActions: NextAction[], buyerName: string, artifacts?: { id: string; visibility: string }[]): RecommendedAction[] => {
+    return dbActions.map((action, idx) => {
+      // Try to find matching artifact visibility
+      // Action IDs like "create-scoring-rubric" map to artifact IDs like "property-scoring-rubric"
+      let visibility: "internal" | "buyer_approval_required" | undefined = undefined;
+      
+      if (artifacts) {
+        // Direct match first
+        const directMatch = artifacts.find(a => a.id === action.id);
+        if (directMatch) {
+          visibility = directMatch.visibility === "internal" ? "internal" : "buyer_approval_required";
+        } else {
+          // Try fuzzy match: action "generate-neighborhood-brief" → artifact "neighborhood-intelligence-brief"
+          const actionKeywords = action.id.toLowerCase().split('-').filter(w => !['create', 'generate', 'prep', 'setup', 'prepare'].includes(w));
+          const matchedArtifact = artifacts.find(a => {
+            const artifactKeywords = a.id.toLowerCase().split('-');
+            return actionKeywords.some(kw => artifactKeywords.includes(kw));
+          });
+          if (matchedArtifact) {
+            visibility = matchedArtifact.visibility === "internal" ? "internal" : "buyer_approval_required";
+          }
+        }
+      }
+      
+      // Default: if no artifact match found, default to internal for safety
+      if (!visibility) {
+        visibility = "internal";
+      }
+      
+      return {
+        id: action.id || `action-${idx}`,
+        label: action.label,
+        command: generateCommandFromDbAction(action, buyerName),
+        type: "artifact" as const,
+        dbType: action.type,
+        icon: getIconForDbAction(action),
+        visibility,
+      };
+    });
   }, []);
 
   // Load actions on mount, buyer change, or when stage data loads
@@ -163,7 +195,8 @@ export function GuidedAgentGPT({
       if (dbStage?.next_actions && dbStage.next_actions.length > 0) {
         // Filter actions based on buyer data before mapping
         const filteredActions = filterActionsByBuyerData(dbStage.next_actions, buyer);
-        const dbActions = mapDbActionsToRecommended(filteredActions, buyerName);
+        // Pass artifacts to map visibility
+        const dbActions = mapDbActionsToRecommended(filteredActions, buyerName, dbStage.artifacts);
         setRecommendedActions(dbActions);
         setShowActions(true);
         return;
@@ -285,7 +318,7 @@ export function GuidedAgentGPT({
     return thinkingPatterns.some(p => lowerCommand.includes(p)) ? "thinking" : "artifact";
   };
 
-  const triggerCommand = useCallback(async (command: string, type: "artifact" | "thinking") => {
+  const triggerCommand = useCallback(async (command: string, type: "artifact" | "thinking", visibility?: "internal" | "buyer_approval_required") => {
     clearStream();
     setShowActions(false);
     setPendingCommand({ command, type });
@@ -311,7 +344,8 @@ export function GuidedAgentGPT({
       if (type === "thinking") {
         await streamThinking(command, buyerRef.current);
       } else {
-        await streamArtifact(command, buyerRef.current);
+        // Pass visibility to streamArtifact, default to internal if not specified
+        await streamArtifact(command, buyerRef.current, visibility || "internal");
       }
     } catch {
       // Error handled by hook
@@ -443,7 +477,7 @@ export function GuidedAgentGPT({
   };
 
   const handleRecommendationClick = useCallback(async (action: RecommendedAction) => {
-    await triggerCommand(action.command, action.type);
+    await triggerCommand(action.command, action.type, action.visibility);
   }, [triggerCommand]);
 
   const handleRefresh = async () => {
