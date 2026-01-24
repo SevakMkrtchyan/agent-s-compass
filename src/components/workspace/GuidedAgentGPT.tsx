@@ -244,17 +244,11 @@ export function GuidedAgentGPT({
 
   useEffect(() => {
     if (!isStreaming && streamedContent) {
-      console.log("[GuidedAgentGPT] Stream complete, detecting missing fields...");
-      console.log("[GuidedAgentGPT] Content length:", streamedContent.length);
-      
       // Detect if AI response indicates missing data
       const missingField = detectMissingField(streamedContent);
       
-      console.log("[GuidedAgentGPT] Missing field result:", missingField);
-      console.log("[GuidedAgentGPT] Pending command:", pendingCommand?.command);
-      
       setMessages(prev => {
-        const updated = prev.map(msg =>
+        return prev.map(msg =>
           msg.status === "streaming" 
             ? { 
                 ...msg, 
@@ -265,8 +259,6 @@ export function GuidedAgentGPT({
               } 
             : msg
         );
-        console.log("[GuidedAgentGPT] Updated messages:", updated.map(m => ({ id: m.id, status: m.status, missingField: m.missingField })));
-        return updated;
       });
     }
   }, [isStreaming, streamedContent, pendingCommand]);
@@ -321,14 +313,6 @@ export function GuidedAgentGPT({
     value: number,
     originalCommand?: string
   ) => {
-    console.log("[handleInlineBuyerUpdate] Called with:", {
-      messageId,
-      field,
-      value,
-      originalCommand,
-      buyerId: buyer.id
-    });
-    
     setIsUpdatingBuyer(true);
     
     try {
@@ -346,16 +330,11 @@ export function GuidedAgentGPT({
         updatePayload.budget_min = value;
       }
       
-      console.log("[handleInlineBuyerUpdate] Update payload:", updatePayload);
-      
       // Update buyer in database
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from("buyers")
         .update(updatePayload)
-        .eq("id", buyer.id)
-        .select();
-
-      console.log("[handleInlineBuyerUpdate] Supabase response:", { data, error });
+        .eq("id", buyer.id);
 
       if (error) throw error;
 
@@ -652,13 +631,6 @@ function MessageBlock({
     const isPending = message.status === "pending";
     const isSaved = message.status === "saved";
     const hasMissingField = message.missingField && isPending;
-    
-    console.log("[MessageBlock] Rendering artifact:", { 
-      messageId: message.id, 
-      isPending, 
-      missingField: message.missingField, 
-      hasMissingField 
-    });
     
     return (
       <div className="max-w-3xl">
