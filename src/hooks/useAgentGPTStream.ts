@@ -36,6 +36,10 @@ interface UseAgentGPTStreamReturn {
 }
 
 function buyerToContext(buyer: Buyer): BuyerContext {
+  // Only use pre_approval_amount if status is "Pre-Approved"
+  // If status is "Not Started" or "In Progress", treat amount as if it doesn't exist
+  const isPreApprovalValid = buyer.pre_approval_status === "Pre-Approved";
+  
   return {
     name: buyer.name,
     email: buyer.email,
@@ -47,7 +51,8 @@ function buyerToContext(buyer: Buyer): BuyerContext {
     buyerId: buyer.id,
     // Extended profile fields
     preApprovalStatus: buyer.pre_approval_status,
-    preApprovalAmount: buyer.pre_approval_amount,
+    // Only include pre_approval_amount if status is Pre-Approved
+    preApprovalAmount: isPreApprovalValid ? buyer.pre_approval_amount : null,
     budgetMin: buyer.budget_min,
     budgetMax: buyer.budget_max,
     preferredCities: buyer.preferred_cities,

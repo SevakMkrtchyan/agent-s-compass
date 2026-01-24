@@ -247,11 +247,14 @@ export function GuidedAgentGPT({
       // Detect if AI response indicates missing data
       let detectedMissing = detectMissingField(streamedContent);
       
-      // Only show inline form if the field is actually missing from buyer object
+      // Only show inline form if buyer needs to complete pre-approval
+      // Don't show if already "Pre-Approved" - they have valid pre-approval
       if (detectedMissing) {
-        const fieldValue = buyer[detectedMissing];
-        if (fieldValue !== null && fieldValue !== undefined) {
-          // Buyer already has this field populated, don't show the form
+        const status = buyer.pre_approval_status;
+        const isPreApprovalComplete = status === "Pre-Approved";
+        
+        if (isPreApprovalComplete) {
+          // Buyer has completed pre-approval, don't show inline form
           detectedMissing = null;
         }
       }
