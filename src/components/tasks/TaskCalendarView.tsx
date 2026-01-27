@@ -68,12 +68,14 @@ export function TaskCalendarView({ tasks, onTaskClick, onDateClick }: TaskCalend
     }
   }, [currentDate, viewMode]);
 
-  // Group tasks by date
+  // Group tasks by date - use raw date string to avoid timezone issues
   const tasksByDate = useMemo(() => {
     const grouped = new Map<string, Task[]>();
     tasks.forEach(task => {
       if (task.due_date) {
-        const dateKey = format(new Date(task.due_date), "yyyy-MM-dd");
+        // Use the date string directly (already in yyyy-MM-dd format)
+        // This avoids timezone conversion issues with new Date()
+        const dateKey = task.due_date.split('T')[0]; // Handle both "2026-01-21" and "2026-01-21T00:00:00"
         if (!grouped.has(dateKey)) {
           grouped.set(dateKey, []);
         }
@@ -83,9 +85,9 @@ export function TaskCalendarView({ tasks, onTaskClick, onDateClick }: TaskCalend
     return grouped;
   }, [tasks]);
 
-  // Set of dates that have tasks
+  // Set of dates that have tasks - use raw date strings
   const taskDates = useMemo(() => {
-    return new Set(tasks.filter(t => t.due_date).map(t => format(new Date(t.due_date!), "yyyy-MM-dd")));
+    return new Set(tasks.filter(t => t.due_date).map(t => t.due_date!.split('T')[0]));
   }, [tasks]);
 
   // Unscheduled tasks
