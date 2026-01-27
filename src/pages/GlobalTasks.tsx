@@ -26,6 +26,7 @@ import {
 import { useTasks } from "@/hooks/useTasks";
 import { TaskPriorityGroup } from "@/components/tasks/TaskPriorityGroup";
 import { CreateTaskDialog } from "@/components/tasks/CreateTaskDialog";
+import { EditTaskDialog } from "@/components/tasks/EditTaskDialog";
 import { TaskCalendarView } from "@/components/tasks/TaskCalendarView";
 import { Task } from "@/types/task";
 import { format } from "date-fns";
@@ -37,6 +38,8 @@ export default function GlobalTasks() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("active");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
 
@@ -65,8 +68,8 @@ export default function GlobalTasks() {
   const activeTasks = filteredTasks.filter(t => t.status !== "Complete");
 
   const handleEditTask = (task: Task) => {
-    // TODO: Implement edit dialog
-    console.log("Edit task:", task);
+    setSelectedTask(task);
+    setEditDialogOpen(true);
   };
 
   const handleTaskClick = (task: Task) => {
@@ -76,6 +79,13 @@ export default function GlobalTasks() {
   const handleDateClick = (date: Date) => {
     setSelectedDate(date);
     setCreateDialogOpen(true);
+  };
+
+  const handleCreateDialogClose = (open: boolean) => {
+    setCreateDialogOpen(open);
+    if (!open) {
+      setSelectedDate(undefined);
+    }
   };
 
   return (
@@ -333,8 +343,14 @@ export default function GlobalTasks() {
 
       <CreateTaskDialog 
         open={createDialogOpen} 
-        onOpenChange={setCreateDialogOpen}
+        onOpenChange={handleCreateDialogClose}
         defaultDueDate={selectedDate ? format(selectedDate, "yyyy-MM-dd") : undefined}
+      />
+
+      <EditTaskDialog
+        task={selectedTask}
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
       />
     </div>
   );
