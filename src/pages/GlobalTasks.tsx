@@ -233,6 +233,7 @@ export default function GlobalTasks() {
               <TaskCalendarView
                 tasks={filteredTasks}
                 onTaskClick={handleCalendarTaskClick}
+                onTaskEdit={handleEditTask}
                 onDateClick={handleDateClick}
               />
             )

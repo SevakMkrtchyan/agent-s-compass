@@ -32,6 +32,7 @@ import { useToast } from "@/hooks/use-toast";
 interface TaskCalendarViewProps {
   tasks: Task[];
   onTaskClick: (task: Task) => void;
+  onTaskEdit: (task: Task) => void;
   onDateClick: (date: Date) => void;
 }
 
@@ -39,7 +40,7 @@ type CalendarViewMode = "month" | "week" | "day";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-export function TaskCalendarView({ tasks, onTaskClick, onDateClick }: TaskCalendarViewProps) {
+export function TaskCalendarView({ tasks, onTaskClick, onTaskEdit, onDateClick }: TaskCalendarViewProps) {
   const { toast } = useToast();
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
@@ -50,7 +51,6 @@ export function TaskCalendarView({ tasks, onTaskClick, onDateClick }: TaskCalend
   const [dropTargetDate, setDropTargetDate] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [detailPanelOpen, setDetailPanelOpen] = useState(false);
-  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
 
   // Get calendar days based on view mode
   const calendarDays = useMemo(() => {
@@ -356,13 +356,11 @@ export function TaskCalendarView({ tasks, onTaskClick, onDateClick }: TaskCalend
                             key={task.id}
                             task={task}
                             onClick={() => handleTaskClick(task)}
+                            onEdit={() => onTaskEdit(task)}
                             onDelete={() => handleDeleteTask(task)}
                             isDragging={draggedTask?.id === task.id}
                             onDragStart={handleDragStart}
                             onDragEnd={handleDragEnd}
-                            isEditing={editingTaskId === task.id}
-                            onStartEdit={() => setEditingTaskId(task.id)}
-                            onCancelEdit={() => setEditingTaskId(null)}
                           />
                         ))}
                         {remainingCount > 0 && (
@@ -417,13 +415,11 @@ export function TaskCalendarView({ tasks, onTaskClick, onDateClick }: TaskCalend
                         key={task.id}
                         task={task}
                         onClick={() => handleTaskClick(task)}
+                        onEdit={() => onTaskEdit(task)}
                         onDelete={() => handleDeleteTask(task)}
                         isDragging={draggedTask?.id === task.id}
                         onDragStart={handleDragStart}
                         onDragEnd={handleDragEnd}
-                        isEditing={editingTaskId === task.id}
-                        onStartEdit={() => setEditingTaskId(task.id)}
-                        onCancelEdit={() => setEditingTaskId(null)}
                       />
                     ))}
                     {!(tasksByDate.get(format(currentDate, "yyyy-MM-dd")) || []).length && (
@@ -454,13 +450,11 @@ export function TaskCalendarView({ tasks, onTaskClick, onDateClick }: TaskCalend
                     key={task.id}
                     task={task}
                     onClick={() => handleTaskClick(task)}
+                    onEdit={() => onTaskEdit(task)}
                     onDelete={() => handleDeleteTask(task)}
                     isDragging={draggedTask?.id === task.id}
                     onDragStart={handleDragStart}
                     onDragEnd={handleDragEnd}
-                    isEditing={editingTaskId === task.id}
-                    onStartEdit={() => setEditingTaskId(task.id)}
-                    onCancelEdit={() => setEditingTaskId(null)}
                   />
                 ))}
               </div>
