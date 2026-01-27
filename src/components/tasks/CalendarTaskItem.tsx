@@ -1,8 +1,6 @@
 import { useMemo, useState } from "react";
-import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Task } from "@/types/task";
-import { Checkbox } from "@/components/ui/checkbox";
 import { useUpdateTask } from "@/hooks/useTasks";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -12,7 +10,16 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import { CheckCircle2, Edit, Trash2, Circle } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { CheckCircle2, Edit, Trash2, Circle, Check, X } from "lucide-react";
 
 interface CalendarTaskItemProps {
   task: Task;
@@ -21,6 +28,9 @@ interface CalendarTaskItemProps {
   isDragging?: boolean;
   onDragStart: (e: React.DragEvent, task: Task) => void;
   onDragEnd: () => void;
+  isEditing?: boolean;
+  onStartEdit?: () => void;
+  onCancelEdit?: () => void;
 }
 
 export function CalendarTaskItem({ 
@@ -29,11 +39,19 @@ export function CalendarTaskItem({
   onDelete,
   isDragging,
   onDragStart,
-  onDragEnd
+  onDragEnd,
+  isEditing = false,
+  onStartEdit,
+  onCancelEdit,
 }: CalendarTaskItemProps) {
   const { toast } = useToast();
   const updateTask = useUpdateTask();
   const [isHovered, setIsHovered] = useState(false);
+  
+  // Inline edit state
+  const [editTitle, setEditTitle] = useState(task.title);
+  const [editPriority, setEditPriority] = useState<string>(task.priority);
+  const [isSaving, setIsSaving] = useState(false);
 
   const priorityBorderColor = useMemo(() => {
     switch (task.priority) {
@@ -98,6 +116,96 @@ export function CalendarTaskItem({
     }
   };
 
+  const handleSaveEdit = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!editTitle.trim()) {
+      toast({ title: "Title is required", variant: "destructive" });
+      return;
+    }
+    
+    setIsSaving(true);
+    try {
+      await updateTask.mutateAsync({
+        id: task.id,
+        title: editTitle.trim(),
+        priority: editPriority as "High" | "Medium" | "Low",
+      });
+      toast({ title: "Task updated" });
+      onCancelEdit?.();
+    } catch (error) {
+      toast({ title: "Error updating task", variant: "destructive" });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleCancelEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditTitle(task.title);
+    setEditPriority(task.priority);
+    onCancelEdit?.();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      handleSaveEdit(e as unknown as React.MouseEvent);
+    } else if (e.key === "Escape") {
+      handleCancelEdit(e as unknown as React.MouseEvent);
+    }
+  };
+
+  // Inline edit mode
+  if (isEditing) {
+    return (
+      <div
+        className={cn(
+          "flex flex-col gap-1.5 p-2 rounded text-xs bg-card border-l-2 border border-primary shadow-md",
+          priorityBorderColor
+        )}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <Input
+          value={editTitle}
+          onChange={(e) => setEditTitle(e.target.value)}
+          onKeyDown={handleKeyDown}
+          className="h-7 text-xs"
+          placeholder="Task title"
+          autoFocus
+        />
+        <div className="flex items-center gap-1.5">
+          <Select value={editPriority} onValueChange={setEditPriority}>
+            <SelectTrigger className="h-6 text-[10px] flex-1">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="High">High</SelectItem>
+              <SelectItem value="Medium">Medium</SelectItem>
+              <SelectItem value="Low">Low</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button 
+            size="icon" 
+            variant="ghost" 
+            className="h-6 w-6" 
+            onClick={handleSaveEdit}
+            disabled={isSaving}
+          >
+            <Check className="h-3.5 w-3.5 text-success" />
+          </Button>
+          <Button 
+            size="icon" 
+            variant="ghost" 
+            className="h-6 w-6" 
+            onClick={handleCancelEdit}
+            disabled={isSaving}
+          >
+            <X className="h-3.5 w-3.5 text-muted-foreground" />
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -153,7 +261,7 @@ export function CalendarTaskItem({
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent>
-        <ContextMenuItem onClick={onClick}>
+        <ContextMenuItem onClick={() => onStartEdit?.()}>
           <Edit className="h-4 w-4 mr-2" />
           Edit Task
         </ContextMenuItem>

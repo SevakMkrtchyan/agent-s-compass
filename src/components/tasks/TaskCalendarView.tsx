@@ -50,6 +50,7 @@ export function TaskCalendarView({ tasks, onTaskClick, onDateClick }: TaskCalend
   const [dropTargetDate, setDropTargetDate] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [detailPanelOpen, setDetailPanelOpen] = useState(false);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
 
   // Get calendar days based on view mode
   const calendarDays = useMemo(() => {
@@ -359,6 +360,9 @@ export function TaskCalendarView({ tasks, onTaskClick, onDateClick }: TaskCalend
                             isDragging={draggedTask?.id === task.id}
                             onDragStart={handleDragStart}
                             onDragEnd={handleDragEnd}
+                            isEditing={editingTaskId === task.id}
+                            onStartEdit={() => setEditingTaskId(task.id)}
+                            onCancelEdit={() => setEditingTaskId(null)}
                           />
                         ))}
                         {remainingCount > 0 && (
@@ -417,6 +421,9 @@ export function TaskCalendarView({ tasks, onTaskClick, onDateClick }: TaskCalend
                         isDragging={draggedTask?.id === task.id}
                         onDragStart={handleDragStart}
                         onDragEnd={handleDragEnd}
+                        isEditing={editingTaskId === task.id}
+                        onStartEdit={() => setEditingTaskId(task.id)}
+                        onCancelEdit={() => setEditingTaskId(null)}
                       />
                     ))}
                     {!(tasksByDate.get(format(currentDate, "yyyy-MM-dd")) || []).length && (
@@ -451,6 +458,9 @@ export function TaskCalendarView({ tasks, onTaskClick, onDateClick }: TaskCalend
                     isDragging={draggedTask?.id === task.id}
                     onDragStart={handleDragStart}
                     onDragEnd={handleDragEnd}
+                    isEditing={editingTaskId === task.id}
+                    onStartEdit={() => setEditingTaskId(task.id)}
+                    onCancelEdit={() => setEditingTaskId(null)}
                   />
                 ))}
               </div>
