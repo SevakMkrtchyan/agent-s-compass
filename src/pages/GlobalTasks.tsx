@@ -20,17 +20,25 @@ import {
   CheckCircle2,
   Clock,
   Loader2,
+  List,
+  CalendarDays,
 } from "lucide-react";
 import { useTasks } from "@/hooks/useTasks";
 import { TaskPriorityGroup } from "@/components/tasks/TaskPriorityGroup";
 import { CreateTaskDialog } from "@/components/tasks/CreateTaskDialog";
+import { TaskCalendarView } from "@/components/tasks/TaskCalendarView";
 import { Task } from "@/types/task";
+import { format } from "date-fns";
+
+type ViewMode = "list" | "calendar";
 
 export default function GlobalTasks() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("active");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>();
 
   const { data: tasks, isLoading } = useTasks();
 
@@ -61,6 +69,15 @@ export default function GlobalTasks() {
     console.log("Edit task:", task);
   };
 
+  const handleTaskClick = (task: Task) => {
+    handleEditTask(task);
+  };
+
+  const handleDateClick = (date: Date) => {
+    setSelectedDate(date);
+    setCreateDialogOpen(true);
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Sidebar collapsed={sidebarCollapsed} />
@@ -82,7 +99,7 @@ export default function GlobalTasks() {
                 Manage all tasks across your buyers
               </p>
             </div>
-            <Button onClick={() => setCreateDialogOpen(true)} className="gap-2">
+            <Button onClick={() => { setSelectedDate(undefined); setCreateDialogOpen(true); }} className="gap-2">
               <Plus className="h-4 w-4" />
               New Task
             </Button>
@@ -144,141 +161,180 @@ export default function GlobalTasks() {
             </Card>
           </div>
 
-          {/* Filters */}
+          {/* Filters & View Toggle */}
           <Card className="mb-6">
             <CardContent className="p-4">
-              <div className="flex flex-wrap gap-4 items-center">
-                <div className="relative flex-1 min-w-[200px]">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search tasks or buyers..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-9"
-                  />
+              <div className="flex flex-wrap gap-4 items-center justify-between">
+                <div className="flex flex-wrap gap-4 items-center flex-1">
+                  <div className="relative flex-1 min-w-[200px] max-w-md">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search tasks or buyers..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-9"
+                    />
+                  </div>
+                  <Select value={filterStatus} onValueChange={setFilterStatus}>
+                    <SelectTrigger className="w-[160px]">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Tasks</SelectItem>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="completed">Completed</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-                <Select value={filterStatus} onValueChange={setFilterStatus}>
-                  <SelectTrigger className="w-[160px]">
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Tasks</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                  </SelectContent>
-                </Select>
+
+                {/* View Toggle */}
+                <div className="flex items-center border rounded-lg p-1 bg-muted/50">
+                  <Button
+                    variant={viewMode === "list" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewMode("list")}
+                    className="gap-2"
+                  >
+                    <List className="h-4 w-4" />
+                    List
+                  </Button>
+                  <Button
+                    variant={viewMode === "calendar" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewMode("calendar")}
+                    className="gap-2"
+                  >
+                    <CalendarDays className="h-4 w-4" />
+                    Calendar
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Task List */}
-          <Tabs defaultValue="priority" className="space-y-4">
-            <TabsList>
-              <TabsTrigger value="priority">By Priority</TabsTrigger>
-              <TabsTrigger value="all">All Tasks</TabsTrigger>
-            </TabsList>
+          {/* Content based on view mode */}
+          {viewMode === "calendar" ? (
+            isLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <TaskCalendarView
+                tasks={filteredTasks}
+                onTaskClick={handleTaskClick}
+                onDateClick={handleDateClick}
+              />
+            )
+          ) : (
+            /* List View */
+            <Tabs defaultValue="priority" className="space-y-4">
+              <TabsList>
+                <TabsTrigger value="priority">By Priority</TabsTrigger>
+                <TabsTrigger value="all">All Tasks</TabsTrigger>
+              </TabsList>
 
-            <TabsContent value="priority">
-              {isLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                </div>
-              ) : filteredTasks.length === 0 ? (
-                <Card>
-                  <CardContent className="py-12 text-center">
-                    <ListTodo className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                    <h3 className="text-lg font-medium text-foreground mb-2">No tasks found</h3>
-                    <p className="text-muted-foreground mb-4">
-                      {searchQuery ? "Try adjusting your search" : "Create your first task to get started"}
-                    </p>
-                    <Button onClick={() => setCreateDialogOpen(true)}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Create Task
-                    </Button>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="space-y-6">
-                  <TaskPriorityGroup 
-                    priority="High" 
-                    tasks={highPriorityTasks} 
-                    onEditTask={handleEditTask}
-                  />
-                  <TaskPriorityGroup 
-                    priority="Medium" 
-                    tasks={mediumPriorityTasks} 
-                    onEditTask={handleEditTask}
-                  />
-                  <TaskPriorityGroup 
-                    priority="Low" 
-                    tasks={lowPriorityTasks} 
-                    onEditTask={handleEditTask}
-                  />
-                  
-                  {filterStatus !== "active" && completedTasks.length > 0 && (
-                    <Card>
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-lg flex items-center gap-2">
-                          <CheckCircle2 className="h-5 w-5 text-success" />
-                          Completed ({completedTasks.length})
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-2">
-                          {completedTasks.map((task) => (
-                            <div key={task.id} className="opacity-60">
-                              <TaskPriorityGroup 
-                                priority={task.priority} 
-                                tasks={[task]} 
-                                onEditTask={handleEditTask}
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
-                </div>
-              )}
-            </TabsContent>
+              <TabsContent value="priority">
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : filteredTasks.length === 0 ? (
+                  <Card>
+                    <CardContent className="py-12 text-center">
+                      <ListTodo className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                      <h3 className="text-lg font-medium text-foreground mb-2">No tasks found</h3>
+                      <p className="text-muted-foreground mb-4">
+                        {searchQuery ? "Try adjusting your search" : "Create your first task to get started"}
+                      </p>
+                      <Button onClick={() => setCreateDialogOpen(true)}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Create Task
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div className="space-y-6">
+                    <TaskPriorityGroup 
+                      priority="High" 
+                      tasks={highPriorityTasks} 
+                      onEditTask={handleEditTask}
+                    />
+                    <TaskPriorityGroup 
+                      priority="Medium" 
+                      tasks={mediumPriorityTasks} 
+                      onEditTask={handleEditTask}
+                    />
+                    <TaskPriorityGroup 
+                      priority="Low" 
+                      tasks={lowPriorityTasks} 
+                      onEditTask={handleEditTask}
+                    />
+                    
+                    {filterStatus !== "active" && completedTasks.length > 0 && (
+                      <Card>
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-lg flex items-center gap-2">
+                            <CheckCircle2 className="h-5 w-5 text-success" />
+                            Completed ({completedTasks.length})
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-2">
+                            {completedTasks.map((task) => (
+                              <div key={task.id} className="opacity-60">
+                                <TaskPriorityGroup 
+                                  priority={task.priority} 
+                                  tasks={[task]} 
+                                  onEditTask={handleEditTask}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+                )}
+              </TabsContent>
 
-            <TabsContent value="all">
-              {isLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                </div>
-              ) : (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <ListTodo className="h-5 w-5" />
-                      All Tasks ({filteredTasks.length})
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      {filteredTasks.map((task) => (
-                        <div key={task.id}>
-                          {/* Reusing TaskCard via priority group for consistency */}
-                          <TaskPriorityGroup 
-                            priority={task.priority} 
-                            tasks={[task]} 
-                            onEditTask={handleEditTask}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </TabsContent>
-          </Tabs>
+              <TabsContent value="all">
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <ListTodo className="h-5 w-5" />
+                        All Tasks ({filteredTasks.length})
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        {filteredTasks.map((task) => (
+                          <div key={task.id}>
+                            <TaskPriorityGroup 
+                              priority={task.priority} 
+                              tasks={[task]} 
+                              onEditTask={handleEditTask}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </TabsContent>
+            </Tabs>
+          )}
         </main>
       </div>
 
       <CreateTaskDialog 
         open={createDialogOpen} 
-        onOpenChange={setCreateDialogOpen} 
+        onOpenChange={setCreateDialogOpen}
+        defaultDueDate={selectedDate ? format(selectedDate, "yyyy-MM-dd") : undefined}
       />
     </div>
   );
