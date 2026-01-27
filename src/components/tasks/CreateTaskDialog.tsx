@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { CalendarIcon } from "lucide-react";
 import {
@@ -33,22 +33,34 @@ interface CreateTaskDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultBuyerId?: string;
+  defaultDueDate?: string;
 }
 
 const TEMP_AGENT_ID = "00000000-0000-0000-0000-000000000001";
 
-export function CreateTaskDialog({ open, onOpenChange, defaultBuyerId }: CreateTaskDialogProps) {
+export function CreateTaskDialog({ open, onOpenChange, defaultBuyerId, defaultDueDate }: CreateTaskDialogProps) {
   const { toast } = useToast();
   const createTask = useCreateTask();
   const { buyers } = useBuyers();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [dueDate, setDueDate] = useState<Date | undefined>();
+  const [dueDate, setDueDate] = useState<Date | undefined>(
+    defaultDueDate ? new Date(defaultDueDate + "T00:00:00") : undefined
+  );
   const [priority, setPriority] = useState<"High" | "Medium" | "Low">("Medium");
   const [assignedTo, setAssignedTo] = useState<"Agent" | "Buyer" | "Third Party">("Agent");
   const [assignedToName, setAssignedToName] = useState("");
   const [buyerId, setBuyerId] = useState<string>(defaultBuyerId || "");
+
+  // Sync defaultDueDate when dialog opens
+  useEffect(() => {
+    if (open && defaultDueDate) {
+      setDueDate(new Date(defaultDueDate + "T00:00:00"));
+    } else if (open && !defaultDueDate) {
+      setDueDate(undefined);
+    }
+  }, [open, defaultDueDate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
