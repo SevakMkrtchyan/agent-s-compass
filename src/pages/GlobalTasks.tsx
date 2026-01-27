@@ -72,8 +72,9 @@ export default function GlobalTasks() {
     setEditDialogOpen(true);
   };
 
-  const handleTaskClick = (task: Task) => {
-    handleEditTask(task);
+  const handleCalendarTaskClick = (task: Task) => {
+    // Calendar view has its own side panel, but we can still use this for list view
+    console.log("Task clicked in calendar:", task.title);
   };
 
   const handleDateClick = (date: Date) => {
@@ -231,7 +232,7 @@ export default function GlobalTasks() {
             ) : (
               <TaskCalendarView
                 tasks={filteredTasks}
-                onTaskClick={handleTaskClick}
+                onTaskClick={handleCalendarTaskClick}
                 onDateClick={handleDateClick}
               />
             )
