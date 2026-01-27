@@ -197,12 +197,12 @@ export function CreateTaskDialog({ open, onOpenChange, defaultBuyerId }: CreateT
 
           <div className="space-y-2">
             <Label>Link to Buyer (Optional)</Label>
-            <Select value={buyerId} onValueChange={setBuyerId}>
+            <Select value={buyerId || "none"} onValueChange={(v) => setBuyerId(v === "none" ? "" : v)}>
               <SelectTrigger>
                 <SelectValue placeholder="Select a buyer..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">No buyer</SelectItem>
+                <SelectItem value="none">No buyer</SelectItem>
                 {buyers?.map((buyer) => (
                   <SelectItem key={buyer.id} value={buyer.id}>
                     {buyer.name}
