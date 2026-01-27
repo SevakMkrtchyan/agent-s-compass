@@ -1,12 +1,11 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { TopBar } from "@/components/dashboard/TopBar";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   Select, 
   SelectContent, 
@@ -14,55 +13,52 @@ import {
   SelectTrigger, 
   SelectValue 
 } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
 import { 
-  FileText, 
-  CheckCircle2, 
-  Clock, 
-  AlertCircle, 
+  ListTodo, 
   Search,
-  Filter,
-  Upload,
-  ExternalLink
+  Plus,
+  CheckCircle2,
+  Clock,
+  Loader2,
 } from "lucide-react";
-import { mockWorkspaces } from "@/data/workspaceData";
-import { STAGES } from "@/types";
-
-// Mock tasks data
-const mockTasks = [
-  { id: "t1", title: "Review pre-approval letter", workspaceId: "ws-1", buyerName: "Sarah Chen", stage: 0, priority: "high", dueDate: "2024-01-15", completed: false, type: "task" },
-  { id: "t2", title: "Schedule property showing", workspaceId: "ws-2", buyerName: "Marcus Johnson", stage: 1, priority: "medium", dueDate: "2024-01-16", completed: false, type: "task" },
-  { id: "t3", title: "Submit offer documents", workspaceId: "ws-1", buyerName: "Sarah Chen", stage: 2, priority: "high", dueDate: "2024-01-14", completed: true, type: "task" },
-  { id: "t4", title: "Upload inspection report", workspaceId: "ws-3", buyerName: "Emily Rodriguez", stage: 3, priority: "medium", dueDate: "2024-01-18", completed: false, type: "document" },
-  { id: "t5", title: "Review closing documents", workspaceId: "ws-2", buyerName: "Marcus Johnson", stage: 4, priority: "low", dueDate: "2024-01-20", completed: false, type: "document" },
-];
+import { useTasks } from "@/hooks/useTasks";
+import { TaskPriorityGroup } from "@/components/tasks/TaskPriorityGroup";
+import { CreateTaskDialog } from "@/components/tasks/CreateTaskDialog";
+import { Task } from "@/types/task";
 
 export default function GlobalTasks() {
-  const navigate = useNavigate();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterPriority, setFilterPriority] = useState<string>("all");
-  const [filterType, setFilterType] = useState<string>("all");
-  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterStatus, setFilterStatus] = useState<string>("active");
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
-  const filteredTasks = mockTasks.filter((task) => {
-    const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      task.buyerName.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesPriority = filterPriority === "all" || task.priority === filterPriority;
-    const matchesType = filterType === "all" || task.type === filterType;
-    const matchesStatus = filterStatus === "all" || 
-      (filterStatus === "completed" && task.completed) || 
-      (filterStatus === "pending" && !task.completed);
-    return matchesSearch && matchesPriority && matchesType && matchesStatus;
+  const { data: tasks, isLoading } = useTasks();
+
+  // Filter tasks
+  const filteredTasks = (tasks || []).filter((task) => {
+    const matchesSearch = 
+      task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      task.buyer?.name?.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesStatus = 
+      filterStatus === "all" || 
+      (filterStatus === "active" && task.status !== "Complete") || 
+      (filterStatus === "completed" && task.status === "Complete");
+
+    return matchesSearch && matchesStatus;
   });
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case "high": return "text-destructive bg-destructive/10";
-      case "medium": return "text-warning bg-warning/10";
-      case "low": return "text-muted-foreground bg-muted";
-      default: return "text-muted-foreground bg-muted";
-    }
+  // Group tasks by priority
+  const highPriorityTasks = filteredTasks.filter(t => t.priority === "High" && t.status !== "Complete");
+  const mediumPriorityTasks = filteredTasks.filter(t => t.priority === "Medium" && t.status !== "Complete");
+  const lowPriorityTasks = filteredTasks.filter(t => t.priority === "Low" && t.status !== "Complete");
+  const completedTasks = filteredTasks.filter(t => t.status === "Complete");
+
+  const activeTasks = filteredTasks.filter(t => t.status !== "Complete");
+
+  const handleEditTask = (task: Task) => {
+    // TODO: Implement edit dialog
+    console.log("Edit task:", task);
   };
 
   return (
@@ -79,9 +75,73 @@ export default function GlobalTasks() {
         />
 
         <main className="p-6">
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold text-foreground">Tasks & Documents</h1>
-            <p className="text-muted-foreground mt-1">Manage all tasks and documents across workspaces</p>
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">Tasks</h1>
+              <p className="text-muted-foreground mt-1">
+                Manage all tasks across your buyers
+              </p>
+            </div>
+            <Button onClick={() => setCreateDialogOpen(true)} className="gap-2">
+              <Plus className="h-4 w-4" />
+              New Task
+            </Button>
+          </div>
+
+          {/* Stats Overview */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <Card>
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-primary/10">
+                    <ListTodo className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">{tasks?.length || 0}</p>
+                    <p className="text-sm text-muted-foreground">Total Tasks</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-destructive/10">
+                    <Clock className="h-5 w-5 text-destructive" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">{highPriorityTasks.length}</p>
+                    <p className="text-sm text-muted-foreground">High Priority</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-warning/10">
+                    <Clock className="h-5 w-5 text-warning" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">{activeTasks.length}</p>
+                    <p className="text-sm text-muted-foreground">Active</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-success/10">
+                    <CheckCircle2 className="h-5 w-5 text-success" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">{completedTasks.length}</p>
+                    <p className="text-sm text-muted-foreground">Completed</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
           {/* Filters */}
@@ -97,34 +157,13 @@ export default function GlobalTasks() {
                     className="pl-9"
                   />
                 </div>
-                <Select value={filterPriority} onValueChange={setFilterPriority}>
-                  <SelectTrigger className="w-[140px]">
-                    <SelectValue placeholder="Priority" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Priorities</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="low">Low</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={filterType} onValueChange={setFilterType}>
-                  <SelectTrigger className="w-[140px]">
-                    <SelectValue placeholder="Type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Types</SelectItem>
-                    <SelectItem value="task">Tasks</SelectItem>
-                    <SelectItem value="document">Documents</SelectItem>
-                  </SelectContent>
-                </Select>
                 <Select value={filterStatus} onValueChange={setFilterStatus}>
-                  <SelectTrigger className="w-[140px]">
+                  <SelectTrigger className="w-[160px]">
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="all">All Tasks</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
                     <SelectItem value="completed">Completed</SelectItem>
                   </SelectContent>
                 </Select>
@@ -133,64 +172,114 @@ export default function GlobalTasks() {
           </Card>
 
           {/* Task List */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                All Tasks ({filteredTasks.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {filteredTasks.map((task) => (
-                  <div
-                    key={task.id}
-                    className={cn(
-                      "flex items-center gap-4 p-4 rounded-lg border transition-colors hover:bg-muted/50",
-                      task.completed && "opacity-60"
-                    )}
-                  >
-                    <Checkbox checked={task.completed} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className={cn("font-medium", task.completed && "line-through")}>
-                          {task.title}
-                        </span>
-                        <Badge variant="outline" className={getPriorityColor(task.priority)}>
-                          {task.priority}
-                        </Badge>
-                        <Badge variant="secondary" className="text-xs">
-                          {task.type === "document" ? <Upload className="h-3 w-3 mr-1" /> : null}
-                          {task.type}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
-                        <span>{task.buyerName}</span>
-                        <span>•</span>
-                        <span>{STAGES[task.stage]?.icon} {STAGES[task.stage]?.title}</span>
-                        <span>•</span>
-                        <span className="flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          {task.dueDate}
-                        </span>
-                      </div>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => navigate(`/workspace/${task.workspaceId}`)}
-                      className="gap-1"
-                    >
-                      <ExternalLink className="h-4 w-4" />
-                      Open
+          <Tabs defaultValue="priority" className="space-y-4">
+            <TabsList>
+              <TabsTrigger value="priority">By Priority</TabsTrigger>
+              <TabsTrigger value="all">All Tasks</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="priority">
+              {isLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : filteredTasks.length === 0 ? (
+                <Card>
+                  <CardContent className="py-12 text-center">
+                    <ListTodo className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    <h3 className="text-lg font-medium text-foreground mb-2">No tasks found</h3>
+                    <p className="text-muted-foreground mb-4">
+                      {searchQuery ? "Try adjusting your search" : "Create your first task to get started"}
+                    </p>
+                    <Button onClick={() => setCreateDialogOpen(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create Task
                     </Button>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-6">
+                  <TaskPriorityGroup 
+                    priority="High" 
+                    tasks={highPriorityTasks} 
+                    onEditTask={handleEditTask}
+                  />
+                  <TaskPriorityGroup 
+                    priority="Medium" 
+                    tasks={mediumPriorityTasks} 
+                    onEditTask={handleEditTask}
+                  />
+                  <TaskPriorityGroup 
+                    priority="Low" 
+                    tasks={lowPriorityTasks} 
+                    onEditTask={handleEditTask}
+                  />
+                  
+                  {filterStatus !== "active" && completedTasks.length > 0 && (
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-lg flex items-center gap-2">
+                          <CheckCircle2 className="h-5 w-5 text-success" />
+                          Completed ({completedTasks.length})
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-2">
+                          {completedTasks.map((task) => (
+                            <div key={task.id} className="opacity-60">
+                              <TaskPriorityGroup 
+                                priority={task.priority} 
+                                tasks={[task]} 
+                                onEditTask={handleEditTask}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="all">
+              {isLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <ListTodo className="h-5 w-5" />
+                      All Tasks ({filteredTasks.length})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {filteredTasks.map((task) => (
+                        <div key={task.id}>
+                          {/* Reusing TaskCard via priority group for consistency */}
+                          <TaskPriorityGroup 
+                            priority={task.priority} 
+                            tasks={[task]} 
+                            onEditTask={handleEditTask}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
+          </Tabs>
         </main>
       </div>
+
+      <CreateTaskDialog 
+        open={createDialogOpen} 
+        onOpenChange={setCreateDialogOpen} 
+      />
     </div>
   );
 }
