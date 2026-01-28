@@ -17,6 +17,7 @@ import {
   Building,
   Users,
   Loader2,
+  FileStack,
 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useState, useMemo } from "react";
@@ -84,6 +85,7 @@ const globalNavItems = [
   { title: "Properties", url: "/properties", icon: HomeIcon },
   { title: "Offers", url: "/offers", icon: DollarSign },
   { title: "Analytics", url: "/analytics", icon: BarChart3 },
+  { title: "Offer Templates", url: "/offer-templates", icon: FileStack },
 ];
 
 export function Sidebar({ collapsed, agentExpanded = false, onAgentExpandedChange, selectedBuyerId }: SidebarProps) {
