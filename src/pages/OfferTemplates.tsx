@@ -16,7 +16,6 @@ import {
   type OfferTemplate 
 } from "@/hooks/useOfferTemplates";
 import { format } from "date-fns";
-import { supabase } from "@/integrations/supabase/client";
 
 export default function OfferTemplates() {
   const [collapsed] = useState(false);
@@ -24,6 +23,7 @@ export default function OfferTemplates() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: templates = [], isLoading } = useOfferTemplates();
@@ -81,36 +81,38 @@ export default function OfferTemplates() {
   const handleDownload = async (template: OfferTemplate) => {
     console.log("[OfferTemplates] Downloading:", template.name, template.file_url);
     
+    setDownloadingId(template.id);
     try {
-      // Extract the file path from the URL
-      const urlParts = template.file_url.split("/offer-templates/");
-      const filePath = urlParts[urlParts.length - 1];
+      // Fetch the file as a blob (works for public bucket URLs)
+      const response = await fetch(template.file_url);
       
-      // Create a signed URL for download
-      const { data, error } = await supabase.storage
-        .from("offer-templates")
-        .createSignedUrl(filePath, 60); // 60 second expiry
-
-      if (error) {
-        console.error("[OfferTemplates] Signed URL error:", error);
-        // Fallback to public URL
-        window.open(template.file_url, "_blank");
-        return;
+      if (!response.ok) {
+        throw new Error(`Failed to fetch file: ${response.status}`);
       }
-
-      console.log("[OfferTemplates] Signed URL created:", data.signedUrl);
       
-      // Create a temporary anchor to trigger download
+      const blob = await response.blob();
+      
+      // Create a local object URL (same-origin, so download attribute works)
+      const blobUrl = URL.createObjectURL(blob);
+      
+      // Create anchor and trigger download
       const link = document.createElement("a");
-      link.href = data.signedUrl;
+      link.href = blobUrl;
       link.download = `${template.name}.${template.file_type}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      
+      // Clean up the object URL
+      URL.revokeObjectURL(blobUrl);
+      
+      console.log("[OfferTemplates] Download successful");
     } catch (error) {
       console.error("[OfferTemplates] Download error:", error);
-      // Fallback to opening in new tab
+      // Fallback: open in new tab
       window.open(template.file_url, "_blank");
+    } finally {
+      setDownloadingId(null);
     }
   };
 
@@ -268,9 +270,14 @@ export default function OfferTemplates() {
                               variant="ghost"
                               size="sm"
                               onClick={() => handleDownload(template)}
+                              disabled={downloadingId === template.id}
                               title="Download template"
                             >
-                              <Download className="h-4 w-4" />
+                              {downloadingId === template.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Download className="h-4 w-4" />
+                              )}
                             </Button>
                             <Button
                               variant="ghost"
