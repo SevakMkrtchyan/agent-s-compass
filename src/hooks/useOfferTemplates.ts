@@ -12,6 +12,19 @@ export interface OfferTemplate {
   created_at: string;
 }
 
+export interface OfferTemplateField {
+  id: string;
+  template_id: string;
+  field_name: string;
+  field_label: string;
+  field_type: string;
+  data_source: string;
+  is_required: boolean;
+  source_field: string | null;
+  default_value: string | null;
+  created_at: string;
+}
+
 // Fetch all templates
 export function useOfferTemplates() {
   return useQuery({
@@ -24,6 +37,78 @@ export function useOfferTemplates() {
 
       if (error) throw error;
       return data as OfferTemplate[];
+    },
+  });
+}
+
+// Fetch fields for a specific template
+export function useOfferTemplateFields(templateId: string | null) {
+  return useQuery({
+    queryKey: ["offer-template-fields", templateId],
+    queryFn: async () => {
+      if (!templateId) return [];
+      
+      const { data, error } = await supabase
+        .from("offer_template_fields")
+        .select("*")
+        .eq("template_id", templateId)
+        .order("created_at", { ascending: true });
+
+      if (error) throw error;
+      return data as OfferTemplateField[];
+    },
+    enabled: !!templateId,
+  });
+}
+
+// Analyze template with AI
+export function useAnalyzeTemplate() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ templateId, fileUrl, fileType }: { 
+      templateId: string; 
+      fileUrl: string; 
+      fileType: string;
+    }) => {
+      console.log("[useAnalyzeTemplate] Starting AI analysis for template:", templateId);
+      
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-offer-template`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({
+            template_id: templateId,
+            file_url: fileUrl,
+            file_type: fileType,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Analysis failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log("[useAnalyzeTemplate] Analysis complete:", data);
+      return data;
+    },
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["offer-template-fields", variables.templateId] });
+      if (data.fields_count > 0) {
+        toast.success(`Detected ${data.fields_count} fields in template`);
+      } else {
+        toast.info("No fillable fields detected in template");
+      }
+    },
+    onError: (error: Error) => {
+      console.error("[useAnalyzeTemplate] Analysis failed:", error);
+      toast.error(`Field detection failed: ${error.message}`);
     },
   });
 }
@@ -116,7 +201,7 @@ export function useDeleteOfferTemplate() {
         // Continue anyway - the file might already be deleted
       }
 
-      // Delete from database
+      // Delete from database (fields will cascade delete if FK is set up)
       const { error } = await supabase
         .from("offer_templates")
         .delete()
@@ -126,6 +211,7 @@ export function useDeleteOfferTemplate() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["offer-templates"] });
+      queryClient.invalidateQueries({ queryKey: ["offer-template-fields"] });
       toast.success("Template deleted");
     },
     onError: (error) => {

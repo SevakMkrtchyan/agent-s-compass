@@ -8,12 +8,18 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Upload, Download, Trash2, FileText, File, Loader2, CheckCircle2, Eye, ExternalLink } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { 
+  Upload, Download, Trash2, FileText, File, Loader2, CheckCircle2, 
+  Eye, ExternalLink, Sparkles, ListChecks, ChevronDown, ChevronUp 
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { 
   useOfferTemplates, 
   useCreateOfferTemplate, 
   useDeleteOfferTemplate,
+  useAnalyzeTemplate,
+  useOfferTemplateFields,
   type OfferTemplate 
 } from "@/hooks/useOfferTemplates";
 import { format } from "date-fns";
@@ -26,17 +32,21 @@ export default function OfferTemplates() {
   const [isUploading, setIsUploading] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [previewTemplate, setPreviewTemplate] = useState<OfferTemplate | null>(null);
+  const [analyzingId, setAnalyzingId] = useState<string | null>(null);
+  const [expandedFieldsId, setExpandedFieldsId] = useState<string | null>(null);
+  const [fieldsModalTemplate, setFieldsModalTemplate] = useState<OfferTemplate | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: templates = [], isLoading } = useOfferTemplates();
   const createTemplate = useCreateOfferTemplate();
   const deleteTemplate = useDeleteOfferTemplate();
+  const analyzeTemplate = useAnalyzeTemplate();
+  const { data: modalFields = [] } = useOfferTemplateFields(fieldsModalTemplate?.id || null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setSelectedFile(file);
-      // Auto-fill name from filename if empty
       if (!templateName) {
         const nameWithoutExt = file.name.replace(/\.(pdf|docx)$/i, "");
         setTemplateName(nameWithoutExt);
@@ -51,12 +61,11 @@ export default function OfferTemplates() {
     setUploadProgress(20);
 
     try {
-      // Simulate progress for UX
       const progressInterval = setInterval(() => {
         setUploadProgress((prev) => Math.min(prev + 10, 80));
       }, 200);
 
-      await createTemplate.mutateAsync({
+      const result = await createTemplate.mutateAsync({
         file: selectedFile,
         name: templateName.trim(),
       });
@@ -64,8 +73,10 @@ export default function OfferTemplates() {
       clearInterval(progressInterval);
       setUploadProgress(100);
 
-      // Reset form after brief delay to show completion
-      setTimeout(() => {
+      // Start AI analysis automatically
+      setAnalyzingId(result.id);
+      
+      setTimeout(async () => {
         setTemplateName("");
         setSelectedFile(null);
         setUploadProgress(0);
@@ -73,10 +84,36 @@ export default function OfferTemplates() {
         if (fileInputRef.current) {
           fileInputRef.current.value = "";
         }
-      }, 1000);
+
+        // Trigger AI analysis
+        try {
+          await analyzeTemplate.mutateAsync({
+            templateId: result.id,
+            fileUrl: result.file_url,
+            fileType: result.file_type,
+          });
+        } catch (error) {
+          console.error("AI analysis failed:", error);
+        } finally {
+          setAnalyzingId(null);
+        }
+      }, 500);
     } catch (error) {
       setUploadProgress(0);
       setIsUploading(false);
+    }
+  };
+
+  const handleReanalyze = async (template: OfferTemplate) => {
+    setAnalyzingId(template.id);
+    try {
+      await analyzeTemplate.mutateAsync({
+        templateId: template.id,
+        fileUrl: template.file_url,
+        fileType: template.file_type,
+      });
+    } finally {
+      setAnalyzingId(null);
     }
   };
 
@@ -85,7 +122,6 @@ export default function OfferTemplates() {
     
     setDownloadingId(template.id);
     try {
-      // Fetch the file as a blob (works for public bucket URLs)
       const response = await fetch(template.file_url);
       
       if (!response.ok) {
@@ -93,11 +129,8 @@ export default function OfferTemplates() {
       }
       
       const blob = await response.blob();
-      
-      // Create a local object URL (same-origin, so download attribute works)
       const blobUrl = URL.createObjectURL(blob);
       
-      // Create anchor and trigger download
       const link = document.createElement("a");
       link.href = blobUrl;
       link.download = `${template.name}.${template.file_type}`;
@@ -105,24 +138,15 @@ export default function OfferTemplates() {
       link.click();
       document.body.removeChild(link);
       
-      // Clean up the object URL
       URL.revokeObjectURL(blobUrl);
       
       console.log("[OfferTemplates] Download successful");
     } catch (error) {
       console.error("[OfferTemplates] Download error:", error);
-      // Fallback: open in new tab
       window.open(template.file_url, "_blank");
     } finally {
       setDownloadingId(null);
     }
-  };
-
-  const formatFileSize = (bytes: number | undefined): string => {
-    if (!bytes) return "—";
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   const handlePreview = (template: OfferTemplate) => {
@@ -130,7 +154,6 @@ export default function OfferTemplates() {
   };
 
   const getPreviewUrl = (template: OfferTemplate): string => {
-    // Use Google Docs Viewer for both PDF and DOCX to avoid X-Frame-Options restrictions
     return `https://docs.google.com/gview?url=${encodeURIComponent(template.file_url)}&embedded=true`;
   };
 
@@ -141,6 +164,15 @@ export default function OfferTemplates() {
   const handleDelete = async (template: OfferTemplate) => {
     if (confirm(`Delete template "${template.name}"?`)) {
       await deleteTemplate.mutateAsync(template);
+    }
+  };
+
+  const getDataSourceBadgeColor = (source: string) => {
+    switch (source) {
+      case "buyer": return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200";
+      case "property": return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
+      case "agent": return "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200";
+      default: return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200";
     }
   };
 
@@ -165,7 +197,7 @@ export default function OfferTemplates() {
             <CardHeader>
               <CardTitle className="text-lg">Upload New Template</CardTitle>
               <CardDescription>
-                Upload a PDF or DOCX file to use as an offer template
+                Upload a PDF or DOCX file — AI will automatically detect fillable fields
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -222,7 +254,7 @@ export default function OfferTemplates() {
                 <div className="mt-4 space-y-2">
                   <Progress value={uploadProgress} className="h-2" />
                   <p className="text-xs text-muted-foreground text-center">
-                    {uploadProgress === 100 ? "Upload complete!" : `Uploading... ${uploadProgress}%`}
+                    {uploadProgress === 100 ? "Upload complete! Starting AI analysis..." : `Uploading... ${uploadProgress}%`}
                   </p>
                 </div>
               )}
@@ -254,67 +286,25 @@ export default function OfferTemplates() {
                     <TableRow>
                       <TableHead>Template Name</TableHead>
                       <TableHead>Type</TableHead>
+                      <TableHead>Status</TableHead>
                       <TableHead>Uploaded</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {templates.map((template) => (
-                      <TableRow key={template.id}>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-2">
-                            {template.file_type === "pdf" ? (
-                              <File className="h-4 w-4 text-red-500" />
-                            ) : (
-                              <FileText className="h-4 w-4 text-blue-500" />
-                            )}
-                            {template.name}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="uppercase text-xs">
-                            {template.file_type}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {format(new Date(template.created_at), "MMM d, yyyy")}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handlePreview(template)}
-                              title="Preview template"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDownload(template)}
-                              disabled={downloadingId === template.id}
-                              title="Download template"
-                            >
-                              {downloadingId === template.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Download className="h-4 w-4" />
-                              )}
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDelete(template)}
-                              disabled={deleteTemplate.isPending}
-                              className="text-destructive hover:text-destructive"
-                              title="Delete template"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
+                      <TemplateRow
+                        key={template.id}
+                        template={template}
+                        isAnalyzing={analyzingId === template.id}
+                        isDownloading={downloadingId === template.id}
+                        isDeleting={deleteTemplate.isPending}
+                        onPreview={handlePreview}
+                        onDownload={handleDownload}
+                        onDelete={handleDelete}
+                        onReanalyze={handleReanalyze}
+                        onViewFields={setFieldsModalTemplate}
+                      />
                     ))}
                   </TableBody>
                 </Table>
@@ -375,6 +365,185 @@ export default function OfferTemplates() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Fields Modal */}
+      <Dialog open={!!fieldsModalTemplate} onOpenChange={(open) => !open && setFieldsModalTemplate(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
+            <DialogTitle className="flex items-center gap-2">
+              <ListChecks className="h-5 w-5" />
+              Detected Fields: {fieldsModalTemplate?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="flex-1 min-h-0">
+            {modalFields.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Sparkles className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p>No fields detected yet</p>
+                <p className="text-sm">Run AI analysis to detect fillable fields</p>
+              </div>
+            ) : (
+              <div className="space-y-3 pr-4">
+                {modalFields.map((field) => (
+                  <div 
+                    key={field.id} 
+                    className="border rounded-lg p-3 bg-muted/30"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="font-medium">{field.field_label}</p>
+                        <p className="text-sm text-muted-foreground font-mono">{field.field_name}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {field.is_required && (
+                          <Badge variant="destructive" className="text-xs">Required</Badge>
+                        )}
+                        <Badge variant="outline" className="text-xs">{field.field_type}</Badge>
+                        <Badge className={cn("text-xs", getDataSourceBadgeColor(field.data_source))}>
+                          {field.data_source}
+                        </Badge>
+                      </div>
+                    </div>
+                    {field.source_field && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Maps to: <span className="font-mono">{field.source_field}</span>
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+          {fieldsModalTemplate && (
+            <div className="pt-4 border-t flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => fieldsModalTemplate && handleReanalyze(fieldsModalTemplate)}
+                disabled={analyzingId === fieldsModalTemplate.id}
+              >
+                {analyzingId === fieldsModalTemplate.id ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4 mr-2" />
+                )}
+                Re-analyze
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+// Extracted row component for cleaner code
+function TemplateRow({
+  template,
+  isAnalyzing,
+  isDownloading,
+  isDeleting,
+  onPreview,
+  onDownload,
+  onDelete,
+  onReanalyze,
+  onViewFields,
+}: {
+  template: OfferTemplate;
+  isAnalyzing: boolean;
+  isDownloading: boolean;
+  isDeleting: boolean;
+  onPreview: (t: OfferTemplate) => void;
+  onDownload: (t: OfferTemplate) => void;
+  onDelete: (t: OfferTemplate) => void;
+  onReanalyze: (t: OfferTemplate) => void;
+  onViewFields: (t: OfferTemplate) => void;
+}) {
+  const { data: fields = [] } = useOfferTemplateFields(template.id);
+  const fieldCount = fields.length;
+
+  return (
+    <TableRow>
+      <TableCell className="font-medium">
+        <div className="flex items-center gap-2">
+          {template.file_type === "pdf" ? (
+            <File className="h-4 w-4 text-red-500" />
+          ) : (
+            <FileText className="h-4 w-4 text-blue-500" />
+          )}
+          {template.name}
+        </div>
+      </TableCell>
+      <TableCell>
+        <Badge variant="outline" className="uppercase text-xs">
+          {template.file_type}
+        </Badge>
+      </TableCell>
+      <TableCell>
+        {isAnalyzing ? (
+          <div className="flex items-center gap-2 text-amber-600">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            <span className="text-sm">Analyzing...</span>
+          </div>
+        ) : fieldCount > 0 ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-auto py-1 px-2 text-green-600 hover:text-green-700"
+            onClick={() => onViewFields(template)}
+          >
+            <ListChecks className="h-3 w-3 mr-1" />
+            <span className="text-sm">{fieldCount} fields</span>
+          </Button>
+        ) : (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-auto py-1 px-2 text-muted-foreground hover:text-foreground"
+            onClick={() => onReanalyze(template)}
+          >
+            <Sparkles className="h-3 w-3 mr-1" />
+            <span className="text-sm">Analyze</span>
+          </Button>
+        )}
+      </TableCell>
+      <TableCell className="text-muted-foreground">
+        {format(new Date(template.created_at), "MMM d, yyyy")}
+      </TableCell>
+      <TableCell className="text-right">
+        <div className="flex items-center justify-end gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onPreview(template)}
+            title="Preview template"
+          >
+            <Eye className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onDownload(template)}
+            disabled={isDownloading}
+            title="Download template"
+          >
+            {isDownloading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onDelete(template)}
+            disabled={isDeleting}
+            className="text-destructive hover:text-destructive"
+            title="Delete template"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </TableCell>
+    </TableRow>
   );
 }
