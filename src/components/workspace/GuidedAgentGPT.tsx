@@ -508,7 +508,17 @@ export function GuidedAgentGPT({
         
         toast({
           title: "✓ Task created",
-          description: action.label,
+          description: `${action.label} — Click to view`,
+          action: (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate(`/workspace/${buyer.id}?tab=tasks`)}
+              className="shrink-0"
+            >
+              View Tasks
+            </Button>
+          ),
         });
         
         // Refetch existing tasks to update the UI badges
@@ -659,10 +669,10 @@ export function GuidedAgentGPT({
                           existingTask ? (
                             <button
                               onClick={() => navigate(`/workspace/${buyer.id}?tab=tasks`)}
-                              className="flex items-center gap-1.5 text-xs text-success hover:text-success/80 transition-colors"
+                              className="flex items-center gap-1.5 text-xs text-success hover:text-success/80 hover:underline transition-colors cursor-pointer group"
                             >
-                              <ListTodo className="h-3.5 w-3.5" />
-                              Task created
+                              <ListTodo className="h-3.5 w-3.5 group-hover:scale-110 transition-transform" />
+                              Task created →
                             </button>
                           ) : (
                             <span className="text-xs text-muted-foreground/50 flex items-center gap-1.5">
