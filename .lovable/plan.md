@@ -1,152 +1,97 @@
 
-
-# Fix: Download Button Chrome Blocking Issue
+# Fix: AI Field Detection "Maximum call stack size exceeded" Error
 
 ## Problem Identified
 
-The download button crashes the page with "This page has been blocked by Chrome" because:
+**Root Cause**: Line 55 in the edge function:
+```typescript
+const base64Content = btoa(String.fromCharCode(...new Uint8Array(fileBuffer)));
+```
 
-1. The bucket is **public**, so the `file_url` is already a valid public URL
-2. The current approach creates a signed URL and uses a programmatic anchor click
-3. Chrome blocks cross-origin downloads triggered by JavaScript when the `download` attribute is used on cross-origin URLs
-4. The anchor element approach violates Chrome's security policies for cross-origin file downloads
+The spread operator (`...`) passes all 847,463 bytes as individual arguments to `String.fromCharCode()`. JavaScript has a limit on the number of function arguments (varies by engine, typically ~65,000-130,000). With an 847KB file, this creates approximately 847,463 arguments, causing a **stack overflow**.
 
-## Root Cause
-
-The `download` attribute on anchor elements only works for **same-origin** URLs. When clicking a cross-origin link with a `download` attribute, Chrome blocks it as a potential security risk.
+This is a well-known issue documented on Stack Overflow and GitHub issues for base64 encoding libraries.
 
 ## Solution
 
-Use the **fetch + blob** approach to download files, which:
-1. Fetches the file content as a blob
-2. Creates a local object URL (same-origin)
-3. Triggers the download from that object URL
-4. Revokes the object URL after download
+Replace the problematic spread-based base64 encoding with Deno's built-in standard library encoder, which handles large files correctly using chunked processing.
 
-Since the bucket is public, we can use the stored `file_url` directly without needing a signed URL.
+## Technical Implementation
 
-## Implementation Steps
+### Step 1: Update imports in the Edge Function
 
-### Step 1: Update handleDownload function
-
-In `src/pages/OfferTemplates.tsx`, replace the current download logic with:
-
+Add the Deno standard library base64 encoder:
 ```typescript
-const handleDownload = async (template: OfferTemplate) => {
-  console.log("[OfferTemplates] Downloading:", template.name, template.file_url);
-  
-  try {
-    // Fetch the file as a blob (works for public bucket URLs)
-    const response = await fetch(template.file_url);
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch file: ${response.status}`);
-    }
-    
-    const blob = await response.blob();
-    
-    // Create a local object URL (same-origin, so download attribute works)
-    const blobUrl = URL.createObjectURL(blob);
-    
-    // Create anchor and trigger download
-    const link = document.createElement("a");
-    link.href = blobUrl;
-    link.download = `${template.name}.${template.file_type}`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    // Clean up the object URL
-    URL.revokeObjectURL(blobUrl);
-    
-    console.log("[OfferTemplates] Download successful");
-  } catch (error) {
-    console.error("[OfferTemplates] Download error:", error);
-    // Fallback: open in new tab
-    window.open(template.file_url, "_blank");
-  }
-};
+import { encodeBase64 } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 ```
 
-### Step 2: Add loading state for downloads (optional enhancement)
+### Step 2: Fix the base64 encoding (Line 54-55)
 
-Add visual feedback while the file is being fetched:
-
+Replace:
 ```typescript
-const [downloadingId, setDownloadingId] = useState<string | null>(null);
-
-// In handleDownload:
-setDownloadingId(template.id);
-try {
-  // ... download logic
-} finally {
-  setDownloadingId(null);
-}
-
-// In the button:
-<Button
-  variant="ghost"
-  size="sm"
-  onClick={() => handleDownload(template)}
-  disabled={downloadingId === template.id}
->
-  {downloadingId === template.id ? (
-    <Loader2 className="h-4 w-4 animate-spin" />
-  ) : (
-    <Download className="h-4 w-4" />
-  )}
-</Button>
+const fileBuffer = await fileResponse.arrayBuffer();
+const base64Content = btoa(String.fromCharCode(...new Uint8Array(fileBuffer)));
 ```
 
-### Step 3: Remove unnecessary Supabase import
+With:
+```typescript
+const fileBuffer = await fileResponse.arrayBuffer();
+const base64Content = encodeBase64(new Uint8Array(fileBuffer));
+```
 
-Since we're using the public URL directly and fetch API, we can remove the `createSignedUrl` logic entirely.
+### Step 3: Add better error handling and logging
 
-## Why This Works
+Add more granular logging to track exactly where issues occur:
 
-```text
-Current Flow (Blocked by Chrome):
-+------------------+      cross-origin      +----------------+
-| JavaScript       | ---- link.click() ---> | Supabase URL   |
-| anchor element   |      download attr     | (different     |
-| with download    |                        | origin)        |
-+------------------+                        +----------------+
-                                                   |
-                                                   X Chrome blocks
-                                                     "Not same-origin"
+```typescript
+console.log("[analyze-offer-template] Step 1: Fetching file...");
+// fetch code
+console.log("[analyze-offer-template] Step 2: File fetched, size:", fileBuffer.byteLength, "bytes");
+console.log("[analyze-offer-template] Step 3: Encoding to base64...");
+// encode code
+console.log("[analyze-offer-template] Step 4: Base64 encoded, length:", base64Content.length);
+console.log("[analyze-offer-template] Step 5: Calling Claude API...");
+// Claude call
+console.log("[analyze-offer-template] Step 6: Claude response received");
+```
 
-New Flow (Works):
-+------------------+      fetch()      +----------------+
-| JavaScript       | ----------------> | Supabase URL   |
-|                  |                   |                |
-+------------------+                   +----------------+
-         |                                    |
-         v                                    v
-+------------------+                   +--------------+
-| Create blob URL  | <--- blob data -- | Returns file |
-| (same-origin)    |                   | content      |
-+------------------+                   +--------------+
-         |
-         v link.click() (same-origin OK!)
-+------------------+
-| Browser triggers |
-| download prompt  |
-+------------------+
+### Step 4: Add timeout protection
+
+Wrap the function execution in a timeout to prevent hangs:
+
+```typescript
+// At the start of the try block
+const timeoutPromise = new Promise((_, reject) => {
+  setTimeout(() => reject(new Error("Analysis timeout: exceeded 25 seconds")), 25000);
+});
+
+// Wrap main logic in Promise.race with timeout
+const result = await Promise.race([
+  mainAnalysisLogic(),
+  timeoutPromise
+]);
 ```
 
 ## Files to Modify
 
-1. **src/pages/OfferTemplates.tsx**
-   - Replace `handleDownload` function with fetch + blob approach
-   - Add `downloadingId` state for loading indicator
-   - Update download button to show loading state
-   - Remove unnecessary `supabase` import if not used elsewhere
+1. **supabase/functions/analyze-offer-template/index.ts**
+   - Add `encodeBase64` import from Deno standard library
+   - Replace spread-based encoding with `encodeBase64()` function
+   - Add step-by-step logging
+   - Add timeout protection
+
+## Why This Fixes the Issue
+
+| Approach | How it works | File size limit |
+|----------|--------------|-----------------|
+| `btoa(String.fromCharCode(...arr))` | Spreads array as function args | ~65KB-130KB |
+| `encodeBase64(Uint8Array)` | Chunked internal processing | No practical limit |
+
+The Deno standard library function processes bytes in chunks rather than passing them all as function arguments, avoiding the call stack limitation entirely.
 
 ## Expected Outcome
 
-- Clicking download button fetches the file and triggers a browser download prompt
-- No Chrome security blocks
-- Works for both PDF and DOCX files
-- Fallback to opening in new tab if fetch fails
-- Visual loading indicator while downloading
-
+- 847KB PDF files will process successfully
+- Step-by-step logs will show progress
+- Timeout protection prevents indefinite hangs
+- AI field detection will complete and populate the `offer_template_fields` table
