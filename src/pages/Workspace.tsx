@@ -381,6 +381,7 @@ export default function Workspace() {
                 initialAction={initialAction}
                 initialCommand={initialCommand}
                 onBuyerUpdated={handleBuyerUpdated}
+                onNavigateToTab={(tab) => setActiveTab(tab as WorkspaceTab)}
               />
             </TabsContent>
 
