@@ -7,7 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Upload, Download, Trash2, FileText, File, Loader2, CheckCircle2 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Upload, Download, Trash2, FileText, File, Loader2, CheckCircle2, Eye, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { 
   useOfferTemplates, 
@@ -24,6 +25,7 @@ export default function OfferTemplates() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [previewTemplate, setPreviewTemplate] = useState<OfferTemplate | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: templates = [], isLoading } = useOfferTemplates();
@@ -121,6 +123,20 @@ export default function OfferTemplates() {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const handlePreview = (template: OfferTemplate) => {
+    setPreviewTemplate(template);
+  };
+
+  const getPreviewUrl = (template: OfferTemplate): string => {
+    if (template.file_type === "pdf") {
+      // PDFs can be embedded directly
+      return template.file_url;
+    } else {
+      // DOCX files use Google Docs Viewer
+      return `https://docs.google.com/gview?url=${encodeURIComponent(template.file_url)}&embedded=true`;
+    }
   };
 
   const handleDelete = async (template: OfferTemplate) => {
@@ -269,6 +285,14 @@ export default function OfferTemplates() {
                             <Button
                               variant="ghost"
                               size="sm"
+                              onClick={() => handlePreview(template)}
+                              title="Preview template"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
                               onClick={() => handleDownload(template)}
                               disabled={downloadingId === template.id}
                               title="Download template"
@@ -300,6 +324,58 @@ export default function OfferTemplates() {
           </Card>
         </div>
       </main>
+
+      {/* Preview Modal */}
+      <Dialog open={!!previewTemplate} onOpenChange={(open) => !open && setPreviewTemplate(null)}>
+        <DialogContent className="max-w-4xl h-[80vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
+            <DialogTitle className="flex items-center gap-2">
+              {previewTemplate?.file_type === "pdf" ? (
+                <File className="h-5 w-5 text-red-500" />
+              ) : (
+                <FileText className="h-5 w-5 text-blue-500" />
+              )}
+              {previewTemplate?.name}
+              <Badge variant="outline" className="uppercase text-xs ml-2">
+                {previewTemplate?.file_type}
+              </Badge>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 min-h-0 relative">
+            {previewTemplate && (
+              <>
+                <iframe
+                  src={getPreviewUrl(previewTemplate)}
+                  className="w-full h-full border rounded-md"
+                  title={`Preview of ${previewTemplate.name}`}
+                />
+                <div className="absolute bottom-4 right-4 flex gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => window.open(previewTemplate.file_url, "_blank")}
+                  >
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    Open in New Tab
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => handleDownload(previewTemplate)}
+                    disabled={downloadingId === previewTemplate.id}
+                  >
+                    {downloadingId === previewTemplate.id ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4 mr-2" />
+                    )}
+                    Download
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
