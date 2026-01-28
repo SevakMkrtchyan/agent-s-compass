@@ -130,13 +130,12 @@ export default function OfferTemplates() {
   };
 
   const getPreviewUrl = (template: OfferTemplate): string => {
-    if (template.file_type === "pdf") {
-      // PDFs can be embedded directly
-      return template.file_url;
-    } else {
-      // DOCX files use Google Docs Viewer
-      return `https://docs.google.com/gview?url=${encodeURIComponent(template.file_url)}&embedded=true`;
-    }
+    // Use Google Docs Viewer for both PDF and DOCX to avoid X-Frame-Options restrictions
+    return `https://docs.google.com/gview?url=${encodeURIComponent(template.file_url)}&embedded=true`;
+  };
+
+  const handleOpenInNewTab = (url: string) => {
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   const handleDelete = async (template: OfferTemplate) => {
@@ -353,7 +352,7 @@ export default function OfferTemplates() {
                   <Button
                     variant="secondary"
                     size="sm"
-                    onClick={() => window.open(previewTemplate.file_url, "_blank")}
+                    onClick={() => handleOpenInNewTab(previewTemplate.file_url)}
                   >
                     <ExternalLink className="h-4 w-4 mr-2" />
                     Open in New Tab
