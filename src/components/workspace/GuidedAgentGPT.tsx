@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import {
   CheckCircle,
   Edit3,
@@ -74,6 +74,7 @@ interface GuidedAgentGPTProps {
   initialAction?: string;
   initialCommand?: string;
   onBuyerUpdated?: (updatedBuyer: Buyer) => void;
+  onNavigateToTab?: (tab: string) => void;
 }
 
 export function GuidedAgentGPT({
@@ -86,23 +87,15 @@ export function GuidedAgentGPT({
   initialAction,
   initialCommand,
   onBuyerUpdated,
+  onNavigateToTab,
 }: GuidedAgentGPTProps) {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
   
-  // Stable buyerId ref to avoid stale closures in callbacks
-  const buyerIdRef = useRef(buyer?.id);
-  buyerIdRef.current = buyer?.id;
-  
-  // Helper to navigate to tasks tab - uses React Router for instant SPA navigation
+  // Helper to navigate to tasks tab - uses callback prop for instant state update
   const navigateToTasksTab = useCallback(() => {
-    const buyerId = buyerIdRef.current;
-    console.log("[navigateToTasksTab] Navigating to tasks tab, buyerId:", buyerId);
-    if (buyerId) {
-      // Use replace to avoid issues with back navigation, and ensure fresh state
-      navigate(`/workspace/${buyerId}?tab=tasks`, { replace: false });
-    }
-  }, [navigate]);
+    console.log("[navigateToTasksTab] Switching to tasks tab via callback");
+    onNavigateToTab?.('tasks');
+  }, [onNavigateToTab]);
   const [commandInput, setCommandInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [recommendedActions, setRecommendedActions] = useState<RecommendedAction[]>([]);
