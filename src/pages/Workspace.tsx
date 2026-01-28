@@ -99,13 +99,28 @@ export default function Workspace() {
   const [searchParams] = useSearchParams();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [agentExpanded, setAgentExpanded] = useState(true);
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>("agentgpt");
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>(() => {
+    // Initialize from URL param if present
+    const tabParam = searchParams.get('tab');
+    if (tabParam && ['agentgpt', 'progress', 'properties', 'offers', 'tasks'].includes(tabParam)) {
+      return tabParam as WorkspaceTab;
+    }
+    return 'agentgpt';
+  });
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [prefillCommand, setPrefillCommand] = useState("");
 
   // Get initial action/command from URL
   const initialAction = searchParams.get('action') || undefined;
   const initialCommand = searchParams.get('command') || undefined;
+
+  // Sync activeTab with URL ?tab= parameter
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam && ['agentgpt', 'progress', 'properties', 'offers', 'tasks'].includes(tabParam)) {
+      setActiveTab(tabParam as WorkspaceTab);
+    }
+  }, [searchParams]);
 
   // Fetch buyer from database
   const { data: dbBuyer, isLoading } = useBuyer(workspaceId);
