@@ -87,8 +87,13 @@ export function GuidedAgentGPT({
   initialCommand,
   onBuyerUpdated,
 }: GuidedAgentGPTProps) {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  
+  // Helper to navigate to tasks tab
+  const navigateToTasksTab = useCallback(() => {
+    setSearchParams({ tab: 'tasks' });
+  }, [setSearchParams]);
   const [commandInput, setCommandInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [recommendedActions, setRecommendedActions] = useState<RecommendedAction[]>([]);
@@ -513,7 +518,7 @@ export function GuidedAgentGPT({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => navigate(`/workspace/${buyer.id}?tab=tasks`)}
+              onClick={() => navigateToTasksTab()}
               className="shrink-0"
             >
               View Tasks
@@ -668,7 +673,7 @@ export function GuidedAgentGPT({
                         {isTaskAction && (
                           existingTask ? (
                             <button
-                              onClick={() => navigate(`/workspace/${buyer.id}?tab=tasks`)}
+                              onClick={() => navigateToTasksTab()}
                               className="flex items-center gap-1.5 text-xs text-success hover:text-success/80 hover:underline transition-colors cursor-pointer group"
                             >
                               <ListTodo className="h-3.5 w-3.5 group-hover:scale-110 transition-transform" />
