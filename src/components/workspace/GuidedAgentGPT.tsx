@@ -87,13 +87,16 @@ export function GuidedAgentGPT({
   initialCommand,
   onBuyerUpdated,
 }: GuidedAgentGPTProps) {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   
-  // Helper to navigate to tasks tab
+  // Helper to navigate to tasks tab - uses direct navigation to bypass React Router state issues
   const navigateToTasksTab = useCallback(() => {
-    setSearchParams({ tab: 'tasks' });
-  }, [setSearchParams]);
+    console.log("[navigateToTasksTab] Navigating to tasks tab, buyerId:", buyer?.id);
+    if (buyer?.id) {
+      window.location.href = `/workspace/${buyer.id}?tab=tasks`;
+    }
+  }, [buyer?.id]);
   const [commandInput, setCommandInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [recommendedActions, setRecommendedActions] = useState<RecommendedAction[]>([]);
@@ -518,7 +521,10 @@ export function GuidedAgentGPT({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => navigateToTasksTab()}
+              onClick={() => {
+                console.log("[Toast] View Tasks clicked, buyerId:", buyer.id);
+                window.location.href = `/workspace/${buyer.id}?tab=tasks`;
+              }}
               className="shrink-0"
             >
               View Tasks
@@ -673,7 +679,10 @@ export function GuidedAgentGPT({
                         {isTaskAction && (
                           existingTask ? (
                             <button
-                              onClick={() => navigateToTasksTab()}
+                              onClick={() => {
+                                console.log("[Badge] Task created badge clicked, buyerId:", buyer.id);
+                                window.location.href = `/workspace/${buyer.id}?tab=tasks`;
+                              }}
                               className="flex items-center gap-1.5 text-xs text-success hover:text-success/80 hover:underline transition-colors cursor-pointer group"
                             >
                               <ListTodo className="h-3.5 w-3.5 group-hover:scale-110 transition-transform" />
