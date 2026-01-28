@@ -47,6 +47,63 @@ export function useTasksByBuyer(buyerId: string | undefined) {
   });
 }
 
+// Check if a task already exists for a specific action + buyer combination
+export function useTaskBySourceAction(buyerId: string | undefined, sourceActionId: string | undefined) {
+  return useQuery({
+    queryKey: ["tasks", "source-action", buyerId, sourceActionId],
+    queryFn: async (): Promise<Task | null> => {
+      if (!buyerId || !sourceActionId) return null;
+      
+      const { data, error } = await supabase
+        .from("tasks")
+        .select(`
+          *,
+          buyer:buyers(id, name),
+          stage:stages(id, stage_name, stage_number)
+        `)
+        .eq("buyer_id", buyerId)
+        .eq("source_action_id", sourceActionId)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data as Task | null;
+    },
+    enabled: !!buyerId && !!sourceActionId,
+  });
+}
+
+// Bulk check for tasks by multiple source action IDs
+export function useTasksBySourceActions(buyerId: string | undefined, sourceActionIds: string[]) {
+  return useQuery({
+    queryKey: ["tasks", "source-actions", buyerId, sourceActionIds],
+    queryFn: async (): Promise<Record<string, Task>> => {
+      if (!buyerId || sourceActionIds.length === 0) return {};
+      
+      const { data, error } = await supabase
+        .from("tasks")
+        .select(`
+          *,
+          buyer:buyers(id, name),
+          stage:stages(id, stage_name, stage_number)
+        `)
+        .eq("buyer_id", buyerId)
+        .in("source_action_id", sourceActionIds);
+
+      if (error) throw error;
+      
+      // Convert to map keyed by source_action_id
+      const taskMap: Record<string, Task> = {};
+      (data || []).forEach((task) => {
+        if (task.source_action_id) {
+          taskMap[task.source_action_id] = task as Task;
+        }
+      });
+      return taskMap;
+    },
+    enabled: !!buyerId && sourceActionIds.length > 0,
+  });
+}
+
 export function useCreateTask() {
   const queryClient = useQueryClient();
 
@@ -138,13 +195,25 @@ export function useCreateTaskFromAction() {
       stageId?: string;
       agentId?: string;
     }) => {
+      // First check if task already exists
+      const { data: existingTask } = await supabase
+        .from("tasks")
+        .select("id")
+        .eq("buyer_id", buyerId)
+        .eq("source_action_id", actionId)
+        .maybeSingle();
+
+      if (existingTask) {
+        throw new Error("TASK_EXISTS");
+      }
+
       return createTask.mutateAsync({
         agent_id: agentId || TEMP_AGENT_ID,
         buyer_id: buyerId,
         stage_id: stageId || null,
         title: actionLabel,
         source_action_id: actionId,
-        priority: "Medium",
+        priority: "High",
         assigned_to: "Agent",
         status: "To Do",
       });

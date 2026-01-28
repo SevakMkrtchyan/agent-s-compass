@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   CheckCircle,
   Edit3,
@@ -18,8 +18,10 @@ import {
   Eye,
   Lock,
   Share2,
+  ListTodo,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useAgentGPT } from "@/hooks/useAgentGPT";
 import { useAgentGPTStream } from "@/hooks/useAgentGPTStream";
@@ -27,6 +29,7 @@ import { useRecommendationCache } from "@/hooks/useRecommendationCache";
 import { useStage, type NextAction, type NextActionShowIf } from "@/hooks/useStages";
 import { useArtifacts } from "@/hooks/useArtifacts";
 import { useToast } from "@/hooks/use-toast";
+import { useCreateTaskFromAction, useTasksBySourceActions } from "@/hooks/useTasks";
 import { StreamingText, ThinkingDots } from "./StreamingText";
 import { InlineBuyerUpdate, detectMissingField, type MissingField } from "./InlineBuyerUpdate";
 import type { StageGroup } from "@/types/conversation";
@@ -85,6 +88,7 @@ export function GuidedAgentGPT({
   onBuyerUpdated,
 }: GuidedAgentGPTProps) {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [commandInput, setCommandInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [recommendedActions, setRecommendedActions] = useState<RecommendedAction[]>([]);
@@ -103,9 +107,24 @@ export function GuidedAgentGPT({
   const { getCachedActions, setCachedActions, lastRefreshed, isCacheHit } = useRecommendationCache();
   const { createArtifact, isCreating } = useArtifacts(buyer.id);
   const { toast } = useToast();
+  const createTaskFromAction = useCreateTaskFromAction();
   
   // Fetch stage data from database
   const { data: dbStage, isLoading: stageLoading } = useStage(currentStage);
+
+  // Get task action IDs from current stage for checking existing tasks
+  const taskActionIds = useMemo(() => {
+    if (!dbStage?.next_actions) return [];
+    return dbStage.next_actions
+      .filter((action) => action.type === "task")
+      .map((action) => action.id);
+  }, [dbStage]);
+
+  // Check for existing tasks for task-type actions
+  const { data: existingTasksMap, refetch: refetchExistingTasks } = useTasksBySourceActions(
+    buyer.id,
+    taskActionIds
+  );
 
   const currentStageData = STAGES[currentStage];
 
@@ -477,8 +496,44 @@ export function GuidedAgentGPT({
   };
 
   const handleRecommendationClick = useCallback(async (action: RecommendedAction) => {
+    // Handle task-type actions: auto-create task instead of streaming
+    if (action.dbType === "task") {
+      try {
+        await createTaskFromAction.mutateAsync({
+          actionId: action.id,
+          actionLabel: action.label,
+          buyerId: buyer.id,
+          stageId: dbStage?.id,
+        });
+        
+        toast({
+          title: "✓ Task created",
+          description: action.label,
+        });
+        
+        // Refetch existing tasks to update the UI badges
+        refetchExistingTasks();
+      } catch (error) {
+        if (error instanceof Error && error.message === "TASK_EXISTS") {
+          toast({
+            title: "Task already exists",
+            description: `"${action.label}" was already created for this buyer`,
+            variant: "default",
+          });
+        } else {
+          toast({
+            title: "Failed to create task",
+            description: "Please try again",
+            variant: "destructive",
+          });
+        }
+      }
+      return;
+    }
+    
+    // Non-task actions: proceed with normal streaming
     await triggerCommand(action.command, action.type, action.visibility);
-  }, [triggerCommand]);
+  }, [triggerCommand, createTaskFromAction, buyer.id, dbStage?.id, toast, refetchExistingTasks]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -575,20 +630,50 @@ export function GuidedAgentGPT({
                 </div>
               ) : (
                 <div className="space-y-0">
-                  {recommendedActions.slice(0, 4).map((action, idx) => (
-                    <button
-                      key={action.id}
-                      onClick={() => handleRecommendationClick(action)}
-                      disabled={isStreaming}
-                      className={cn(
-                        "w-full text-left py-4 text-lg text-foreground/70 hover:text-foreground transition-colors",
-                        "disabled:opacity-50 disabled:cursor-not-allowed",
-                        idx < 3 && "border-b border-border/10"
-                      )}
-                    >
-                      {action.label}
-                    </button>
-                  ))}
+                  {recommendedActions.slice(0, 4).map((action, idx) => {
+                    const existingTask = action.dbType === "task" ? existingTasksMap?.[action.id] : null;
+                    const isTaskAction = action.dbType === "task";
+                    
+                    return (
+                      <div
+                        key={action.id}
+                        className={cn(
+                          "flex items-center justify-between py-4",
+                          idx < 3 && "border-b border-border/10"
+                        )}
+                      >
+                        <button
+                          onClick={() => handleRecommendationClick(action)}
+                          disabled={isStreaming || createTaskFromAction.isPending}
+                          className={cn(
+                            "text-left text-lg text-foreground/70 hover:text-foreground transition-colors",
+                            "disabled:opacity-50 disabled:cursor-not-allowed",
+                            existingTask && "text-foreground/50"
+                          )}
+                        >
+                          {action.label}
+                        </button>
+                        
+                        {/* Task indicator badge */}
+                        {isTaskAction && (
+                          existingTask ? (
+                            <button
+                              onClick={() => navigate(`/workspace/${buyer.id}?tab=tasks`)}
+                              className="flex items-center gap-1.5 text-xs text-success hover:text-success/80 transition-colors"
+                            >
+                              <ListTodo className="h-3.5 w-3.5" />
+                              Task created
+                            </button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground/50 flex items-center gap-1.5">
+                              <ListTodo className="h-3.5 w-3.5" />
+                              Creates task
+                            </span>
+                          )
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
