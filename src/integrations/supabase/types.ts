@@ -349,6 +349,150 @@ export type Database = {
         }
         Relationships: []
       }
+      offer_template_fields: {
+        Row: {
+          created_at: string
+          data_source: string
+          default_value: string | null
+          field_label: string
+          field_name: string
+          field_type: string
+          id: string
+          is_required: boolean
+          source_field: string | null
+          template_id: string
+        }
+        Insert: {
+          created_at?: string
+          data_source: string
+          default_value?: string | null
+          field_label: string
+          field_name: string
+          field_type?: string
+          id?: string
+          is_required?: boolean
+          source_field?: string | null
+          template_id: string
+        }
+        Update: {
+          created_at?: string
+          data_source?: string
+          default_value?: string | null
+          field_label?: string
+          field_name?: string
+          field_type?: string
+          id?: string
+          is_required?: boolean
+          source_field?: string | null
+          template_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "offer_template_fields_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "offer_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      offer_templates: {
+        Row: {
+          brokerage_id: string | null
+          created_at: string
+          created_by: string | null
+          file_type: string
+          file_url: string
+          id: string
+          name: string
+        }
+        Insert: {
+          brokerage_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          file_type: string
+          file_url: string
+          id?: string
+          name: string
+        }
+        Update: {
+          brokerage_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          file_type?: string
+          file_url?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      offers: {
+        Row: {
+          agent_id: string
+          buyer_id: string
+          created_at: string
+          field_values: Json
+          generated_document_url: string | null
+          id: string
+          offer_amount: number
+          property_id: string | null
+          status: string
+          submitted_at: string | null
+          template_id: string
+          updated_at: string
+        }
+        Insert: {
+          agent_id: string
+          buyer_id: string
+          created_at?: string
+          field_values?: Json
+          generated_document_url?: string | null
+          id?: string
+          offer_amount: number
+          property_id?: string | null
+          status?: string
+          submitted_at?: string | null
+          template_id: string
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string
+          buyer_id?: string
+          created_at?: string
+          field_values?: Json
+          generated_document_url?: string | null
+          id?: string
+          offer_amount?: number
+          property_id?: string | null
+          status?: string
+          submitted_at?: string | null
+          template_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "offers_buyer_id_fkey"
+            columns: ["buyer_id"]
+            isOneToOne: false
+            referencedRelation: "buyers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "offers_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "offers_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "offer_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       properties: {
         Row: {
           address: string
