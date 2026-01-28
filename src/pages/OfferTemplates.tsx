@@ -6,7 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Upload, Download, Trash2, FileText, File, Loader2 } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { Upload, Download, Trash2, FileText, File, Loader2, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { 
   useOfferTemplates, 
@@ -15,11 +16,14 @@ import {
   type OfferTemplate 
 } from "@/hooks/useOfferTemplates";
 import { format } from "date-fns";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function OfferTemplates() {
   const [collapsed] = useState(false);
   const [templateName, setTemplateName] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: templates = [], isLoading } = useOfferTemplates();
@@ -41,17 +45,80 @@ export default function OfferTemplates() {
   const handleUpload = async () => {
     if (!selectedFile || !templateName.trim()) return;
 
-    await createTemplate.mutateAsync({
-      file: selectedFile,
-      name: templateName.trim(),
-    });
+    setIsUploading(true);
+    setUploadProgress(20);
 
-    // Reset form
-    setTemplateName("");
-    setSelectedFile(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
+    try {
+      // Simulate progress for UX
+      const progressInterval = setInterval(() => {
+        setUploadProgress((prev) => Math.min(prev + 10, 80));
+      }, 200);
+
+      await createTemplate.mutateAsync({
+        file: selectedFile,
+        name: templateName.trim(),
+      });
+
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+
+      // Reset form after brief delay to show completion
+      setTimeout(() => {
+        setTemplateName("");
+        setSelectedFile(null);
+        setUploadProgress(0);
+        setIsUploading(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+      }, 1000);
+    } catch (error) {
+      setUploadProgress(0);
+      setIsUploading(false);
     }
+  };
+
+  const handleDownload = async (template: OfferTemplate) => {
+    console.log("[OfferTemplates] Downloading:", template.name, template.file_url);
+    
+    try {
+      // Extract the file path from the URL
+      const urlParts = template.file_url.split("/offer-templates/");
+      const filePath = urlParts[urlParts.length - 1];
+      
+      // Create a signed URL for download
+      const { data, error } = await supabase.storage
+        .from("offer-templates")
+        .createSignedUrl(filePath, 60); // 60 second expiry
+
+      if (error) {
+        console.error("[OfferTemplates] Signed URL error:", error);
+        // Fallback to public URL
+        window.open(template.file_url, "_blank");
+        return;
+      }
+
+      console.log("[OfferTemplates] Signed URL created:", data.signedUrl);
+      
+      // Create a temporary anchor to trigger download
+      const link = document.createElement("a");
+      link.href = data.signedUrl;
+      link.download = `${template.name}.${template.file_type}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error("[OfferTemplates] Download error:", error);
+      // Fallback to opening in new tab
+      window.open(template.file_url, "_blank");
+    }
+  };
+
+  const formatFileSize = (bytes: number | undefined): string => {
+    if (!bytes) return "—";
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   const handleDelete = async (template: OfferTemplate) => {
@@ -116,18 +183,32 @@ export default function OfferTemplates() {
                 <div className="flex items-end">
                   <Button
                     onClick={handleUpload}
-                    disabled={!selectedFile || !templateName.trim() || createTemplate.isPending}
+                    disabled={!selectedFile || !templateName.trim() || isUploading}
                     className="w-full"
                   >
-                    {createTemplate.isPending ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    {isUploading ? (
+                      uploadProgress === 100 ? (
+                        <CheckCircle2 className="h-4 w-4 mr-2 text-green-500" />
+                      ) : (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      )
                     ) : (
                       <Upload className="h-4 w-4 mr-2" />
                     )}
-                    Upload Template
+                    {uploadProgress === 100 ? "Uploaded!" : isUploading ? "Uploading..." : "Upload Template"}
                   </Button>
                 </div>
               </div>
+
+              {/* Upload Progress */}
+              {isUploading && (
+                <div className="mt-4 space-y-2">
+                  <Progress value={uploadProgress} className="h-2" />
+                  <p className="text-xs text-muted-foreground text-center">
+                    {uploadProgress === 100 ? "Upload complete!" : `Uploading... ${uploadProgress}%`}
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -186,16 +267,10 @@ export default function OfferTemplates() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              asChild
+                              onClick={() => handleDownload(template)}
+                              title="Download template"
                             >
-                              <a 
-                                href={template.file_url} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                download
-                              >
-                                <Download className="h-4 w-4" />
-                              </a>
+                              <Download className="h-4 w-4" />
                             </Button>
                             <Button
                               variant="ghost"
@@ -203,6 +278,7 @@ export default function OfferTemplates() {
                               onClick={() => handleDelete(template)}
                               disabled={deleteTemplate.isPending}
                               className="text-destructive hover:text-destructive"
+                              title="Delete template"
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>

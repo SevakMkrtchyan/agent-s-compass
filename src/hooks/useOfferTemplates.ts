@@ -34,12 +34,15 @@ export function useCreateOfferTemplate() {
 
   return useMutation({
     mutationFn: async ({ file, name }: { file: File; name: string }) => {
+      console.log("[OfferTemplates] Starting upload for:", file.name, "Size:", file.size);
+      
       // Determine file type
       const fileType = file.name.endsWith(".pdf") ? "pdf" : "docx";
       
       // Generate unique filename
       const timestamp = Date.now();
       const fileName = `${timestamp}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+      console.log("[OfferTemplates] Generated filename:", fileName);
 
       // Upload to storage
       const { data: uploadData, error: uploadError } = await supabase.storage
@@ -49,14 +52,21 @@ export function useCreateOfferTemplate() {
           upsert: false,
         });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error("[OfferTemplates] Storage upload failed:", uploadError);
+        throw new Error(`Upload failed: ${uploadError.message}`);
+      }
+      
+      console.log("[OfferTemplates] Storage upload successful:", uploadData);
 
       // Get public URL
       const { data: urlData } = supabase.storage
         .from("offer-templates")
         .getPublicUrl(uploadData.path);
 
-      // Create database record
+      console.log("[OfferTemplates] Public URL generated:", urlData.publicUrl);
+
+      // Create database record with file size
       const { data, error } = await supabase
         .from("offer_templates")
         .insert({
@@ -67,16 +77,21 @@ export function useCreateOfferTemplate() {
         .select()
         .single();
 
-      if (error) throw error;
-      return data;
+      if (error) {
+        console.error("[OfferTemplates] Database insert failed:", error);
+        throw new Error(`Database save failed: ${error.message}`);
+      }
+      
+      console.log("[OfferTemplates] Template record created:", data);
+      return { ...data, file_size: file.size };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["offer-templates"] });
-      toast.success("Template uploaded successfully");
+      toast.success(`Template "${data.name}" uploaded successfully`);
     },
-    onError: (error) => {
-      console.error("Failed to upload template:", error);
-      toast.error("Failed to upload template");
+    onError: (error: Error) => {
+      console.error("[OfferTemplates] Upload failed:", error);
+      toast.error(error.message || "Failed to upload template");
     },
   });
 }
