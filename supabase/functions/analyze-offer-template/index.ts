@@ -71,17 +71,18 @@ async function analyzeTemplate(
     ? "application/pdf" 
     : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
-  // Use Claude 3.5 Haiku for faster processing (3-5x faster than Sonnet)
-  console.log("[analyze-offer-template] Step 5: Calling Claude Haiku API...");
+  // Use Claude Sonnet 4 for PDF processing (same model as agentgpt-stream)
+  console.log("[analyze-offer-template] Step 5: Calling Claude Sonnet API...");
   const claudeResponse = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "x-api-key": ANTHROPIC_API_KEY,
       "anthropic-version": "2023-06-01",
+      "anthropic-beta": "pdfs-2024-09-25", // Enable PDF support
     },
     body: JSON.stringify({
-      model: "claude-3-haiku-20240307", // Claude 3 Haiku - fast and available
+      model: "claude-sonnet-4-20250514", // Claude Sonnet 4 - supports PDF input
       max_tokens: 4096,
       messages: [
         {
@@ -142,13 +143,28 @@ Return ONLY a valid JSON array of field objects, no additional text or explanati
   console.log("[analyze-offer-template] Step 6: Claude response received");
 
   const responseText = claudeData.content?.[0]?.text || "";
+  console.log("[analyze-offer-template] Raw response preview:", responseText.substring(0, 500));
   
   let detectedFields: DetectedField[] = [];
-  const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+  
+  // Try to extract JSON array from response (may have markdown code blocks)
+  const jsonMatch = responseText.match(/\[[\s\S]*?\]/);
   if (jsonMatch) {
-    detectedFields = JSON.parse(jsonMatch[0]);
+    try {
+      detectedFields = JSON.parse(jsonMatch[0]);
+    } catch (parseError) {
+      console.error("[analyze-offer-template] JSON parse error:", parseError);
+      // Try extracting from code block
+      const codeBlockMatch = responseText.match(/```(?:json)?\s*(\[[\s\S]*?\])\s*```/);
+      if (codeBlockMatch) {
+        detectedFields = JSON.parse(codeBlockMatch[1]);
+      } else {
+        throw new Error(`Failed to parse JSON from response: ${responseText.substring(0, 200)}`);
+      }
+    }
   } else {
-    throw new Error("No JSON array found in Claude response");
+    console.error("[analyze-offer-template] No JSON array found. Response:", responseText.substring(0, 500));
+    throw new Error(`No JSON array found in Claude response. Preview: ${responseText.substring(0, 100)}`);
   }
 
   console.log("[analyze-offer-template] Step 7: Detected fields:", detectedFields.length);
