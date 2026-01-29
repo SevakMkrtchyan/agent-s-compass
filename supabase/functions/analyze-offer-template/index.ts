@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { encode as encodeBase64 } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 
 const corsHeaders = {
@@ -17,8 +17,38 @@ interface DetectedField {
   source_field?: string;
 }
 
-async function analyzeTemplate(template_id: string, file_url: string, file_type: string): Promise<{ success: boolean; fields_count: number; fields: DetectedField[] }> {
+// Use any for Supabase client to avoid complex generic typing
+// deno-lint-ignore no-explicit-any
+type AnySupabaseClient = SupabaseClient<any, any, any>;
+
+async function updateTemplateStatus(
+  supabase: AnySupabaseClient,
+  templateId: string,
+  status: string,
+  error?: string
+) {
+  const updateData: Record<string, unknown> = { analysis_status: status };
+  if (status === "completed") {
+    updateData.analyzed_at = new Date().toISOString();
+    updateData.analysis_error = null;
+  }
+  if (error) {
+    updateData.analysis_error = error;
+  }
+  
+  await supabase.from("offer_templates").update(updateData).eq("id", templateId);
+}
+
+async function analyzeTemplate(
+  template_id: string, 
+  file_url: string, 
+  file_type: string,
+  supabase: AnySupabaseClient
+): Promise<{ success: boolean; fields_count: number; fields: DetectedField[] }> {
   console.log("[analyze-offer-template] Step 1: Fetching file from:", file_url);
+  
+  // Update status to analyzing
+  await updateTemplateStatus(supabase, template_id, "analyzing");
   
   const fileResponse = await fetch(file_url);
   if (!fileResponse.ok) {
@@ -41,7 +71,8 @@ async function analyzeTemplate(template_id: string, file_url: string, file_type:
     ? "application/pdf" 
     : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
-  console.log("[analyze-offer-template] Step 5: Calling Claude API...");
+  // Use Claude 3.5 Haiku for faster processing (3-5x faster than Sonnet)
+  console.log("[analyze-offer-template] Step 5: Calling Claude Haiku API...");
   const claudeResponse = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -50,7 +81,7 @@ async function analyzeTemplate(template_id: string, file_url: string, file_type:
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-3-5-haiku-20241022", // Faster model for field extraction
       max_tokens: 4096,
       messages: [
         {
@@ -122,11 +153,6 @@ Return ONLY a valid JSON array of field objects, no additional text or explanati
 
   console.log("[analyze-offer-template] Step 7: Detected fields:", detectedFields.length);
 
-  // Save to database
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
   // Clear existing fields
   await supabase
     .from("offer_template_fields")
@@ -156,6 +182,9 @@ Return ONLY a valid JSON array of field objects, no additional text or explanati
     console.log("[analyze-offer-template] Step 8: Saved", fieldsToInsert.length, "fields to database");
   }
 
+  // Update status to completed
+  await updateTemplateStatus(supabase, template_id, "completed");
+
   return { success: true, fields_count: detectedFields.length, fields: detectedFields };
 }
 
@@ -164,10 +193,15 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  try {
-    const { template_id, file_url, file_type } = await req.json();
+  // Initialize Supabase client
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    console.log("[analyze-offer-template] Starting analysis:", { template_id, file_type });
+  try {
+    const { template_id, file_url, file_type, async: runAsync } = await req.json();
+
+    console.log("[analyze-offer-template] Starting analysis:", { template_id, file_type, async: runAsync });
 
     if (!template_id || !file_url || !file_type) {
       return new Response(
@@ -176,13 +210,61 @@ serve(async (req) => {
       );
     }
 
-    // Timeout protection: 25 seconds max
+    // If async mode, return immediately and process in background
+    if (runAsync) {
+      console.log("[analyze-offer-template] Running in async mode, returning immediately");
+      
+      // Update status to analyzing
+      await updateTemplateStatus(supabase, template_id, "analyzing");
+      
+      // Use EdgeRuntime.waitUntil to continue processing after response
+      const analysisPromise = (async () => {
+        try {
+          // Extended timeout for background processing - 60 seconds
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error("Analysis timeout: exceeded 60 seconds")), 60000);
+          });
+
+          await Promise.race([
+            analyzeTemplate(template_id, file_url, file_type, supabase),
+            timeoutPromise
+          ]);
+        } catch (error) {
+          console.error("[analyze-offer-template] Background analysis error:", error);
+          await updateTemplateStatus(
+            supabase, 
+            template_id, 
+            "failed", 
+            error instanceof Error ? error.message : "Unknown error"
+          );
+        }
+      })();
+
+      // @ts-ignore - EdgeRuntime.waitUntil is available in Supabase Edge Functions
+      if (typeof EdgeRuntime !== "undefined" && EdgeRuntime.waitUntil) {
+        EdgeRuntime.waitUntil(analysisPromise);
+      } else {
+        // Fallback: just start the promise (it will run in background)
+        analysisPromise.catch(console.error);
+      }
+
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: "Analysis started in background",
+          status: "analyzing"
+        }),
+        { status: 202, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Synchronous mode: wait for completion with 60 second timeout
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error("Analysis timeout: exceeded 25 seconds")), 25000);
+      setTimeout(() => reject(new Error("Analysis timeout: exceeded 60 seconds")), 60000);
     });
 
     const result = await Promise.race([
-      analyzeTemplate(template_id, file_url, file_type),
+      analyzeTemplate(template_id, file_url, file_type, supabase),
       timeoutPromise
     ]);
 
@@ -192,6 +274,20 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error("[analyze-offer-template] Error:", error);
+    
+    // Try to update status to failed
+    try {
+      const body = await req.clone().json().catch(() => ({}));
+      if (body.template_id) {
+        await updateTemplateStatus(
+          supabase, 
+          body.template_id, 
+          "failed", 
+          error instanceof Error ? error.message : "Unknown error"
+        );
+      }
+    } catch { /* ignore */ }
+
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

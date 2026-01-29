@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useEffect, useCallback } from "react";
 
 export interface OfferTemplate {
   id: string;
@@ -10,6 +11,9 @@ export interface OfferTemplate {
   brokerage_id: string | null;
   created_by: string | null;
   created_at: string;
+  analysis_status: string;
+  analysis_error: string | null;
+  analyzed_at: string | null;
 }
 
 export interface OfferTemplateField {
@@ -61,7 +65,51 @@ export function useOfferTemplateFields(templateId: string | null) {
   });
 }
 
-// Analyze template with AI
+// Poll for analysis completion
+export function useAnalysisPolling(templateId: string | null, isAnalyzing: boolean) {
+  const queryClient = useQueryClient();
+
+  const pollForCompletion = useCallback(async () => {
+    if (!templateId || !isAnalyzing) return null;
+
+    const { data, error } = await supabase
+      .from("offer_templates")
+      .select("analysis_status, analysis_error")
+      .eq("id", templateId)
+      .single();
+
+    if (error) {
+      console.error("[useAnalysisPolling] Error fetching status:", error);
+      return null;
+    }
+
+    return data;
+  }, [templateId, isAnalyzing]);
+
+  useEffect(() => {
+    if (!templateId || !isAnalyzing) return;
+
+    const intervalId = setInterval(async () => {
+      const status = await pollForCompletion();
+      
+      if (status) {
+        if (status.analysis_status === "completed") {
+          // Invalidate queries to refresh data
+          queryClient.invalidateQueries({ queryKey: ["offer-templates"] });
+          queryClient.invalidateQueries({ queryKey: ["offer-template-fields", templateId] });
+          clearInterval(intervalId);
+        } else if (status.analysis_status === "failed") {
+          queryClient.invalidateQueries({ queryKey: ["offer-templates"] });
+          clearInterval(intervalId);
+        }
+      }
+    }, 3000); // Poll every 3 seconds
+
+    return () => clearInterval(intervalId);
+  }, [templateId, isAnalyzing, pollForCompletion, queryClient]);
+}
+
+// Analyze template with AI (async mode - returns immediately)
 export function useAnalyzeTemplate() {
   const queryClient = useQueryClient();
 
@@ -71,7 +119,7 @@ export function useAnalyzeTemplate() {
       fileUrl: string; 
       fileType: string;
     }) => {
-      console.log("[useAnalyzeTemplate] Starting AI analysis for template:", templateId);
+      console.log("[useAnalyzeTemplate] Starting async AI analysis for template:", templateId);
       
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-offer-template`,
@@ -85,6 +133,7 @@ export function useAnalyzeTemplate() {
             template_id: templateId,
             file_url: fileUrl,
             file_type: fileType,
+            async: true, // Enable async mode
           }),
         }
       );
@@ -95,16 +144,13 @@ export function useAnalyzeTemplate() {
       }
 
       const data = await response.json();
-      console.log("[useAnalyzeTemplate] Analysis complete:", data);
-      return data;
+      console.log("[useAnalyzeTemplate] Analysis started:", data);
+      return { ...data, templateId };
     },
-    onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["offer-template-fields", variables.templateId] });
-      if (data.fields_count > 0) {
-        toast.success(`Detected ${data.fields_count} fields in template`);
-      } else {
-        toast.info("No fillable fields detected in template");
-      }
+    onSuccess: (data) => {
+      // Invalidate to pick up the "analyzing" status
+      queryClient.invalidateQueries({ queryKey: ["offer-templates"] });
+      toast.info("Analyzing template fields...");
     },
     onError: (error: Error) => {
       console.error("[useAnalyzeTemplate] Analysis failed:", error);
@@ -151,13 +197,14 @@ export function useCreateOfferTemplate() {
 
       console.log("[OfferTemplates] Public URL generated:", urlData.publicUrl);
 
-      // Create database record with file size
+      // Create database record with initial analysis_status
       const { data, error } = await supabase
         .from("offer_templates")
         .insert({
           name,
           file_url: urlData.publicUrl,
           file_type: fileType,
+          analysis_status: "pending",
         })
         .select()
         .single();
@@ -168,7 +215,7 @@ export function useCreateOfferTemplate() {
       }
       
       console.log("[OfferTemplates] Template record created:", data);
-      return { ...data, file_size: file.size };
+      return { ...data, file_size: file.size } as OfferTemplate & { file_size: number };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["offer-templates"] });

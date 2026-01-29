@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   Upload, Download, Trash2, FileText, File, Loader2, CheckCircle2, 
-  Eye, ExternalLink, Sparkles, ListChecks, ChevronDown, ChevronUp 
+  Eye, ExternalLink, Sparkles, ListChecks, AlertCircle, RefreshCw 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { 
@@ -20,9 +20,11 @@ import {
   useDeleteOfferTemplate,
   useAnalyzeTemplate,
   useOfferTemplateFields,
+  useAnalysisPolling,
   type OfferTemplate 
 } from "@/hooks/useOfferTemplates";
 import { format } from "date-fns";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function OfferTemplates() {
   const [collapsed] = useState(false);
@@ -32,16 +34,29 @@ export default function OfferTemplates() {
   const [isUploading, setIsUploading] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [previewTemplate, setPreviewTemplate] = useState<OfferTemplate | null>(null);
-  const [analyzingId, setAnalyzingId] = useState<string | null>(null);
-  const [expandedFieldsId, setExpandedFieldsId] = useState<string | null>(null);
   const [fieldsModalTemplate, setFieldsModalTemplate] = useState<OfferTemplate | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
 
   const { data: templates = [], isLoading } = useOfferTemplates();
   const createTemplate = useCreateOfferTemplate();
   const deleteTemplate = useDeleteOfferTemplate();
   const analyzeTemplate = useAnalyzeTemplate();
   const { data: modalFields = [] } = useOfferTemplateFields(fieldsModalTemplate?.id || null);
+
+  // Poll for any templates that are currently analyzing
+  const analyzingTemplates = templates.filter(t => t.analysis_status === "analyzing");
+  
+  useEffect(() => {
+    if (analyzingTemplates.length === 0) return;
+
+    const intervalId = setInterval(async () => {
+      // Refresh templates to check for status updates
+      queryClient.invalidateQueries({ queryKey: ["offer-templates"] });
+    }, 3000);
+
+    return () => clearInterval(intervalId);
+  }, [analyzingTemplates.length, queryClient]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -73,29 +88,20 @@ export default function OfferTemplates() {
       clearInterval(progressInterval);
       setUploadProgress(100);
 
-      // Start AI analysis automatically
-      setAnalyzingId(result.id);
-      
-      setTimeout(async () => {
+      // Start AI analysis in background (async mode - returns immediately)
+      analyzeTemplate.mutate({
+        templateId: result.id,
+        fileUrl: result.file_url,
+        fileType: result.file_type,
+      });
+
+      setTimeout(() => {
         setTemplateName("");
         setSelectedFile(null);
         setUploadProgress(0);
         setIsUploading(false);
         if (fileInputRef.current) {
           fileInputRef.current.value = "";
-        }
-
-        // Trigger AI analysis
-        try {
-          await analyzeTemplate.mutateAsync({
-            templateId: result.id,
-            fileUrl: result.file_url,
-            fileType: result.file_type,
-          });
-        } catch (error) {
-          console.error("AI analysis failed:", error);
-        } finally {
-          setAnalyzingId(null);
         }
       }, 500);
     } catch (error) {
@@ -104,17 +110,12 @@ export default function OfferTemplates() {
     }
   };
 
-  const handleReanalyze = async (template: OfferTemplate) => {
-    setAnalyzingId(template.id);
-    try {
-      await analyzeTemplate.mutateAsync({
-        templateId: template.id,
-        fileUrl: template.file_url,
-        fileType: template.file_type,
-      });
-    } finally {
-      setAnalyzingId(null);
-    }
+  const handleReanalyze = (template: OfferTemplate) => {
+    analyzeTemplate.mutate({
+      templateId: template.id,
+      fileUrl: template.file_url,
+      fileType: template.file_type,
+    });
   };
 
   const handleDownload = async (template: OfferTemplate) => {
@@ -254,7 +255,7 @@ export default function OfferTemplates() {
                 <div className="mt-4 space-y-2">
                   <Progress value={uploadProgress} className="h-2" />
                   <p className="text-xs text-muted-foreground text-center">
-                    {uploadProgress === 100 ? "Upload complete! Starting AI analysis..." : `Uploading... ${uploadProgress}%`}
+                    {uploadProgress === 100 ? "Upload complete! AI analysis starting..." : `Uploading... ${uploadProgress}%`}
                   </p>
                 </div>
               )}
@@ -296,7 +297,6 @@ export default function OfferTemplates() {
                       <TemplateRow
                         key={template.id}
                         template={template}
-                        isAnalyzing={analyzingId === template.id}
                         isDownloading={downloadingId === template.id}
                         isDeleting={deleteTemplate.isPending}
                         onPreview={handlePreview}
@@ -419,12 +419,12 @@ export default function OfferTemplates() {
               <Button
                 variant="outline"
                 onClick={() => fieldsModalTemplate && handleReanalyze(fieldsModalTemplate)}
-                disabled={analyzingId === fieldsModalTemplate.id}
+                disabled={fieldsModalTemplate.analysis_status === "analyzing"}
               >
-                {analyzingId === fieldsModalTemplate.id ? (
+                {fieldsModalTemplate.analysis_status === "analyzing" ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 ) : (
-                  <Sparkles className="h-4 w-4 mr-2" />
+                  <RefreshCw className="h-4 w-4 mr-2" />
                 )}
                 Re-analyze
               </Button>
@@ -436,10 +436,9 @@ export default function OfferTemplates() {
   );
 }
 
-// Extracted row component for cleaner code
+// Template row component with status-based UI
 function TemplateRow({
   template,
-  isAnalyzing,
   isDownloading,
   isDeleting,
   onPreview,
@@ -449,7 +448,6 @@ function TemplateRow({
   onViewFields,
 }: {
   template: OfferTemplate;
-  isAnalyzing: boolean;
   isDownloading: boolean;
   isDeleting: boolean;
   onPreview: (t: OfferTemplate) => void;
@@ -460,6 +458,69 @@ function TemplateRow({
 }) {
   const { data: fields = [] } = useOfferTemplateFields(template.id);
   const fieldCount = fields.length;
+
+  const renderStatus = () => {
+    switch (template.analysis_status) {
+      case "analyzing":
+        return (
+          <div className="flex items-center gap-2 text-amber-600">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            <span className="text-sm">Analyzing...</span>
+          </div>
+        );
+      case "completed":
+        if (fieldCount > 0) {
+          return (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-auto py-1 px-2 text-green-600 hover:text-green-700"
+              onClick={() => onViewFields(template)}
+            >
+              <CheckCircle2 className="h-3 w-3 mr-1" />
+              <span className="text-sm">{fieldCount} fields</span>
+            </Button>
+          );
+        }
+        return (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-auto py-1 px-2 text-muted-foreground hover:text-foreground"
+            onClick={() => onReanalyze(template)}
+          >
+            <Sparkles className="h-3 w-3 mr-1" />
+            <span className="text-sm">Re-analyze</span>
+          </Button>
+        );
+      case "failed":
+        return (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-auto py-1 px-2 text-destructive hover:text-destructive"
+            onClick={() => onReanalyze(template)}
+            title={template.analysis_error || "Analysis failed"}
+          >
+            <AlertCircle className="h-3 w-3 mr-1" />
+            <span className="text-sm">Failed - Retry</span>
+          </Button>
+        );
+      case "pending":
+      default:
+        return (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-auto py-1 px-2 text-muted-foreground hover:text-foreground"
+            onClick={() => onReanalyze(template)}
+          >
+            <Sparkles className="h-3 w-3 mr-1" />
+            <span className="text-sm">Analyze</span>
+          </Button>
+        );
+    }
+  };
 
   return (
     <TableRow>
@@ -479,32 +540,7 @@ function TemplateRow({
         </Badge>
       </TableCell>
       <TableCell>
-        {isAnalyzing ? (
-          <div className="flex items-center gap-2 text-amber-600">
-            <Loader2 className="h-3 w-3 animate-spin" />
-            <span className="text-sm">Analyzing...</span>
-          </div>
-        ) : fieldCount > 0 ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-auto py-1 px-2 text-green-600 hover:text-green-700"
-            onClick={() => onViewFields(template)}
-          >
-            <ListChecks className="h-3 w-3 mr-1" />
-            <span className="text-sm">{fieldCount} fields</span>
-          </Button>
-        ) : (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-auto py-1 px-2 text-muted-foreground hover:text-foreground"
-            onClick={() => onReanalyze(template)}
-          >
-            <Sparkles className="h-3 w-3 mr-1" />
-            <span className="text-sm">Analyze</span>
-          </Button>
-        )}
+        {renderStatus()}
       </TableCell>
       <TableCell className="text-muted-foreground">
         {format(new Date(template.created_at), "MMM d, yyyy")}

@@ -398,6 +398,9 @@ export type Database = {
       }
       offer_templates: {
         Row: {
+          analysis_error: string | null
+          analysis_status: string
+          analyzed_at: string | null
           brokerage_id: string | null
           created_at: string
           created_by: string | null
@@ -407,6 +410,9 @@ export type Database = {
           name: string
         }
         Insert: {
+          analysis_error?: string | null
+          analysis_status?: string
+          analyzed_at?: string | null
           brokerage_id?: string | null
           created_at?: string
           created_by?: string | null
@@ -416,6 +422,9 @@ export type Database = {
           name: string
         }
         Update: {
+          analysis_error?: string | null
+          analysis_status?: string
+          analyzed_at?: string | null
           brokerage_id?: string | null
           created_at?: string
           created_by?: string | null
