@@ -262,10 +262,10 @@ export default function GlobalProperties() {
                       className="w-full gap-2"
                       onClick={() => {
                         if (property.buyerAssignments.length === 1) {
-                          navigate(`/workspace/${property.buyerAssignments[0].buyerId}`);
+                          navigate(`/workspace/${property.buyerAssignments[0].buyerId}?tab=properties`);
                         } else if (property.buyerAssignments.length > 1) {
                           // Navigate to first buyer's workspace
-                          navigate(`/workspace/${property.buyerAssignments[0].buyerId}`);
+                          navigate(`/workspace/${property.buyerAssignments[0].buyerId}?tab=properties`);
                         } else {
                           // Property not assigned - go to add property flow
                           navigate("/add-property");
