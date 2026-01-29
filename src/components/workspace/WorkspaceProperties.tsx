@@ -745,134 +745,77 @@ export function WorkspaceProperties({ buyerId, onAgentCommand }: WorkspaceProper
 
     return (
       <Dialog open={!!selectedProperty} onOpenChange={() => setSelectedProperty(null)}>
-        <DialogContent className="max-w-5xl max-h-[90vh] p-0 gap-0" aria-describedby={undefined}>
+        <DialogContent className="max-w-6xl w-[95vw] max-h-[95vh] p-0 gap-0 overflow-hidden" aria-describedby={undefined}>
           <VisuallyHidden>
             <DialogTitle>{selectedProperty.address} - Property Details</DialogTitle>
           </VisuallyHidden>
-          {/* Header with Quick Actions */}
-          <div className="flex items-center justify-between p-4 border-b border-border">
-            <button 
-              onClick={() => setSelectedProperty(null)}
-              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              Back to Properties
-            </button>
-            <div className="flex items-center gap-2">
-              {/* Status Badge */}
-              {badges.length > 0 && (
-                <div className="flex gap-1">
-                  {badges.slice(0, 2).map((badge, i) => (
-                    <Badge key={i} className={cn("capitalize text-xs font-normal gap-1", badge.className)}>
-                      {badge.icon}
-                      {badge.label}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-              {/* Favorite Toggle */}
-              <Button
-                variant={selectedProperty.favorited ? "secondary" : "outline"}
-                size="sm"
-                onClick={() => toggleFavorite(selectedProperty.id)}
-                className="gap-1"
-              >
-                <Heart className={cn("h-4 w-4", selectedProperty.favorited && "fill-red-500 text-red-500")} />
-                {selectedProperty.favorited ? "Favorited" : "Favorite"}
-              </Button>
-              {/* Edit Notes Button */}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => { 
-                  setTempNotes(selectedProperty.agentNotes || ""); 
-                  setEditingNotes(true); 
-                }}
-                className="gap-1"
-              >
-                <FileText className="h-4 w-4" />
-                Notes
-              </Button>
-              {/* Close */}
-              <button
-                onClick={() => setSelectedProperty(null)}
-                className="p-2 hover:bg-muted rounded"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-
-          <ScrollArea className="max-h-[calc(90vh-4rem)]">
-            <div className="p-6 space-y-6">
-              {/* Property Title */}
-              <div>
-                <h2 className="text-2xl font-semibold">{selectedProperty.address}, {selectedProperty.city}, {selectedProperty.state} {selectedProperty.zipCode}</h2>
-                <p className="text-3xl font-bold mt-2">{formatPrice(selectedProperty.price)}</p>
-              </div>
-
-              {/* Image Gallery - Full Width */}
-              <div className="space-y-3 -mx-6">
-                <div className="relative aspect-[16/10] bg-black">
-                  {images.length > 0 ? (
-                    <img
-                      src={images[currentImageIndex] || images[0]}
-                      alt={`${selectedProperty.address} - Photo ${currentImageIndex + 1}`}
-                      className="w-full h-full object-contain"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.src = '/placeholder.svg';
-                      }}
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-muted">
-                      <Home className="h-16 w-16 text-muted-foreground/30" />
-                    </div>
-                  )}
-                  
-                  {/* Navigation Arrows - More Visible */}
-                  {images.length > 1 && (
-                    <>
-                      <button
-                        onClick={() => setCurrentImageIndex(prev => prev === 0 ? images.length - 1 : prev - 1)}
-                        className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-black/60 hover:bg-black/80 text-white rounded-full shadow-lg transition-all hover:scale-105"
-                        aria-label="Previous photo"
-                      >
-                        <ChevronLeft className="h-6 w-6" />
-                      </button>
-                      <button
-                        onClick={() => setCurrentImageIndex(prev => prev === images.length - 1 ? 0 : prev + 1)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-black/60 hover:bg-black/80 text-white rounded-full shadow-lg transition-all hover:scale-105"
-                        aria-label="Next photo"
-                      >
-                        <ChevronRight className="h-6 w-6" />
-                      </button>
-                      
-                      {/* Photo Counter */}
-                      <div className="absolute bottom-4 right-4 px-3 py-1.5 bg-black/70 text-white rounded-full text-sm font-medium shadow-lg">
-                        {currentImageIndex + 1} / {images.length}
-                      </div>
-                      
-                      {/* Keyboard hint */}
-                      <div className="absolute bottom-4 left-4 px-2 py-1 bg-black/50 text-white/70 rounded text-xs">
-                        ← → to navigate
-                      </div>
-                    </>
-                  )}
-                </div>
+          
+          {/* Two-Column Layout */}
+          <div className="flex flex-col lg:flex-row h-full max-h-[95vh]">
+            {/* Left: Image Gallery - 60% */}
+            <div className="lg:w-[60%] bg-black flex flex-col">
+            {/* Main Image Container */}
+              <div className="relative flex-1 min-h-[350px] lg:min-h-[500px] flex items-center justify-center p-4">
+                {images.length > 0 ? (
+                  <img
+                    src={images[currentImageIndex] || images[0]}
+                    alt={`${selectedProperty.address} - Photo ${currentImageIndex + 1}`}
+                    className="w-full h-full object-contain"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.src = '/placeholder.svg';
+                    }}
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-muted">
+                    <Home className="h-16 w-16 text-muted-foreground/30" />
+                  </div>
+                )}
                 
-                {/* Thumbnail Strip */}
+                {/* Navigation Arrows */}
                 {images.length > 1 && (
-                  <div className="flex gap-2 overflow-x-auto px-6 pb-1">
-                    {images.map((img, i) => (
+                  <>
+                    <button
+                      onClick={() => setCurrentImageIndex(prev => prev === 0 ? images.length - 1 : prev - 1)}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 p-3 bg-white/90 hover:bg-white text-black rounded-full shadow-lg transition-all hover:scale-105"
+                      aria-label="Previous photo"
+                    >
+                      <ChevronLeft className="h-5 w-5" />
+                    </button>
+                    <button
+                      onClick={() => setCurrentImageIndex(prev => prev === images.length - 1 ? 0 : prev + 1)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-3 bg-white/90 hover:bg-white text-black rounded-full shadow-lg transition-all hover:scale-105"
+                      aria-label="Next photo"
+                    >
+                      <ChevronRight className="h-5 w-5" />
+                    </button>
+                    
+                    {/* Photo Counter */}
+                    <div className="absolute bottom-3 right-3 px-3 py-1.5 bg-black/80 text-white rounded-full text-sm font-medium">
+                      {currentImageIndex + 1} / {images.length}
+                    </div>
+                    
+                    {/* Keyboard hint */}
+                    <div className="absolute bottom-3 left-3 px-2 py-1 bg-black/60 text-white/80 rounded text-xs">
+                      ← → to navigate
+                    </div>
+                  </>
+                )}
+              </div>
+              
+              {/* Thumbnail Strip - Larger */}
+              {images.length > 1 && (
+                <div className="bg-black/90 p-3 border-t border-white/10">
+                  <div className="flex gap-2 overflow-x-auto">
+                    {images.slice(0, 12).map((img, i) => (
                       <button
                         key={i}
                         onClick={() => setCurrentImageIndex(i)}
                         className={cn(
-                          "w-20 h-14 rounded-md overflow-hidden flex-shrink-0 border-2 transition-all",
+                          "w-24 h-16 rounded overflow-hidden flex-shrink-0 border-2 transition-all",
                           currentImageIndex === i 
-                            ? "border-primary ring-2 ring-primary/30" 
-                            : "border-transparent opacity-60 hover:opacity-100"
+                            ? "border-white ring-1 ring-white/50 opacity-100" 
+                            : "border-transparent opacity-50 hover:opacity-90"
                         )}
                       >
                         <img 
@@ -886,255 +829,217 @@ export function WorkspaceProperties({ buyerId, onAgentCommand }: WorkspaceProper
                         />
                       </button>
                     ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Property Overview */}
-              <div>
-                <h3 className="font-medium mb-4">Property Overview</h3>
-                <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
-                  <div className="text-center p-3 bg-muted/50 rounded-lg">
-                    <Bed className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
-                    <p className="font-medium">{selectedProperty.bedrooms}</p>
-                    <p className="text-xs text-muted-foreground">Beds</p>
-                  </div>
-                  <div className="text-center p-3 bg-muted/50 rounded-lg">
-                    <Bath className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
-                    <p className="font-medium">{selectedProperty.bathrooms}</p>
-                    <p className="text-xs text-muted-foreground">Baths</p>
-                  </div>
-                  <div className="text-center p-3 bg-muted/50 rounded-lg">
-                    <Square className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
-                    <p className="font-medium">{selectedProperty.sqft.toLocaleString()}</p>
-                    <p className="text-xs text-muted-foreground">Sq Ft</p>
-                  </div>
-                  <div className="text-center p-3 bg-muted/50 rounded-lg">
-                    <Home className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
-                    <p className="font-medium">{selectedProperty.yearBuilt}</p>
-                    <p className="text-xs text-muted-foreground">Built</p>
-                  </div>
-                  <div className="text-center p-3 bg-muted/50 rounded-lg">
-                    <DollarSign className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
-                    <p className="font-medium">${selectedProperty.pricePerSqft}</p>
-                    <p className="text-xs text-muted-foreground">$/sqft</p>
-                  </div>
-                  <div className="text-center p-3 bg-muted/50 rounded-lg">
-                    <Clock className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
-                    <p className="font-medium">{selectedProperty.daysOnMarket}</p>
-                    <p className="text-xs text-muted-foreground">Days</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Description */}
-              {selectedProperty.description && (
-                <div>
-                  <h3 className="font-medium mb-2">Description</h3>
-                  <p className="text-sm text-muted-foreground">{selectedProperty.description}</p>
-                </div>
-              )}
-
-              {/* Features */}
-              {selectedProperty.features && selectedProperty.features.length > 0 && (
-                <div>
-                  <h3 className="font-medium mb-2">Property Features</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                    {selectedProperty.features.map((feature, i) => (
-                      <div key={i} className="text-sm text-muted-foreground flex items-center gap-2">
-                        <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-                        {feature}
+                    {images.length > 12 && (
+                      <div className="w-24 h-16 rounded bg-white/10 flex items-center justify-center text-white text-sm font-medium flex-shrink-0">
+                        +{images.length - 12}
                       </div>
-                    ))}
+                    )}
                   </div>
                 </div>
               )}
-
-              <div className="border-t border-border" />
-
-              {/* Buyer Status & Actions */}
-              <div>
-                <h3 className="font-medium mb-4">Buyer Status & Actions</h3>
-                <p className="text-sm text-muted-foreground mb-3">For: {buyer.name}</p>
-                <div className="flex flex-wrap items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    {selectedProperty.viewed ? (
-                      <Badge variant="secondary" className="gap-1">
-                        <Eye className="h-3 w-3" /> Viewed by buyer
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="gap-1 text-muted-foreground">
-                        <EyeOff className="h-3 w-3" /> Not viewed
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {selectedProperty.scheduled ? (
-                      <Badge variant="secondary" className="gap-1">
-                        <Calendar className="h-3 w-3" /> Showing scheduled
-                      </Badge>
-                    ) : (
-                      <Button size="sm" variant="outline" onClick={() => handleScheduleShowing(selectedProperty.id)}>
-                        <Calendar className="h-3 w-3 mr-1" /> Schedule
-                      </Button>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button 
-                      size="sm" 
-                      variant={selectedProperty.favorited ? "secondary" : "outline"}
-                      onClick={() => toggleFavorite(selectedProperty.id)}
-                    >
-                      <Heart className={cn("h-3 w-3 mr-1", selectedProperty.favorited && "fill-red-500 text-red-500")} />
-                      {selectedProperty.favorited ? "Favorited" : "Favorite"}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Agent Notes */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="font-medium">Agent Notes <span className="text-muted-foreground font-normal text-sm">(Private)</span></h3>
-                  {!editingNotes && (
-                    <Button size="sm" variant="ghost" onClick={() => { setTempNotes(selectedProperty.agentNotes || ""); setEditingNotes(true); }}>
-                      Edit Notes
-                    </Button>
+            </div>
+            
+            {/* Right: Property Details - 40% */}
+            <div className="lg:w-[40%] flex flex-col bg-background">
+              {/* Header */}
+              <div className="flex items-center justify-between p-4 border-b border-border">
+                <div className="flex items-center gap-2">
+                  {badges.length > 0 && (
+                    <div className="flex gap-1">
+                      {badges.slice(0, 2).map((badge, i) => (
+                        <Badge key={i} className={cn("capitalize text-xs font-normal gap-1", badge.className)}>
+                          {badge.icon}
+                          {badge.label}
+                        </Badge>
+                      ))}
+                    </div>
                   )}
                 </div>
-                {editingNotes ? (
-                  <div className="space-y-2">
-                    <Textarea
-                      value={tempNotes}
-                      onChange={(e) => setTempNotes(e.target.value)}
-                      placeholder="Add private notes about this property..."
-                      rows={3}
-                    />
-                    <div className="flex gap-2">
-                      <Button size="sm" onClick={saveNotes}>Save</Button>
-                      <Button size="sm" variant="ghost" onClick={() => setEditingNotes(false)}>Cancel</Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="p-3 bg-muted/50 rounded-lg text-sm text-muted-foreground min-h-[60px]">
-                    {selectedProperty.agentNotes || "No notes added yet."}
-                  </div>
-                )}
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant={selectedProperty.favorited ? "secondary" : "ghost"}
+                    size="sm"
+                    onClick={() => toggleFavorite(selectedProperty.id)}
+                    className="gap-1"
+                  >
+                    <Heart className={cn("h-4 w-4", selectedProperty.favorited && "fill-red-500 text-red-500")} />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => { 
+                      setTempNotes(selectedProperty.agentNotes || ""); 
+                      setEditingNotes(true); 
+                    }}
+                  >
+                    <FileText className="h-4 w-4" />
+                  </Button>
+                  <button
+                    onClick={() => setSelectedProperty(null)}
+                    className="p-2 hover:bg-muted rounded"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
 
-              <div className="border-t border-border" />
-
-              {/* AI Market Analysis */}
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-primary" />
-                    <h3 className="font-medium">AI Market Analysis</h3>
+              <ScrollArea className="flex-1">
+                <div className="p-5 space-y-5">
+                  {/* Price & Address */}
+                  <div>
+                    <p className="text-3xl font-bold">{formatPrice(selectedProperty.price)}</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      ${selectedProperty.pricePerSqft}/sqft
+                    </p>
+                    <h2 className="text-lg font-medium mt-3">{selectedProperty.address}</h2>
+                    <p className="text-muted-foreground flex items-center gap-1.5 mt-1">
+                      <MapPin className="h-4 w-4 flex-shrink-0" />
+                      {selectedProperty.city}, {selectedProperty.state} {selectedProperty.zipCode}
+                    </p>
                   </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="gap-2"
-                    onClick={() => handleGeneratePropertyAnalysis(selectedProperty)}
-                    disabled={propertyAnalysis?.isGenerating}
-                  >
-                    {propertyAnalysis?.isGenerating ? (
-                      <>
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        Generating...
-                      </>
-                    ) : (
-                      <>
-                        <RefreshCw className="h-3 w-3" />
-                        {propertyAnalysis?.analysis || selectedProperty.aiAnalysis ? 'Regenerate' : 'Generate'} Analysis
-                      </>
+
+                  {/* Quick Stats */}
+                  <div className="grid grid-cols-3 gap-3 py-4 border-y border-border">
+                    <div className="text-center">
+                      <div className="flex items-center justify-center gap-1 text-lg font-semibold">
+                        <Bed className="h-4 w-4 text-muted-foreground" />
+                        {selectedProperty.bedrooms}
+                      </div>
+                      <p className="text-xs text-muted-foreground">beds</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="flex items-center justify-center gap-1 text-lg font-semibold">
+                        <Bath className="h-4 w-4 text-muted-foreground" />
+                        {selectedProperty.bathrooms}
+                      </div>
+                      <p className="text-xs text-muted-foreground">baths</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="flex items-center justify-center gap-1 text-lg font-semibold">
+                        <Square className="h-4 w-4 text-muted-foreground" />
+                        {selectedProperty.sqft.toLocaleString()}
+                      </div>
+                      <p className="text-xs text-muted-foreground">sqft</p>
+                    </div>
+                  </div>
+
+                  {/* Property Details Grid */}
+                  <div className="grid grid-cols-2 gap-3">
+                    {selectedProperty.yearBuilt && (
+                      <div className="p-3 bg-muted/50 rounded-lg">
+                        <p className="text-xs text-muted-foreground">Year Built</p>
+                        <p className="font-medium">{selectedProperty.yearBuilt}</p>
+                      </div>
                     )}
-                  </Button>
-                </div>
-                
-                {(propertyAnalysis?.analysis || selectedProperty.aiAnalysis) ? (
-                  <div className="p-4 border border-border rounded-lg bg-muted/30">
-                    <AIAnalysisContent 
-                      analysis={propertyAnalysis?.analysis || selectedProperty.aiAnalysis || ""} 
-                      generatedAt={propertyAnalysis?.generatedAt || selectedProperty.aiAnalysisGeneratedAt}
-                    />
-                    
-                    {/* Disclaimer */}
-                    <div className="mt-6 pt-4 border-t border-border">
-                      <div className="flex items-start gap-2 text-xs text-muted-foreground">
-                        <Info className="h-3 w-3 mt-0.5 flex-shrink-0" />
-                        <p>
-                          This analysis is AI-generated for informational purposes only. Agent should verify all data and use professional judgment. Not a substitute for CMA, appraisal, or inspection.
-                        </p>
+                    <div className="p-3 bg-muted/50 rounded-lg">
+                      <p className="text-xs text-muted-foreground">Days on Market</p>
+                      <p className="font-medium">{selectedProperty.daysOnMarket}d</p>
+                    </div>
+                    {selectedProperty.lotSize && (
+                      <div className="p-3 bg-muted/50 rounded-lg">
+                        <p className="text-xs text-muted-foreground">Lot Size</p>
+                        <p className="font-medium">{selectedProperty.lotSize}</p>
+                      </div>
+                    )}
+                    {selectedProperty.propertyType && (
+                      <div className="p-3 bg-muted/50 rounded-lg">
+                        <p className="text-xs text-muted-foreground">Type</p>
+                        <p className="font-medium capitalize">{selectedProperty.propertyType.replace('_', ' ')}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Description */}
+                  {selectedProperty.description && (
+                    <div>
+                      <h3 className="font-medium mb-2 text-sm">Description</h3>
+                      <p className="text-sm text-muted-foreground line-clamp-4">{selectedProperty.description}</p>
+                    </div>
+                  )}
+
+                  {/* Features */}
+                  {selectedProperty.features && selectedProperty.features.length > 0 && (
+                    <div>
+                      <h3 className="font-medium mb-2 text-sm">Features</h3>
+                      <div className="flex flex-wrap gap-1.5">
+                        {selectedProperty.features.slice(0, 8).map((feature, i) => (
+                          <Badge key={i} variant="secondary" className="text-xs font-normal capitalize">
+                            {feature.replace(/_/g, ' ')}
+                          </Badge>
+                        ))}
+                        {selectedProperty.features.length > 8 && (
+                          <Badge variant="outline" className="text-xs font-normal">
+                            +{selectedProperty.features.length - 8} more
+                          </Badge>
+                        )}
                       </div>
                     </div>
-                    
-                    {/* Action buttons */}
-                    <div className="flex items-center gap-2 mt-4 pt-4 border-t border-border">
-                      <Button variant="outline" size="sm" className="gap-2">
-                        <Download className="h-3 w-3" />
-                        Export as PDF
-                      </Button>
-                      <Button variant="outline" size="sm" className="gap-2">
-                        <Share2 className="h-3 w-3" />
-                        Publish to Buyer Portal
-                      </Button>
+                  )}
+
+                  {/* Agent Notes */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="font-medium text-sm">Agent Notes</h3>
+                      {!editingNotes && (
+                        <Button size="sm" variant="ghost" onClick={() => { setTempNotes(selectedProperty.agentNotes || ""); setEditingNotes(true); }}>
+                          Edit
+                        </Button>
+                      )}
                     </div>
+                    {editingNotes ? (
+                      <div className="space-y-2">
+                        <Textarea
+                          value={tempNotes}
+                          onChange={(e) => setTempNotes(e.target.value)}
+                          placeholder="Add private notes..."
+                          rows={2}
+                          className="text-sm"
+                        />
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={saveNotes}>Save</Button>
+                          <Button size="sm" variant="ghost" onClick={() => setEditingNotes(false)}>Cancel</Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-2.5 bg-muted/50 rounded text-sm text-muted-foreground min-h-[40px]">
+                        {selectedProperty.agentNotes || "No notes added."}
+                      </div>
+                    )}
                   </div>
-                ) : propertyAnalysis?.isGenerating ? (
-                  <div className="p-8 border border-border rounded-lg bg-muted/30 text-center">
-                    <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3 text-primary" />
-                    <p className="text-sm text-muted-foreground">Generating comprehensive analysis...</p>
-                  </div>
-                ) : (
-                  <div className="p-8 border border-dashed border-border rounded-lg bg-muted/30 text-center">
-                    <Sparkles className="h-8 w-8 mx-auto mb-3 text-muted-foreground" />
-                    <p className="text-sm text-muted-foreground mb-3">No analysis generated yet</p>
-                    <Button 
-                      size="sm" 
-                      onClick={() => handleGeneratePropertyAnalysis(selectedProperty)}
-                    >
-                      <Sparkles className="h-3 w-3 mr-2" />
-                      Generate AI Analysis
-                    </Button>
-                  </div>
+                </div>
+              </ScrollArea>
+
+              {/* Footer Actions */}
+              <div className="p-4 border-t border-border bg-background flex flex-wrap gap-2">
+                {selectedProperty.listingUrl && (
+                  <Button variant="outline" size="sm" onClick={() => window.open(selectedProperty.listingUrl, "_blank")}>
+                    <ExternalLink className="h-4 w-4 mr-1" />
+                    Listing
+                  </Button>
                 )}
+                <Button variant="outline" size="sm" onClick={() => handleScheduleShowing(selectedProperty.id)}>
+                  <Calendar className="h-4 w-4 mr-1" />
+                  Schedule
+                </Button>
+                <Button 
+                  size="sm" 
+                  onClick={() => {
+                    navigate(`/workspace/${buyerId}?tab=offers&propertyId=${selectedProperty.id}`);
+                    setSelectedProperty(null);
+                  }}
+                >
+                  <DollarSign className="h-4 w-4 mr-1" />
+                  Create Offer
+                </Button>
+                <div className="flex-1" />
+                <Button variant="outline" size="sm" onClick={() => archiveProperty(selectedProperty.id)}>
+                  <Archive className="h-4 w-4" />
+                </Button>
+                <Button variant="destructive" size="sm" onClick={() => removeProperty(selectedProperty.id)}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
               </div>
             </div>
-          </ScrollArea>
-
-          {/* Footer Actions */}
-          <div className="flex items-center gap-3 p-4 border-t border-border bg-background">
-            {selectedProperty.listingUrl && (
-              <Button variant="outline" size="sm" onClick={() => window.open(selectedProperty.listingUrl, "_blank")}>
-                <ExternalLink className="h-4 w-4 mr-2" />
-                View Listing
-              </Button>
-            )}
-            <Button variant="outline" size="sm" onClick={() => handleScheduleShowing(selectedProperty.id)}>
-              <Calendar className="h-4 w-4 mr-2" />
-              Schedule Showing
-            </Button>
-            <Button 
-              size="sm" 
-              onClick={() => {
-                // Navigate to create offer for this property
-                navigate(`/workspace/${buyerId}?tab=offers&propertyId=${selectedProperty.id}`);
-                setSelectedProperty(null);
-              }}
-            >
-              <DollarSign className="h-4 w-4 mr-2" />
-              Create Offer
-            </Button>
-            <div className="flex-1" />
-            <Button variant="outline" size="sm" onClick={() => archiveProperty(selectedProperty.id)}>
-              <Archive className="h-4 w-4 mr-2" />
-              Archive
-            </Button>
-            <Button variant="destructive" size="sm" onClick={() => removeProperty(selectedProperty.id)}>
-              <Trash2 className="h-4 w-4 mr-2" />
-              Remove
-            </Button>
           </div>
         </DialogContent>
       </Dialog>
