@@ -717,7 +717,7 @@ export function WorkspaceProperties({ buyerId, onAgentCommand }: WorkspaceProper
     return (
       <Dialog open={!!selectedProperty} onOpenChange={() => setSelectedProperty(null)}>
         <DialogContent className="max-w-5xl max-h-[90vh] p-0 gap-0">
-          {/* Header */}
+          {/* Header with Quick Actions */}
           <div className="flex items-center justify-between p-4 border-b border-border">
             <button 
               onClick={() => setSelectedProperty(null)}
@@ -726,12 +726,49 @@ export function WorkspaceProperties({ buyerId, onAgentCommand }: WorkspaceProper
               <ChevronLeft className="h-4 w-4" />
               Back to Properties
             </button>
-            <button
-              onClick={() => setSelectedProperty(null)}
-              className="p-2 hover:bg-muted rounded"
-            >
-              <X className="h-4 w-4" />
-            </button>
+            <div className="flex items-center gap-2">
+              {/* Status Badge */}
+              {badges.length > 0 && (
+                <div className="flex gap-1">
+                  {badges.slice(0, 2).map((badge, i) => (
+                    <Badge key={i} className={cn("capitalize text-xs font-normal gap-1", badge.className)}>
+                      {badge.icon}
+                      {badge.label}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              {/* Favorite Toggle */}
+              <Button
+                variant={selectedProperty.favorited ? "secondary" : "outline"}
+                size="sm"
+                onClick={() => toggleFavorite(selectedProperty.id)}
+                className="gap-1"
+              >
+                <Heart className={cn("h-4 w-4", selectedProperty.favorited && "fill-red-500 text-red-500")} />
+                {selectedProperty.favorited ? "Favorited" : "Favorite"}
+              </Button>
+              {/* Edit Notes Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => { 
+                  setTempNotes(selectedProperty.agentNotes || ""); 
+                  setEditingNotes(true); 
+                }}
+                className="gap-1"
+              >
+                <FileText className="h-4 w-4" />
+                Notes
+              </Button>
+              {/* Close */}
+              <button
+                onClick={() => setSelectedProperty(null)}
+                className="p-2 hover:bg-muted rounded"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </div>
 
           <ScrollArea className="max-h-[calc(90vh-4rem)]">
@@ -1002,7 +1039,7 @@ export function WorkspaceProperties({ buyerId, onAgentCommand }: WorkspaceProper
           </ScrollArea>
 
           {/* Footer Actions */}
-          <div className="flex items-center gap-3 p-4 border-t border-border">
+          <div className="flex items-center gap-3 p-4 border-t border-border bg-background">
             {selectedProperty.listingUrl && (
               <Button variant="outline" size="sm" onClick={() => window.open(selectedProperty.listingUrl, "_blank")}>
                 <ExternalLink className="h-4 w-4 mr-2" />
@@ -1012,6 +1049,17 @@ export function WorkspaceProperties({ buyerId, onAgentCommand }: WorkspaceProper
             <Button variant="outline" size="sm" onClick={() => handleScheduleShowing(selectedProperty.id)}>
               <Calendar className="h-4 w-4 mr-2" />
               Schedule Showing
+            </Button>
+            <Button 
+              size="sm" 
+              onClick={() => {
+                // Navigate to create offer for this property
+                navigate(`/workspace/${buyerId}?tab=offers&propertyId=${selectedProperty.id}`);
+                setSelectedProperty(null);
+              }}
+            >
+              <DollarSign className="h-4 w-4 mr-2" />
+              Create Offer
             </Button>
             <div className="flex-1" />
             <Button variant="outline" size="sm" onClick={() => archiveProperty(selectedProperty.id)}>
