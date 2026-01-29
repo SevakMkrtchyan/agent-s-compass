@@ -66,10 +66,10 @@ import {
   Info,
   Download,
 } from "lucide-react";
-import { mockProperties, mockBuyers } from "@/data/mockData";
-import { Property } from "@/types";
 import { cn } from "@/lib/utils";
 import { usePropertyAnalysis } from "@/hooks/usePropertyAnalysis";
+import { useProperties, PropertyWithBuyerData } from "@/hooks/useProperties";
+import { useBuyer } from "@/hooks/useBuyers";
 
 interface WorkspacePropertiesProps {
   buyerId: string;
@@ -80,17 +80,8 @@ type StatusFilter = "all" | "active" | "viewed" | "scheduled" | "favorited" | "a
 type SortOption = "recent" | "price-low" | "price-high" | "dom";
 type SubTab = "properties" | "comparables" | "favorites";
 
-// Extended property with buyer-specific data
-interface BuyerProperty extends Property {
-  viewed?: boolean;
-  scheduled?: boolean;
-  scheduledDate?: string;
-  favorited?: boolean;
-  archived?: boolean;
-  agentNotes?: string;
-  aiAnalysis?: string;
-  aiAnalysisGeneratedAt?: string;
-}
+// Use the imported PropertyWithBuyerData as BuyerProperty
+type BuyerProperty = PropertyWithBuyerData;
 
 interface MarketSummary {
   avgPrice: number;
@@ -118,26 +109,23 @@ export function WorkspaceProperties({ buyerId, onAgentCommand }: WorkspaceProper
   const [priceFilter, setPriceFilter] = useState<string>("any");
   const [bedsFilter, setBedsFilter] = useState<string>("any");
   
-  // Get buyer info
-  const buyer = mockBuyers.find(b => b.id === buyerId) || mockBuyers[0];
+  // Fetch buyer info from database
+  const { data: buyer, isLoading: isBuyerLoading } = useBuyer(buyerId);
   
   // Property analysis hook
   const { generateAnalysis, isAnalyzing, analysis: streamedAnalysis } = usePropertyAnalysis();
   
-  // Mock buyer properties with extended data
-  const [properties, setProperties] = useState<BuyerProperty[]>(
-    mockProperties.map((p, i) => ({
-      ...p,
-      viewed: i < 2,
-      scheduled: i === 1,
-      scheduledDate: i === 1 ? "2024-01-20T14:00:00" : undefined,
-      favorited: i === 0 || i === 2,
-      archived: false,
-      agentNotes: i === 0 ? "Great backyard for their kids. Close to schools they wanted. Might need to act fast given low DOM." : "",
-      aiAnalysis: undefined,
-      aiAnalysisGeneratedAt: undefined,
-    }))
-  );
+  // Fetch properties from database
+  const { 
+    properties, 
+    isLoading: isPropertiesLoading, 
+    toggleFavorite: dbToggleFavorite,
+    toggleViewed: dbToggleViewed,
+    archiveProperty: dbArchiveProperty,
+    updateAgentNotes,
+    scheduleShowing,
+    setProperties,
+  } = useProperties(buyerId);
   
   const [selectedProperty, setSelectedProperty] = useState<BuyerProperty | null>(null);
   const [isGeneratingComps, setIsGeneratingComps] = useState(false);
@@ -161,25 +149,31 @@ export function WorkspaceProperties({ buyerId, onAgentCommand }: WorkspaceProper
 
   const toggleFavorite = (propertyId: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    setProperties(prev => prev.map(p => 
-      p.id === propertyId ? { ...p, favorited: !p.favorited } : p
-    ));
+    const prop = properties.find(p => p.id === propertyId);
+    if (prop?.buyerPropertyId) {
+      dbToggleFavorite(prop.buyerPropertyId);
+    }
   };
 
   const toggleViewed = (propertyId: string) => {
-    setProperties(prev => prev.map(p => 
-      p.id === propertyId ? { ...p, viewed: !p.viewed } : p
-    ));
+    const prop = properties.find(p => p.id === propertyId);
+    if (prop?.buyerPropertyId) {
+      dbToggleViewed(prop.buyerPropertyId);
+    }
   };
 
   const archiveProperty = (propertyId: string) => {
-    setProperties(prev => prev.map(p => 
-      p.id === propertyId ? { ...p, archived: true } : p
-    ));
+    const prop = properties.find(p => p.id === propertyId);
+    if (prop?.buyerPropertyId) {
+      dbArchiveProperty(prop.buyerPropertyId);
+    }
   };
 
   const removeProperty = (propertyId: string) => {
-    setProperties(prev => prev.filter(p => p.id !== propertyId));
+    const prop = properties.find(p => p.id === propertyId);
+    if (prop?.buyerPropertyId) {
+      dbArchiveProperty(prop.buyerPropertyId);
+    }
     setSelectedProperty(null);
   };
 
@@ -188,18 +182,15 @@ export function WorkspaceProperties({ buyerId, onAgentCommand }: WorkspaceProper
   };
 
   const handleScheduleShowing = (propertyId: string) => {
-    setProperties(prev => prev.map(p => 
-      p.id === propertyId 
-        ? { ...p, scheduled: true, scheduledDate: new Date().toISOString() } 
-        : p
-    ));
+    const prop = properties.find(p => p.id === propertyId);
+    if (prop?.buyerPropertyId) {
+      scheduleShowing(prop.buyerPropertyId);
+    }
   };
 
-  const saveNotes = () => {
-    if (selectedProperty) {
-      setProperties(prev => prev.map(p => 
-        p.id === selectedProperty.id ? { ...p, agentNotes: tempNotes } : p
-      ));
+  const saveNotes = async () => {
+    if (selectedProperty && selectedProperty.buyerPropertyId) {
+      await updateAgentNotes(selectedProperty.buyerPropertyId, tempNotes);
       setSelectedProperty(prev => prev ? { ...prev, agentNotes: tempNotes } : null);
     }
     setEditingNotes(false);
@@ -242,14 +233,14 @@ export function WorkspaceProperties({ buyerId, onAgentCommand }: WorkspaceProper
     }));
 
     const buyerProfile = {
-      id: buyer.id,
-      name: buyer.name,
-      type: (buyer.buyerType || 'first-time') as 'first-time' | 'move-up' | 'investor' | 'downsizing',
-      budget: 500000,
-      preApproval: 475000,
-      mustHaves: ['Move-in ready', 'Good schools'],
-      niceToHaves: ['Updated kitchen', 'Fenced yard'],
-      preferredCities: ['Austin'],
+      id: buyer?.id || buyerId,
+      name: buyer?.name || "Buyer",
+      type: (buyer?.buyer_type || 'first-time') as 'first-time' | 'move-up' | 'investor' | 'downsizing',
+      budget: buyer?.budget_max || 500000,
+      preApproval: buyer?.pre_approval_amount || 475000,
+      mustHaves: buyer?.must_haves?.split(',').map(s => s.trim()) || ['Move-in ready', 'Good schools'],
+      niceToHaves: buyer?.nice_to_haves?.split(',').map(s => s.trim()) || ['Updated kitchen', 'Fenced yard'],
+      preferredCities: buyer?.preferred_cities || ['Austin'],
       agentNotes: property.agentNotes,
     };
 
@@ -497,10 +488,10 @@ export function WorkspaceProperties({ buyerId, onAgentCommand }: WorkspaceProper
                   {property.favorited ? "Remove from favorites" : "Add to favorites"}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                {property.zillowUrl && (
-                  <DropdownMenuItem onClick={() => window.open(property.zillowUrl, "_blank")}>
+                {property.listingUrl && (
+                  <DropdownMenuItem onClick={() => window.open(property.listingUrl, "_blank")}>
                     <ExternalLink className="h-4 w-4 mr-2" />
-                    View on Zillow
+                    View Listing
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem onClick={() => archiveProperty(property.id)}>
@@ -609,7 +600,7 @@ export function WorkspaceProperties({ buyerId, onAgentCommand }: WorkspaceProper
             year: 'numeric',
             hour: 'numeric',
             minute: '2-digit'
-          }) : 'just now'} • Customized for {buyer.name}
+          }) : 'just now'} • Customized for {buyer?.name || "Buyer"}
         </div>
         <div className="whitespace-pre-wrap text-sm leading-relaxed">
           {analysis.split('\n').map((line, i) => {
@@ -1012,10 +1003,10 @@ export function WorkspaceProperties({ buyerId, onAgentCommand }: WorkspaceProper
 
           {/* Footer Actions */}
           <div className="flex items-center gap-3 p-4 border-t border-border">
-            {selectedProperty.zillowUrl && (
-              <Button variant="outline" size="sm" onClick={() => window.open(selectedProperty.zillowUrl, "_blank")}>
+            {selectedProperty.listingUrl && (
+              <Button variant="outline" size="sm" onClick={() => window.open(selectedProperty.listingUrl, "_blank")}>
                 <ExternalLink className="h-4 w-4 mr-2" />
-                View on Zillow
+                View Listing
               </Button>
             )}
             <Button variant="outline" size="sm" onClick={() => handleScheduleShowing(selectedProperty.id)}>
@@ -1406,7 +1397,15 @@ export function WorkspaceProperties({ buyerId, onAgentCommand }: WorkspaceProper
       {/* Content */}
       <ScrollArea className="flex-1">
         <div className="p-6">
-          {activeSubTab === "properties" && (
+          {/* Loading State */}
+          {isPropertiesLoading && (
+            <div className="text-center py-16">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
+              <p className="text-sm text-muted-foreground">Loading properties...</p>
+            </div>
+          )}
+
+          {!isPropertiesLoading && activeSubTab === "properties" && (
             <>
               {sortedProperties.length > 0 ? (
                 viewMode === "grid" ? (
@@ -1471,7 +1470,7 @@ export function WorkspaceProperties({ buyerId, onAgentCommand }: WorkspaceProper
                   Favorited Properties ({favoriteCount})
                 </h3>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Properties marked as favorites by you or {buyer.name}
+                  Properties marked as favorites by you or {buyer?.name || "the buyer"}
                 </p>
               </div>
 
