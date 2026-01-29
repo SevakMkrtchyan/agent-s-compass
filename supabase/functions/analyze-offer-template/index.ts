@@ -81,7 +81,7 @@ async function analyzeTemplate(
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: "claude-3-5-haiku-20241022", // Faster model for field extraction
+      model: "claude-3-haiku-20240307", // Claude 3 Haiku - fast and available
       max_tokens: 4096,
       messages: [
         {
