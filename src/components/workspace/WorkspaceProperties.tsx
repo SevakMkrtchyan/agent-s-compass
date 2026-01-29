@@ -3,11 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { WorkspacePropertyModal } from "./WorkspacePropertyModal";
 import {
   Select,
   SelectContent,
@@ -130,9 +129,6 @@ export function WorkspaceProperties({ buyerId, onAgentCommand }: WorkspaceProper
   
   const [selectedProperty, setSelectedProperty] = useState<BuyerProperty | null>(null);
   const [isGeneratingComps, setIsGeneratingComps] = useState(false);
-  const [editingNotes, setEditingNotes] = useState(false);
-  const [tempNotes, setTempNotes] = useState("");
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
   
   // Comparables tab state
   const [expandedProperty, setExpandedProperty] = useState<string | null>(null);
@@ -189,13 +185,6 @@ export function WorkspaceProperties({ buyerId, onAgentCommand }: WorkspaceProper
     }
   };
 
-  const saveNotes = async () => {
-    if (selectedProperty && selectedProperty.buyerPropertyId) {
-      await updateAgentNotes(selectedProperty.buyerPropertyId, tempNotes);
-      setSelectedProperty(prev => prev ? { ...prev, agentNotes: tempNotes } : null);
-    }
-    setEditingNotes(false);
-  };
 
   // Generate market summary for comparables tab
   const generateMarketSummary = useCallback(async () => {
@@ -708,343 +697,7 @@ export function WorkspaceProperties({ buyerId, onAgentCommand }: WorkspaceProper
     );
   };
 
-  // Reset image index when selected property changes
-  useEffect(() => {
-    if (selectedProperty) {
-      setCurrentImageIndex(0);
-    }
-  }, [selectedProperty?.id]);
-
-  // Keyboard navigation for property modal
-  useEffect(() => {
-    if (!selectedProperty) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const images = selectedProperty.images || [];
-      if (images.length <= 1) return;
-
-      if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        setCurrentImageIndex(prev => prev === 0 ? images.length - 1 : prev - 1);
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        setCurrentImageIndex(prev => prev === images.length - 1 ? 0 : prev + 1);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedProperty]);
-
-  const PropertyDetailModal = () => {
-    if (!selectedProperty) return null;
-
-    const badges = getStatusBadges(selectedProperty);
-    const images = selectedProperty.images || [];
-    const propertyAnalysis = propertyAnalyses[selectedProperty.id];
-
-    return (
-      <Dialog open={!!selectedProperty} onOpenChange={() => setSelectedProperty(null)}>
-        <DialogContent className="max-w-6xl w-[95vw] max-h-[95vh] p-0 gap-0 overflow-hidden" aria-describedby={undefined}>
-          <VisuallyHidden>
-            <DialogTitle>{selectedProperty.address} - Property Details</DialogTitle>
-          </VisuallyHidden>
-          
-          {/* Two-Column Layout */}
-          <div className="flex flex-col lg:flex-row h-full max-h-[95vh]">
-            {/* Left: Image Gallery - 60% */}
-            <div className="lg:w-[60%] bg-black flex flex-col">
-            {/* Main Image Container */}
-              <div className="relative flex-1 min-h-[350px] lg:min-h-[500px] flex items-center justify-center p-4">
-                {images.length > 0 ? (
-                  <img
-                    src={images[currentImageIndex] || images[0]}
-                    alt={`${selectedProperty.address} - Photo ${currentImageIndex + 1}`}
-                    className="w-full h-full object-contain"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.src = '/placeholder.svg';
-                    }}
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-muted">
-                    <Home className="h-16 w-16 text-muted-foreground/30" />
-                  </div>
-                )}
-                
-                {/* Navigation Arrows */}
-                {images.length > 1 && (
-                  <>
-                    <button
-                      onClick={() => setCurrentImageIndex(prev => prev === 0 ? images.length - 1 : prev - 1)}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 p-3 bg-white/90 hover:bg-white text-black rounded-full shadow-lg transition-all hover:scale-105"
-                      aria-label="Previous photo"
-                    >
-                      <ChevronLeft className="h-5 w-5" />
-                    </button>
-                    <button
-                      onClick={() => setCurrentImageIndex(prev => prev === images.length - 1 ? 0 : prev + 1)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 p-3 bg-white/90 hover:bg-white text-black rounded-full shadow-lg transition-all hover:scale-105"
-                      aria-label="Next photo"
-                    >
-                      <ChevronRight className="h-5 w-5" />
-                    </button>
-                    
-                    {/* Photo Counter */}
-                    <div className="absolute bottom-3 right-3 px-3 py-1.5 bg-black/80 text-white rounded-full text-sm font-medium">
-                      {currentImageIndex + 1} / {images.length}
-                    </div>
-                    
-                    {/* Keyboard hint */}
-                    <div className="absolute bottom-3 left-3 px-2 py-1 bg-black/60 text-white/80 rounded text-xs">
-                      ← → to navigate
-                    </div>
-                  </>
-                )}
-              </div>
-              
-              {/* Thumbnail Strip - Larger */}
-              {images.length > 1 && (
-                <div className="bg-black/90 p-3 border-t border-white/10">
-                  <div className="flex gap-2 overflow-x-auto">
-                    {images.slice(0, 12).map((img, i) => (
-                      <button
-                        key={i}
-                        onClick={() => setCurrentImageIndex(i)}
-                        className={cn(
-                          "w-24 h-16 rounded overflow-hidden flex-shrink-0 border-2 transition-all",
-                          currentImageIndex === i 
-                            ? "border-white ring-1 ring-white/50 opacity-100" 
-                            : "border-transparent opacity-50 hover:opacity-90"
-                        )}
-                      >
-                        <img 
-                          src={img} 
-                          alt={`Thumbnail ${i + 1}`} 
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.src = '/placeholder.svg';
-                          }}
-                        />
-                      </button>
-                    ))}
-                    {images.length > 12 && (
-                      <div className="w-24 h-16 rounded bg-white/10 flex items-center justify-center text-white text-sm font-medium flex-shrink-0">
-                        +{images.length - 12}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            {/* Right: Property Details - 40% */}
-            <div className="lg:w-[40%] flex flex-col bg-background">
-              {/* Header */}
-              <div className="flex items-center justify-between p-4 border-b border-border">
-                <div className="flex items-center gap-2">
-                  {badges.length > 0 && (
-                    <div className="flex gap-1">
-                      {badges.slice(0, 2).map((badge, i) => (
-                        <Badge key={i} className={cn("capitalize text-xs font-normal gap-1", badge.className)}>
-                          {badge.icon}
-                          {badge.label}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant={selectedProperty.favorited ? "secondary" : "ghost"}
-                    size="sm"
-                    onClick={() => toggleFavorite(selectedProperty.id)}
-                    className="gap-1"
-                  >
-                    <Heart className={cn("h-4 w-4", selectedProperty.favorited && "fill-red-500 text-red-500")} />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => { 
-                      setTempNotes(selectedProperty.agentNotes || ""); 
-                      setEditingNotes(true); 
-                    }}
-                  >
-                    <FileText className="h-4 w-4" />
-                  </Button>
-                  <button
-                    onClick={() => setSelectedProperty(null)}
-                    className="p-2 hover:bg-muted rounded"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-
-              <ScrollArea className="flex-1">
-                <div className="p-5 space-y-5">
-                  {/* Price & Address */}
-                  <div>
-                    <p className="text-3xl font-bold">{formatPrice(selectedProperty.price)}</p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      ${selectedProperty.pricePerSqft}/sqft
-                    </p>
-                    <h2 className="text-lg font-medium mt-3">{selectedProperty.address}</h2>
-                    <p className="text-muted-foreground flex items-center gap-1.5 mt-1">
-                      <MapPin className="h-4 w-4 flex-shrink-0" />
-                      {selectedProperty.city}, {selectedProperty.state} {selectedProperty.zipCode}
-                    </p>
-                  </div>
-
-                  {/* Quick Stats */}
-                  <div className="grid grid-cols-3 gap-3 py-4 border-y border-border">
-                    <div className="text-center">
-                      <div className="flex items-center justify-center gap-1 text-lg font-semibold">
-                        <Bed className="h-4 w-4 text-muted-foreground" />
-                        {selectedProperty.bedrooms}
-                      </div>
-                      <p className="text-xs text-muted-foreground">beds</p>
-                    </div>
-                    <div className="text-center">
-                      <div className="flex items-center justify-center gap-1 text-lg font-semibold">
-                        <Bath className="h-4 w-4 text-muted-foreground" />
-                        {selectedProperty.bathrooms}
-                      </div>
-                      <p className="text-xs text-muted-foreground">baths</p>
-                    </div>
-                    <div className="text-center">
-                      <div className="flex items-center justify-center gap-1 text-lg font-semibold">
-                        <Square className="h-4 w-4 text-muted-foreground" />
-                        {selectedProperty.sqft.toLocaleString()}
-                      </div>
-                      <p className="text-xs text-muted-foreground">sqft</p>
-                    </div>
-                  </div>
-
-                  {/* Property Details Grid */}
-                  <div className="grid grid-cols-2 gap-3">
-                    {selectedProperty.yearBuilt && (
-                      <div className="p-3 bg-muted/50 rounded-lg">
-                        <p className="text-xs text-muted-foreground">Year Built</p>
-                        <p className="font-medium">{selectedProperty.yearBuilt}</p>
-                      </div>
-                    )}
-                    <div className="p-3 bg-muted/50 rounded-lg">
-                      <p className="text-xs text-muted-foreground">Days on Market</p>
-                      <p className="font-medium">{selectedProperty.daysOnMarket}d</p>
-                    </div>
-                    {selectedProperty.lotSize && (
-                      <div className="p-3 bg-muted/50 rounded-lg">
-                        <p className="text-xs text-muted-foreground">Lot Size</p>
-                        <p className="font-medium">{selectedProperty.lotSize}</p>
-                      </div>
-                    )}
-                    {selectedProperty.propertyType && (
-                      <div className="p-3 bg-muted/50 rounded-lg">
-                        <p className="text-xs text-muted-foreground">Type</p>
-                        <p className="font-medium capitalize">{selectedProperty.propertyType.replace('_', ' ')}</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Description */}
-                  {selectedProperty.description && (
-                    <div>
-                      <h3 className="font-medium mb-2 text-sm">Description</h3>
-                      <p className="text-sm text-muted-foreground line-clamp-4">{selectedProperty.description}</p>
-                    </div>
-                  )}
-
-                  {/* Features */}
-                  {selectedProperty.features && selectedProperty.features.length > 0 && (
-                    <div>
-                      <h3 className="font-medium mb-2 text-sm">Features</h3>
-                      <div className="flex flex-wrap gap-1.5">
-                        {selectedProperty.features.slice(0, 8).map((feature, i) => (
-                          <Badge key={i} variant="secondary" className="text-xs font-normal capitalize">
-                            {feature.replace(/_/g, ' ')}
-                          </Badge>
-                        ))}
-                        {selectedProperty.features.length > 8 && (
-                          <Badge variant="outline" className="text-xs font-normal">
-                            +{selectedProperty.features.length - 8} more
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Agent Notes */}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="font-medium text-sm">Agent Notes</h3>
-                      {!editingNotes && (
-                        <Button size="sm" variant="ghost" onClick={() => { setTempNotes(selectedProperty.agentNotes || ""); setEditingNotes(true); }}>
-                          Edit
-                        </Button>
-                      )}
-                    </div>
-                    {editingNotes ? (
-                      <div className="space-y-2">
-                        <Textarea
-                          value={tempNotes}
-                          onChange={(e) => setTempNotes(e.target.value)}
-                          placeholder="Add private notes..."
-                          rows={2}
-                          className="text-sm"
-                        />
-                        <div className="flex gap-2">
-                          <Button size="sm" onClick={saveNotes}>Save</Button>
-                          <Button size="sm" variant="ghost" onClick={() => setEditingNotes(false)}>Cancel</Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="p-2.5 bg-muted/50 rounded text-sm text-muted-foreground min-h-[40px]">
-                        {selectedProperty.agentNotes || "No notes added."}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </ScrollArea>
-
-              {/* Footer Actions */}
-              <div className="p-4 border-t border-border bg-background flex flex-wrap gap-2">
-                {selectedProperty.listingUrl && (
-                  <Button variant="outline" size="sm" onClick={() => window.open(selectedProperty.listingUrl, "_blank")}>
-                    <ExternalLink className="h-4 w-4 mr-1" />
-                    Listing
-                  </Button>
-                )}
-                <Button variant="outline" size="sm" onClick={() => handleScheduleShowing(selectedProperty.id)}>
-                  <Calendar className="h-4 w-4 mr-1" />
-                  Schedule
-                </Button>
-                <Button 
-                  size="sm" 
-                  onClick={() => {
-                    navigate(`/workspace/${buyerId}?tab=offers&propertyId=${selectedProperty.id}`);
-                    setSelectedProperty(null);
-                  }}
-                >
-                  <DollarSign className="h-4 w-4 mr-1" />
-                  Create Offer
-                </Button>
-                <div className="flex-1" />
-                <Button variant="outline" size="sm" onClick={() => archiveProperty(selectedProperty.id)}>
-                  <Archive className="h-4 w-4" />
-                </Button>
-                <Button variant="destructive" size="sm" onClick={() => removeProperty(selectedProperty.id)}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  };
+  // PropertyDetailModal has been moved to a separate component
 
   // Comparables Tab Content
   const ComparablesTabContent = () => {
@@ -1536,7 +1189,17 @@ export function WorkspaceProperties({ buyerId, onAgentCommand }: WorkspaceProper
       </ScrollArea>
 
       {/* Property Detail Modal */}
-      <PropertyDetailModal />
+      <WorkspacePropertyModal
+        property={selectedProperty}
+        isOpen={!!selectedProperty}
+        onClose={() => setSelectedProperty(null)}
+        buyerId={buyerId}
+        onToggleFavorite={(id) => toggleFavorite(id)}
+        onArchive={archiveProperty}
+        onRemove={removeProperty}
+        onScheduleShowing={handleScheduleShowing}
+        onUpdateNotes={updateAgentNotes}
+      />
     </div>
   );
 }
