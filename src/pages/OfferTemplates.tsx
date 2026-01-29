@@ -494,17 +494,24 @@ function TemplateRow({
           </Button>
         );
       case "failed":
+        console.error("[TemplateRow] Analysis failed for template:", template.name, "Error:", template.analysis_error);
         return (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-auto py-1 px-2 text-destructive hover:text-destructive"
-            onClick={() => onReanalyze(template)}
-            title={template.analysis_error || "Analysis failed"}
-          >
-            <AlertCircle className="h-3 w-3 mr-1" />
-            <span className="text-sm">Failed - Retry</span>
-          </Button>
+          <div className="flex flex-col items-start gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-auto py-1 px-2 text-destructive hover:text-destructive"
+              onClick={() => onReanalyze(template)}
+            >
+              <AlertCircle className="h-3 w-3 mr-1" />
+              <span className="text-sm">Retry Analysis</span>
+            </Button>
+            {template.analysis_error && (
+              <span className="text-xs text-destructive/80 max-w-[200px] truncate" title={template.analysis_error}>
+                Error: {template.analysis_error}
+              </span>
+            )}
+          </div>
         );
       case "pending":
       default:
