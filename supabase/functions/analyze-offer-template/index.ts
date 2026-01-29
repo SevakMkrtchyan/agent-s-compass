@@ -39,6 +39,73 @@ async function updateTemplateStatus(
   await supabase.from("offer_templates").update(updateData).eq("id", templateId);
 }
 
+// Helper function to call Claude API with retry logic for 429 rate limits
+async function callClaudeWithRetry(
+  requestBody: Record<string, unknown>,
+  headers: Record<string, string>,
+  maxRetries: number = 3
+): Promise<Response> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers,
+        body: JSON.stringify(requestBody),
+      });
+
+      // If not rate limited, return the response
+      if (response.status !== 429) {
+        return response;
+      }
+
+      // Log rate limit headers for debugging
+      const remainingRequests = response.headers.get("anthropic-ratelimit-requests-remaining");
+      const resetTime = response.headers.get("anthropic-ratelimit-requests-reset");
+      const retryAfter = response.headers.get("retry-after");
+      
+      console.log("[analyze-offer-template] Rate limit hit!", {
+        attempt: attempt + 1,
+        remainingRequests,
+        resetTime,
+        retryAfter,
+      });
+
+      // If this was our last retry, return the 429 response
+      if (attempt === maxRetries) {
+        console.error("[analyze-offer-template] Max retries exceeded, returning 429");
+        return response;
+      }
+
+      // Calculate backoff delay: 2s, 4s, 8s (exponential)
+      const retryAfterSeconds = retryAfter ? parseInt(retryAfter, 10) : null;
+      const backoffDelay = retryAfterSeconds 
+        ? retryAfterSeconds * 1000 
+        : Math.pow(2, attempt + 1) * 1000;
+      
+      console.log(`[analyze-offer-template] Rate limited, retrying in ${backoffDelay / 1000} seconds... (attempt ${attempt + 1}/${maxRetries})`);
+      
+      // Wait before retrying
+      await new Promise(resolve => setTimeout(resolve, backoffDelay));
+      
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.error(`[analyze-offer-template] Request failed on attempt ${attempt + 1}:`, error);
+      
+      if (attempt === maxRetries) {
+        throw lastError;
+      }
+      
+      // Wait before retrying on network errors too
+      const backoffDelay = Math.pow(2, attempt + 1) * 1000;
+      await new Promise(resolve => setTimeout(resolve, backoffDelay));
+    }
+  }
+
+  throw lastError || new Error("Max retries exceeded");
+}
+
 async function analyzeTemplate(
   template_id: string, 
   file_url: string, 
@@ -72,33 +139,33 @@ async function analyzeTemplate(
     : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
   // Use Claude Sonnet 4 for PDF processing (same model as agentgpt-stream)
-  console.log("[analyze-offer-template] Step 5: Calling Claude Sonnet API...");
-  const claudeResponse = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
-      "anthropic-beta": "pdfs-2024-09-25", // Enable PDF support
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514", // Claude Sonnet 4 - supports PDF input
-      max_tokens: 4096,
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "document",
-              source: {
-                type: "base64",
-                media_type: mediaType,
-                data: base64Content,
-              },
+  console.log("[analyze-offer-template] Step 5: Calling Claude Sonnet API with retry logic...");
+  
+  const claudeHeaders = {
+    "Content-Type": "application/json",
+    "x-api-key": ANTHROPIC_API_KEY,
+    "anthropic-version": "2023-06-01",
+    "anthropic-beta": "pdfs-2024-09-25", // Enable PDF support
+  };
+  
+  const claudeRequestBody = {
+    model: "claude-sonnet-4-20250514", // Claude Sonnet 4 - supports PDF input
+    max_tokens: 4096,
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "document",
+            source: {
+              type: "base64",
+              media_type: mediaType,
+              data: base64Content,
             },
-            {
-              type: "text",
-              text: `Analyze this real estate offer template document and identify all fillable fields or blanks that need to be completed when creating an offer. 
+          },
+          {
+            type: "text",
+            text: `Analyze this real estate offer template document and identify all fillable fields or blanks that need to be completed when creating an offer. 
 
 For each field you identify, provide:
 - field_name: A snake_case identifier (e.g., buyer_full_name, purchase_price, closing_date)
@@ -126,16 +193,24 @@ Return ONLY a valid JSON array of field objects, no additional text or explanati
   {"field_name": "buyer_full_name", "field_label": "Buyer's Full Legal Name", "field_type": "text", "data_source": "buyer", "is_required": true, "source_field": "name"},
   {"field_name": "purchase_price", "field_label": "Purchase Price", "field_type": "number", "data_source": "manual", "is_required": true}
 ]`,
-            },
-          ],
-        },
-      ],
-    }),
-  });
+          },
+        ],
+      },
+    ],
+  };
+  
+  // Call Claude with retry logic for 429 rate limits
+  const claudeResponse = await callClaudeWithRetry(claudeRequestBody, claudeHeaders, 3);
 
   if (!claudeResponse.ok) {
     const errorText = await claudeResponse.text();
     console.error("[analyze-offer-template] Claude API error:", claudeResponse.status, errorText);
+    
+    // Specific error message for rate limits after retries exhausted
+    if (claudeResponse.status === 429) {
+      throw new Error("Rate limit exceeded after 3 retries. Please try again in a few minutes.");
+    }
+    
     throw new Error(`Claude API error: ${claudeResponse.status}`);
   }
 

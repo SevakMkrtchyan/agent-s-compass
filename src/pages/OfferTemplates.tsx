@@ -368,12 +368,15 @@ export default function OfferTemplates() {
 
       {/* Fields Modal */}
       <Dialog open={!!fieldsModalTemplate} onOpenChange={(open) => !open && setFieldsModalTemplate(null)}>
-        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+        <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col" aria-describedby={undefined}>
           <DialogHeader className="flex-shrink-0">
             <DialogTitle className="flex items-center gap-2">
-              <ListChecks className="h-5 w-5" />
-              Detected Fields: {fieldsModalTemplate?.name}
+              <ListChecks className="h-5 w-5 text-green-600" />
+              Detected Fields ({modalFields.length} fields)
             </DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              {fieldsModalTemplate?.name}
+            </p>
           </DialogHeader>
           <ScrollArea className="flex-1 min-h-0">
             {modalFields.length === 0 ? (
@@ -383,35 +386,40 @@ export default function OfferTemplates() {
                 <p className="text-sm">Run AI analysis to detect fillable fields</p>
               </div>
             ) : (
-              <div className="space-y-3 pr-4">
-                {modalFields.map((field) => (
-                  <div 
-                    key={field.id} 
-                    className="border rounded-lg p-3 bg-muted/30"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="font-medium">{field.field_label}</p>
-                        <p className="text-sm text-muted-foreground font-mono">{field.field_name}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {field.is_required && (
-                          <Badge variant="destructive" className="text-xs">Required</Badge>
-                        )}
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Field Name</TableHead>
+                    <TableHead>Label</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Data Source</TableHead>
+                    <TableHead className="text-center">Required</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {modalFields.map((field) => (
+                    <TableRow key={field.id}>
+                      <TableCell className="font-mono text-sm">{field.field_name}</TableCell>
+                      <TableCell className="font-medium">{field.field_label}</TableCell>
+                      <TableCell>
                         <Badge variant="outline" className="text-xs">{field.field_type}</Badge>
+                      </TableCell>
+                      <TableCell>
                         <Badge className={cn("text-xs", getDataSourceBadgeColor(field.data_source))}>
                           {field.data_source}
                         </Badge>
-                      </div>
-                    </div>
-                    {field.source_field && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Maps to: <span className="font-mono">{field.source_field}</span>
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {field.is_required ? (
+                          <CheckCircle2 className="h-4 w-4 text-green-600 mx-auto" />
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             )}
           </ScrollArea>
           {fieldsModalTemplate && (
@@ -554,6 +562,17 @@ function TemplateRow({
       </TableCell>
       <TableCell className="text-right">
         <div className="flex items-center justify-end gap-2">
+          {/* View Fields button - only show when analysis completed with fields */}
+          {template.analysis_status === "completed" && fieldCount > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onViewFields(template)}
+              title="View detected fields"
+            >
+              <ListChecks className="h-4 w-4" />
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"
