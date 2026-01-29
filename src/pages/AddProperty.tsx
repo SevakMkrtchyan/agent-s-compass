@@ -14,9 +14,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { mockBuyers } from "@/data/mockData";
+import { useBuyers } from "@/hooks/useBuyers";
 import { MLSProperty } from "@/types/property";
-import { STAGES } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { PropertySearchTab } from "@/components/property/PropertySearchTab";
 import { PasteLinkTab } from "@/components/property/PasteLinkTab";
@@ -29,6 +28,9 @@ export default function AddProperty() {
   const [searchParams] = useSearchParams();
   const preselectedBuyerId = searchParams.get("buyerId");
   const { toast } = useToast();
+  
+  // Fetch buyers from database
+  const { buyers, isLoading: isBuyersLoading } = useBuyers();
   
   const [step, setStep] = useState<Step>("input");
   const [activeTab, setActiveTab] = useState("search");
@@ -199,7 +201,7 @@ export default function AddProperty() {
       }
 
       const assignedNames = assignedBuyers
-        .map(id => mockBuyers.find(b => b.id === id)?.name)
+        .map(id => buyers.find(b => b.id === id)?.name)
         .filter(Boolean)
         .join(", ");
 
@@ -366,38 +368,49 @@ export default function AddProperty() {
 
                 <ScrollArea className="h-[280px] border border-border rounded-lg">
                   <div className="p-3 space-y-2">
-                    {mockBuyers.map(buyer => {
-                      const isAssigned = assignedBuyers.includes(buyer.id);
-                      const status = buyerStatuses[buyer.id];
-                      const initials = buyer.name.split(" ").map(n => n[0]).join("");
-                      
-                      return (
-                        <div key={buyer.id} className="space-y-3">
-                          <div
-                            className={cn(
-                              "flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer",
-                              isAssigned 
-                                ? "border-primary bg-primary/5" 
-                                : "border-border hover:border-primary/50"
-                            )}
-                            onClick={() => handleBuyerToggle(buyer.id)}
-                          >
-                            <Checkbox
-                              checked={isAssigned}
-                              onCheckedChange={() => handleBuyerToggle(buyer.id)}
-                            />
-                            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary">
-                              {initials}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium text-sm">{buyer.name}</span>
-                                <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                                  Stage {buyer.currentStage}: {STAGES[buyer.currentStage]?.title}
-                                </span>
+                    {isBuyersLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : buyers.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <User className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                        <p className="text-sm">No buyers found</p>
+                        <p className="text-xs mt-1">Add a buyer first to assign properties</p>
+                      </div>
+                    ) : (
+                      buyers.map(buyer => {
+                        const isAssigned = assignedBuyers.includes(buyer.id);
+                        const status = buyerStatuses[buyer.id];
+                        const initials = buyer.name.split(" ").map(n => n[0]).join("");
+                        
+                        return (
+                          <div key={buyer.id} className="space-y-3">
+                            <div
+                              className={cn(
+                                "flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer",
+                                isAssigned 
+                                  ? "border-primary bg-primary/5" 
+                                  : "border-border hover:border-primary/50"
+                              )}
+                              onClick={() => handleBuyerToggle(buyer.id)}
+                            >
+                              <Checkbox
+                                checked={isAssigned}
+                                onCheckedChange={() => handleBuyerToggle(buyer.id)}
+                              />
+                              <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary">
+                                {initials}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium text-sm">{buyer.name}</span>
+                                  <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                                    {buyer.current_stage || "Home Search"}
+                                  </span>
+                                </div>
                               </div>
                             </div>
-                          </div>
 
                           {/* Expanded Status Options */}
                           {isAssigned && (
@@ -452,7 +465,8 @@ export default function AddProperty() {
                           )}
                         </div>
                       );
-                    })}
+                      })
+                    )}
 
                     {/* Unassigned Option */}
                     <div
