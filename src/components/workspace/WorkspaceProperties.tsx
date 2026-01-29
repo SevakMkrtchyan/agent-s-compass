@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -707,6 +708,34 @@ export function WorkspaceProperties({ buyerId, onAgentCommand }: WorkspaceProper
     );
   };
 
+  // Reset image index when selected property changes
+  useEffect(() => {
+    if (selectedProperty) {
+      setCurrentImageIndex(0);
+    }
+  }, [selectedProperty?.id]);
+
+  // Keyboard navigation for property modal
+  useEffect(() => {
+    if (!selectedProperty) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const images = selectedProperty.images || [];
+      if (images.length <= 1) return;
+
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        setCurrentImageIndex(prev => prev === 0 ? images.length - 1 : prev - 1);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        setCurrentImageIndex(prev => prev === images.length - 1 ? 0 : prev + 1);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedProperty]);
+
   const PropertyDetailModal = () => {
     if (!selectedProperty) return null;
 
@@ -716,7 +745,10 @@ export function WorkspaceProperties({ buyerId, onAgentCommand }: WorkspaceProper
 
     return (
       <Dialog open={!!selectedProperty} onOpenChange={() => setSelectedProperty(null)}>
-        <DialogContent className="max-w-5xl max-h-[90vh] p-0 gap-0">
+        <DialogContent className="max-w-5xl max-h-[90vh] p-0 gap-0" aria-describedby={undefined}>
+          <VisuallyHidden>
+            <DialogTitle>{selectedProperty.address} - Property Details</DialogTitle>
+          </VisuallyHidden>
           {/* Header with Quick Actions */}
           <div className="flex items-center justify-between p-4 border-b border-border">
             <button 
@@ -779,46 +811,79 @@ export function WorkspaceProperties({ buyerId, onAgentCommand }: WorkspaceProper
                 <p className="text-3xl font-bold mt-2">{formatPrice(selectedProperty.price)}</p>
               </div>
 
-              {/* Image Gallery */}
-              <div className="space-y-3">
-                <div className="relative aspect-video rounded-lg overflow-hidden bg-muted">
-                  <img
-                    src={images[currentImageIndex] || images[0]}
-                    alt={selectedProperty.address}
-                    className="w-full h-full object-cover"
-                  />
+              {/* Image Gallery - Full Width */}
+              <div className="space-y-3 -mx-6">
+                <div className="relative aspect-[16/10] bg-black">
+                  {images.length > 0 ? (
+                    <img
+                      src={images[currentImageIndex] || images[0]}
+                      alt={`${selectedProperty.address} - Photo ${currentImageIndex + 1}`}
+                      className="w-full h-full object-contain"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.src = '/placeholder.svg';
+                      }}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-muted">
+                      <Home className="h-16 w-16 text-muted-foreground/30" />
+                    </div>
+                  )}
+                  
+                  {/* Navigation Arrows - More Visible */}
                   {images.length > 1 && (
                     <>
                       <button
                         onClick={() => setCurrentImageIndex(prev => prev === 0 ? images.length - 1 : prev - 1)}
-                        className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-background/80 backdrop-blur-sm rounded-full hover:bg-background"
+                        className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-black/60 hover:bg-black/80 text-white rounded-full shadow-lg transition-all hover:scale-105"
+                        aria-label="Previous photo"
                       >
-                        <ChevronLeft className="h-5 w-5" />
+                        <ChevronLeft className="h-6 w-6" />
                       </button>
                       <button
                         onClick={() => setCurrentImageIndex(prev => prev === images.length - 1 ? 0 : prev + 1)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-background/80 backdrop-blur-sm rounded-full hover:bg-background"
+                        className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-black/60 hover:bg-black/80 text-white rounded-full shadow-lg transition-all hover:scale-105"
+                        aria-label="Next photo"
                       >
-                        <ChevronRight className="h-5 w-5" />
+                        <ChevronRight className="h-6 w-6" />
                       </button>
-                      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1 bg-background/80 backdrop-blur-sm rounded-full text-sm">
+                      
+                      {/* Photo Counter */}
+                      <div className="absolute bottom-4 right-4 px-3 py-1.5 bg-black/70 text-white rounded-full text-sm font-medium shadow-lg">
                         {currentImageIndex + 1} / {images.length}
+                      </div>
+                      
+                      {/* Keyboard hint */}
+                      <div className="absolute bottom-4 left-4 px-2 py-1 bg-black/50 text-white/70 rounded text-xs">
+                        ← → to navigate
                       </div>
                     </>
                   )}
                 </div>
+                
+                {/* Thumbnail Strip */}
                 {images.length > 1 && (
-                  <div className="flex gap-2 overflow-x-auto">
+                  <div className="flex gap-2 overflow-x-auto px-6 pb-1">
                     {images.map((img, i) => (
                       <button
                         key={i}
                         onClick={() => setCurrentImageIndex(i)}
                         className={cn(
-                          "w-16 h-12 rounded overflow-hidden flex-shrink-0 border-2 transition-colors",
-                          currentImageIndex === i ? "border-primary" : "border-transparent"
+                          "w-20 h-14 rounded-md overflow-hidden flex-shrink-0 border-2 transition-all",
+                          currentImageIndex === i 
+                            ? "border-primary ring-2 ring-primary/30" 
+                            : "border-transparent opacity-60 hover:opacity-100"
                         )}
                       >
-                        <img src={img} alt="" className="w-full h-full object-cover" />
+                        <img 
+                          src={img} 
+                          alt={`Thumbnail ${i + 1}`} 
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.src = '/placeholder.svg';
+                          }}
+                        />
                       </button>
                     ))}
                   </div>
