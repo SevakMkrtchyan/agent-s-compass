@@ -1,41 +1,13 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Send, ChevronRight, Plus } from "lucide-react";
+import { Send, Plus } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { TopBar } from "@/components/dashboard/TopBar";
 import { ActionQueue } from "@/components/dashboard/ActionQueue";
 import { cn } from "@/lib/utils";
-import { mockWorkspaces, currentUser } from "@/data/workspaceData";
-import { STAGES } from "@/types";
-
-// Plain text suggestions - global actions
-const globalSuggestions = [
-  { 
-    id: "1", 
-    label: "Create a new buyer workspace", 
-    action: "create-workspace",
-    command: "Create a new buyer workspace and draft the initial buyer representation agreement (BR-11) for signature"
-  },
-  { 
-    id: "2", 
-    label: "Review pending approvals across all buyers", 
-    action: "review-approvals",
-    command: "Review all pending approvals and drafts across my buyer pipeline - prioritize by urgency"
-  },
-  { 
-    id: "3", 
-    label: "Generate weekly activity summary", 
-    action: "weekly-summary",
-    command: "Generate a comprehensive weekly activity summary for all active buyers including key milestones and next steps"
-  },
-  { 
-    id: "4", 
-    label: "View pipeline health metrics", 
-    action: "pipeline-metrics",
-    command: "Analyze my current pipeline health - stage distribution, average time per stage, and bottlenecks"
-  },
-];
+import { useBuyers } from "@/hooks/useBuyers";
+import { useDynamicSuggestions, type ActionItem } from "@/hooks/useDashboardData";
 
 export default function AgentGPT() {
   const navigate = useNavigate();
@@ -43,17 +15,17 @@ export default function AgentGPT() {
   const [agentExpanded, setAgentExpanded] = useState(false);
   const [commandInput, setCommandInput] = useState("");
 
-  // Get agent's first name
-  const agentFirstName = currentUser.name.split(" ")[0];
+  // Get real buyers from database
+  const { buyers } = useBuyers();
+  
+  // Get dynamic suggestions based on real data
+  const { data: suggestions = [] } = useDynamicSuggestions();
 
-  // Get buyers that need attention (sorted by urgency)
-  const buyersNeedingAttention = mockWorkspaces
-    .filter(ws => ws.openTasks > 0)
-    .sort((a, b) => b.openTasks - a.openTasks)
-    .slice(0, 5);
+  // Get agent's name (placeholder for now)
+  const agentFirstName = "Agent";
 
   // Check if any urgent items exist
-  const hasUrgentItems = buyersNeedingAttention.length > 0;
+  const hasUrgentItems = buyers.length > 0;
 
   // Navigate to buyer workspace with command for Claude
   const openBuyerWorkspace = useCallback((workspaceId: string, command?: string) => {
@@ -64,27 +36,24 @@ export default function AgentGPT() {
     }
   }, [navigate]);
 
-  // Handle global suggestion clicks - trigger Claude with specific command
-  const handleSuggestionClick = useCallback((suggestion: typeof globalSuggestions[0]) => {
-    const firstWorkspace = mockWorkspaces[0];
-    if (!firstWorkspace) return;
-
+  // Handle global suggestion clicks
+  const handleSuggestionClick = useCallback((suggestion: { action: string; command: string }) => {
     if (suggestion.action === "pipeline-metrics") {
       navigate("/analytics");
       return;
     }
 
-    // All other suggestions open workspace with Claude command
-    openBuyerWorkspace(firstWorkspace.id, suggestion.command);
-  }, [navigate, openBuyerWorkspace]);
+    // Open first buyer workspace with the command
+    const firstBuyer = buyers[0];
+    if (firstBuyer) {
+      openBuyerWorkspace(firstBuyer.id, suggestion.command);
+    }
+  }, [navigate, openBuyerWorkspace, buyers]);
 
   // Handle action queue item click
-  const handleActionClick = useCallback((action: any) => {
+  const handleActionClick = useCallback((action: ActionItem) => {
     if (action.buyerId) {
-      const workspace = mockWorkspaces.find(ws => ws.buyerId === action.buyerId || ws.id === action.buyerId);
-      if (workspace) {
-        openBuyerWorkspace(workspace.id);
-      }
+      openBuyerWorkspace(action.buyerId);
     }
   }, [openBuyerWorkspace]);
 
@@ -92,12 +61,12 @@ export default function AgentGPT() {
   const handleSendCommand = useCallback(() => {
     if (!commandInput.trim()) return;
     
-    const firstWorkspace = mockWorkspaces[0];
-    if (firstWorkspace) {
-      openBuyerWorkspace(firstWorkspace.id, commandInput.trim());
+    const firstBuyer = buyers[0];
+    if (firstBuyer) {
+      openBuyerWorkspace(firstBuyer.id, commandInput.trim());
     }
     setCommandInput("");
-  }, [commandInput, openBuyerWorkspace]);
+  }, [commandInput, openBuyerWorkspace, buyers]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -105,6 +74,14 @@ export default function AgentGPT() {
       handleSendCommand();
     }
   };
+
+  // Default suggestions if dynamic ones are loading
+  const displaySuggestions = suggestions.length > 0 ? suggestions : [
+    { id: "1", label: "Create a new buyer workspace", action: "create-workspace", command: "Create a new buyer workspace" },
+    { id: "2", label: "Review pending approvals across all buyers", action: "review-approvals", command: "Review all pending approvals" },
+    { id: "3", label: "Generate weekly activity summary", action: "weekly-summary", command: "Generate weekly summary" },
+    { id: "4", label: "View pipeline health metrics", action: "pipeline-metrics", command: "" },
+  ];
 
   return (
     <div className="min-h-screen bg-[#f9fafb]">
@@ -127,7 +104,7 @@ export default function AgentGPT() {
 
         <div className="flex-1 flex">
           {/* Main Content */}
-        <div className="flex-1 flex flex-col">
+          <div className="flex-1 flex flex-col">
             <ScrollArea className="flex-1">
               <div className="w-full px-6 sm:px-8 md:px-12 lg:px-16 xl:px-20 py-12 md:py-16 lg:py-20">
                 
@@ -139,6 +116,11 @@ export default function AgentGPT() {
                   <p className="text-base md:text-lg text-muted-foreground/70">
                     Manage transactions, review approvals, and track your pipeline
                   </p>
+                  {buyers.length > 0 && (
+                    <p className="text-sm text-muted-foreground mt-2">
+                      {buyers.length} active buyer{buyers.length !== 1 ? 's' : ''} in your pipeline
+                    </p>
+                  )}
                 </div>
 
                 {/* Command Input - Wider */}
@@ -171,7 +153,7 @@ export default function AgentGPT() {
                       Suggestions
                     </p>
                     <ul className="space-y-3">
-                      {globalSuggestions.map((suggestion) => (
+                      {displaySuggestions.map((suggestion) => (
                         <li key={suggestion.id}>
                           <button
                             onClick={() => handleSuggestionClick(suggestion)}
@@ -189,18 +171,7 @@ export default function AgentGPT() {
                     <p className="text-xs font-medium uppercase tracking-wider mb-4 text-muted-foreground">
                       Action Queue
                     </p>
-                  
-                    {hasUrgentItems ? (
-                      <ActionQueue onActionClick={handleActionClick} />
-                    ) : (
-                      <div className="bg-card rounded-xl border p-8 text-center">
-                        <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-muted/50 mb-4">
-                          <span className="text-2xl">✓</span>
-                        </div>
-                        <p className="text-foreground font-medium mb-1">All caught up!</p>
-                        <p className="text-muted-foreground text-sm">No urgent items across your pipeline.</p>
-                      </div>
-                    )}
+                    <ActionQueue onActionClick={handleActionClick} />
                   </div>
                 </div>
 
