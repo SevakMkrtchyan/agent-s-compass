@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { CalendarIcon, X, Trash2, User, Clock, Flag, CheckCircle2 } from "lucide-react";
+import { CalendarIcon, X, Trash2, User, Clock, Flag, CheckCircle2, Home, MapPin, DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -208,6 +208,60 @@ export function TaskDetailPanel({ task, open, onClose }: TaskDetailPanelProps) {
             </Badge>
           )}
         </div>
+
+        {/* Linked Property Card */}
+        {task.property && (
+          <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+              <Home className="h-3 w-3" />
+              Linked Property
+            </Label>
+            <div className="p-3 border rounded-lg bg-muted/30 space-y-2">
+              <div className="flex items-start gap-2">
+                <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                <div>
+                  <p className="font-medium text-sm">{task.property.address}</p>
+                  <p className="text-xs text-muted-foreground">{task.property.city}, {task.property.state}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <DollarSign className="h-3 w-3" />
+                  ${Number(task.property.price).toLocaleString()}
+                </span>
+                <span>{task.property.bedrooms} bed</span>
+                <span>{task.property.bathrooms} bath</span>
+                <span>{task.property.sqft?.toLocaleString()} sqft</span>
+              </div>
+              
+              {/* Mark as Toured button for showing tasks */}
+              {task.source_action_id === "schedule-showings" && status !== "Complete" && (
+                <Button
+                  size="sm"
+                  className="w-full mt-2"
+                  onClick={async () => {
+                    try {
+                      await updateTask.mutateAsync({
+                        id: task.id,
+                        status: "Complete",
+                        completed_at: new Date().toISOString(),
+                      });
+                      setStatus("Complete");
+                      setHasChanges(false);
+                      toast({ title: "✓ Marked as toured" });
+                    } catch {
+                      toast({ title: "Failed to update", variant: "destructive" });
+                    }
+                  }}
+                  disabled={updateTask.isPending}
+                >
+                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                  Mark as Toured
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Description */}
         <div className="space-y-2">

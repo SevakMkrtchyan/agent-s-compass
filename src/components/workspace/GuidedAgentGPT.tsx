@@ -27,9 +27,11 @@ import { useAgentGPT } from "@/hooks/useAgentGPT";
 import { useAgentGPTStream } from "@/hooks/useAgentGPTStream";
 import { useRecommendationCache } from "@/hooks/useRecommendationCache";
 import { useStage, type NextAction, type NextActionShowIf } from "@/hooks/useStages";
+import { useQuery } from "@tanstack/react-query";
 import { useArtifacts } from "@/hooks/useArtifacts";
 import { useToast } from "@/hooks/use-toast";
 import { useCreateTaskFromAction, useTasksBySourceActions } from "@/hooks/useTasks";
+import { useCreateShowingTasks } from "@/hooks/useShowingTasks";
 import { StreamingText, ThinkingDots } from "./StreamingText";
 import { InlineBuyerUpdate, detectMissingField, type MissingField } from "./InlineBuyerUpdate";
 import type { StageGroup } from "@/types/conversation";
@@ -115,6 +117,7 @@ export function GuidedAgentGPT({
   const { createArtifact, isCreating } = useArtifacts(buyer.id);
   const { toast } = useToast();
   const createTaskFromAction = useCreateTaskFromAction();
+  const createShowingTasks = useCreateShowingTasks();
   
   // Fetch stage data from database
   const { data: dbStage, isLoading: stageLoading } = useStage(currentStage);
@@ -133,6 +136,22 @@ export function GuidedAgentGPT({
     taskActionIds
   );
 
+  // Query for showing tasks count (for schedule-showings action badge)
+  const { data: showingTasksCount, refetch: refetchShowingTasks } = useQuery({
+    queryKey: ["tasks", "showing-count", buyer.id],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("tasks")
+        .select("*", { count: "exact", head: true })
+        .eq("buyer_id", buyer.id)
+        .eq("source_action_id", "schedule-showings")
+        .neq("status", "Complete");
+      
+      if (error) throw error;
+      return count || 0;
+    },
+    enabled: !!buyer.id,
+  });
   const currentStageData = STAGES[currentStage];
 
   // Filter actions based on show_if conditions and buyer data
@@ -503,7 +522,69 @@ export function GuidedAgentGPT({
   };
 
   const handleRecommendationClick = useCallback(async (action: RecommendedAction) => {
-    // Handle task-type actions: auto-create task instead of streaming
+    // Special handling for "schedule-showings" action: create one task per property
+    if (action.id === "schedule-showings") {
+      try {
+        const result = await createShowingTasks.mutateAsync({
+          buyerId: buyer.id,
+          stageId: dbStage?.id,
+        });
+        
+        if (result.created > 0) {
+          toast({
+            title: `✓ Created ${result.created} showing task${result.created > 1 ? 's' : ''}`,
+            description: result.skipped > 0 
+              ? `${result.skipped} already scheduled` 
+              : "One task per property",
+            action: (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={navigateToTasksTab}
+                className="shrink-0"
+              >
+                View Tasks
+              </Button>
+            ),
+          });
+        } else {
+          toast({
+            title: "All showings already scheduled",
+            description: `${result.skipped} task${result.skipped > 1 ? 's' : ''} already exist`,
+          });
+        }
+        
+        // Refetch existing tasks and showing count to update the UI badges
+        refetchExistingTasks();
+        refetchShowingTasks();
+      } catch (error) {
+        if (error instanceof Error && error.message === "NO_PROPERTIES") {
+          toast({
+            title: "Add properties first",
+            description: "No properties saved for this buyer yet",
+            action: (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onNavigateToTab?.('properties')}
+                className="shrink-0"
+              >
+                Add Property
+              </Button>
+            ),
+          });
+        } else {
+          toast({
+            title: "Failed to create tasks",
+            description: "Please try again",
+            variant: "destructive",
+          });
+        }
+      }
+      return;
+    }
+    
+    // Handle other task-type actions: auto-create single task
     if (action.dbType === "task") {
       try {
         await createTaskFromAction.mutateAsync({
@@ -550,7 +631,7 @@ export function GuidedAgentGPT({
     
     // Non-task actions: proceed with normal streaming
     await triggerCommand(action.command, action.type, action.visibility);
-  }, [triggerCommand, createTaskFromAction, buyer.id, dbStage?.id, toast, refetchExistingTasks]);
+  }, [triggerCommand, createTaskFromAction, createShowingTasks, buyer.id, dbStage?.id, toast, refetchExistingTasks, refetchShowingTasks, navigateToTasksTab, onNavigateToTab]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -650,6 +731,8 @@ export function GuidedAgentGPT({
                   {recommendedActions.slice(0, 4).map((action, idx) => {
                     const existingTask = action.dbType === "task" ? existingTasksMap?.[action.id] : null;
                     const isTaskAction = action.dbType === "task";
+                    const isScheduleShowings = action.id === "schedule-showings";
+                    const hasShowingTasks = isScheduleShowings && showingTasksCount && showingTasksCount > 0;
                     
                     return (
                       <div
@@ -661,18 +744,29 @@ export function GuidedAgentGPT({
                       >
                         <button
                           onClick={() => handleRecommendationClick(action)}
-                          disabled={isStreaming || createTaskFromAction.isPending}
+                          disabled={isStreaming || createTaskFromAction.isPending || createShowingTasks.isPending}
                           className={cn(
                             "text-left text-lg text-foreground/70 hover:text-foreground transition-colors",
                             "disabled:opacity-50 disabled:cursor-not-allowed",
-                            existingTask && "text-foreground/50"
+                            (existingTask || hasShowingTasks) && "text-foreground/50"
                           )}
                         >
                           {action.label}
                         </button>
                         
-                        {/* Task indicator badge */}
-                        {isTaskAction && (
+                        {/* Special badge for schedule-showings action */}
+                        {isScheduleShowings && hasShowingTasks && (
+                          <button
+                            onClick={navigateToTasksTab}
+                            className="flex items-center gap-1.5 text-xs text-success hover:text-success/80 hover:underline transition-colors cursor-pointer group"
+                          >
+                            <ListTodo className="h-3.5 w-3.5 group-hover:scale-110 transition-transform" />
+                            ✓ {showingTasksCount} showing{showingTasksCount > 1 ? 's' : ''} scheduled →
+                          </button>
+                        )}
+                        
+                        {/* Regular task indicator badge (not for schedule-showings) */}
+                        {isTaskAction && !isScheduleShowings && (
                           existingTask ? (
                             <button
                               onClick={navigateToTasksTab}
@@ -687,6 +781,14 @@ export function GuidedAgentGPT({
                               Creates task
                             </span>
                           )
+                        )}
+                        
+                        {/* Label for schedule-showings when no tasks yet */}
+                        {isScheduleShowings && !hasShowingTasks && (
+                          <span className="text-xs text-muted-foreground/50 flex items-center gap-1.5">
+                            <ListTodo className="h-3.5 w-3.5" />
+                            Creates task per property
+                          </span>
                         )}
                       </div>
                     );

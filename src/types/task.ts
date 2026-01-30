@@ -26,6 +26,16 @@ export interface Task {
     stage_name: string;
     stage_number: number;
   } | null;
+  property?: {
+    id: string;
+    address: string;
+    city: string;
+    state: string;
+    price: number;
+    bedrooms: number;
+    bathrooms: number;
+    sqft: number;
+  } | null;
 }
 
 export interface CreateTaskInput {

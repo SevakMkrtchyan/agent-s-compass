@@ -14,7 +14,8 @@ export function useTasks() {
         .select(`
           *,
           buyer:buyers(id, name),
-          stage:stages(id, stage_name, stage_number)
+          stage:stages(id, stage_name, stage_number),
+          property:properties(id, address, city, state, price, bedrooms, bathrooms, sqft)
         `)
         .order("created_at", { ascending: false });
 
@@ -35,7 +36,8 @@ export function useTasksByBuyer(buyerId: string | undefined) {
         .select(`
           *,
           buyer:buyers(id, name),
-          stage:stages(id, stage_name, stage_number)
+          stage:stages(id, stage_name, stage_number),
+          property:properties(id, address, city, state, price, bedrooms, bathrooms, sqft)
         `)
         .eq("buyer_id", buyerId)
         .order("created_at", { ascending: false });
