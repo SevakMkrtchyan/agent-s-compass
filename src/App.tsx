@@ -16,6 +16,7 @@ import AddProperty from "./pages/AddProperty";
 import WorkspaceList from "./pages/WorkspaceList";
 import Buyers from "./pages/Buyers";
 import OfferTemplates from "./pages/OfferTemplates";
+import BuyerPortal from "./pages/BuyerPortal";
 import NotFound from "./pages/NotFound";
 import { StagesTest } from "./components/dev/StagesTest";
 const queryClient = new QueryClient();
@@ -42,6 +43,8 @@ const App = () => (
           <Route path="/offer-templates" element={<OfferTemplates />} />
           {/* Buyers page */}
           <Route path="/buyers" element={<Buyers />} />
+          {/* Buyer Portal - accessed via unique link */}
+          <Route path="/portal/:buyerId" element={<BuyerPortal />} />
           {/* Legacy buyer route */}
           <Route path="/buyer/:buyerId" element={<Navigate to="/agentgpt" replace />} />
           {/* Dev routes */}

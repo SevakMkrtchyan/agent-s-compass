@@ -22,6 +22,7 @@ export interface Buyer {
   nice_to_haves: string | null;
   agent_notes: string | null;
   portal_link: string | null;
+  portal_token: string | null;
   agent_id: string;
   created_at: string;
   updated_at: string;

@@ -8,6 +8,7 @@ import {
   Info,
   LayoutGrid,
   Loader2,
+  Link2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -25,6 +26,7 @@ import { TopBar } from "@/components/dashboard/TopBar";
 import { GuidedAgentGPT } from "@/components/workspace/GuidedAgentGPT";
 import { ProgressTab } from "@/components/workspace/ProgressTab";
 import { DetailsInspector } from "@/components/workspace/DetailsInspector";
+import { PortalLinkDialog } from "@/components/portal/PortalLinkDialog";
 
 // Deep View Components (tabs)
 import { WorkspaceTimeline } from "@/components/workspace/WorkspaceTimeline";
@@ -109,6 +111,7 @@ export default function Workspace() {
   });
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [prefillCommand, setPrefillCommand] = useState("");
+  const [portalToken, setPortalToken] = useState<string | null>(null);
 
   // Get initial action/command from URL
   const initialAction = searchParams.get('action') || undefined;
@@ -137,6 +140,8 @@ export default function Workspace() {
       console.log("[Workspace] dbBuyer updated from database:", dbBuyer.current_stage);
       // Reset overrides when the database buyer changes
       setLocalBuyerOverrides({});
+      // Set portal token from database
+      setPortalToken((dbBuyer as any).portal_token || null);
     }
   }, [dbBuyer?.id, dbBuyer?.current_stage]);
 
@@ -334,6 +339,12 @@ export default function Workspace() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <PortalLinkDialog
+                buyerId={buyer.id}
+                buyerName={buyer.name}
+                portalToken={portalToken}
+                onTokenUpdated={setPortalToken}
+              />
               <Button variant="ghost" size="sm" className="h-8 text-muted-foreground" onClick={() => setDetailsOpen(true)}>
                 <Info className="h-4 w-4" />
               </Button>

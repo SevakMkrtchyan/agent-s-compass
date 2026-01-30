@@ -35,3 +35,6 @@ verify_jwt = false
 
 [functions.analyze-what-if]
 verify_jwt = false
+
+[functions.buyer-portal-chat]
+verify_jwt = false
