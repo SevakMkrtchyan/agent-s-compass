@@ -1,14 +1,14 @@
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 import { 
   MessageCircle, 
   LayoutDashboard, 
   Home, 
   FileText, 
   FolderOpen,
-  Menu
+  X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import type { PortalBuyer } from "@/pages/BuyerPortal";
 
@@ -18,7 +18,8 @@ interface PortalLayoutProps {
   buyer: PortalBuyer;
   activeTab: PortalTab;
   onTabChange: (tab: PortalTab) => void;
-  children: ReactNode;
+  children?: ReactNode;
+  renderChat?: (onOpenMenu: () => void) => ReactNode;
 }
 
 const navItems: { id: PortalTab; label: string; icon: typeof MessageCircle }[] = [
@@ -29,42 +30,94 @@ const navItems: { id: PortalTab; label: string; icon: typeof MessageCircle }[] =
   { id: "documents", label: "Documents", icon: FolderOpen },
 ];
 
-export function PortalLayout({ buyer, activeTab, onTabChange, children }: PortalLayoutProps) {
+export function PortalLayout({ buyer, activeTab, onTabChange, children, renderChat }: PortalLayoutProps) {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
+  const isChat = activeTab === "chat";
+
+  const handleTabChange = (tab: PortalTab) => {
+    onTabChange(tab);
+    setMobileMenuOpen(false);
+  };
+
   const NavContent = () => (
     <nav className="flex flex-col gap-1 p-4">
-      {navItems.map((item) => (
-        <Button
-          key={item.id}
-          variant={activeTab === item.id ? "secondary" : "ghost"}
-          className={cn(
-            "justify-start gap-3 h-11",
-            activeTab === item.id && "bg-secondary"
-          )}
-          onClick={() => onTabChange(item.id)}
-        >
-          <item.icon className="h-5 w-5" />
-          <span>{item.label}</span>
+      <div className="flex items-center justify-between mb-4 lg:hidden">
+        <span className="font-semibold text-lg">Menu</span>
+        <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(false)}>
+          <X className="h-5 w-5" />
         </Button>
-      ))}
+      </div>
+      
+      <div className="mb-4 pb-4 border-b lg:border-b-0 lg:pb-0 lg:mb-0">
+        <div className="flex items-center gap-3 px-2">
+          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+            <span className="text-sm font-medium text-primary">
+              {buyer.name.charAt(0).toUpperCase()}
+            </span>
+          </div>
+          <div>
+            <p className="font-medium text-sm">{buyer.name}</p>
+            <p className="text-xs text-muted-foreground">Home Buyer</p>
+          </div>
+        </div>
+      </div>
+      
+      <div className="mt-4 space-y-1">
+        {navItems.map((item) => (
+          <Button
+            key={item.id}
+            variant={activeTab === item.id ? "secondary" : "ghost"}
+            className={cn(
+              "justify-start gap-3 h-11 w-full",
+              activeTab === item.id && "bg-secondary"
+            )}
+            onClick={() => handleTabChange(item.id)}
+          >
+            <item.icon className="h-5 w-5" />
+            <span>{item.label}</span>
+          </Button>
+        ))}
+      </div>
     </nav>
   );
 
+  // Full-screen layout for chat
+  if (isChat && renderChat) {
+    return (
+      <div className="h-screen bg-background flex flex-col">
+        {/* Mobile menu sheet */}
+        <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+          <SheetContent side="left" className="w-72 p-0">
+            <NavContent />
+          </SheetContent>
+        </Sheet>
+
+        {/* Render chat with menu opener */}
+        <div className="flex-1 flex flex-col min-h-0">
+          {renderChat(() => setMobileMenuOpen(true))}
+        </div>
+      </div>
+    );
+  }
+
+  // Standard layout with sidebar for other tabs
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Top Bar */}
       <header className="h-16 border-b bg-card flex items-center justify-between px-4 lg:px-6">
         <div className="flex items-center gap-4">
           {/* Mobile menu */}
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="lg:hidden">
-                <Menu className="h-5 w-5" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-64 p-0">
-              <div className="p-4 border-b">
-                <h2 className="font-semibold">Menu</h2>
-              </div>
+          <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="lg:hidden"
+              onClick={() => setMobileMenuOpen(true)}
+            >
+              <Home className="h-5 w-5" />
+            </Button>
+            <SheetContent side="left" className="w-72 p-0">
               <NavContent />
             </SheetContent>
           </Sheet>
