@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { cn } from "@/lib/utils";
@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import { useFileUpload } from "@/hooks/useFileUpload";
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -47,6 +48,10 @@ export default function Settings() {
   const [sidebarCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState("profile");
   const [isSaving, setIsSaving] = useState(false);
+  
+  const { upload, isUploading } = useFileUpload();
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
   
   // Form states
   const [userForm, setUserForm] = useState({
@@ -190,6 +195,65 @@ export default function Settings() {
     navigate("/auth");
   };
 
+  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const { url, error } = await upload(file, { bucket: "avatars" });
+    
+    if (error) {
+      toast.error(error);
+      return;
+    }
+
+    if (url) {
+      setUserForm(prev => ({ ...prev, avatar_url: url }));
+      // Auto-save to database
+      const { error: saveError } = await updateProfile({ avatar_url: url });
+      if (saveError) {
+        toast.error("Failed to save avatar");
+      } else {
+        toast.success("Avatar updated successfully");
+      }
+    }
+    
+    // Reset input
+    if (avatarInputRef.current) {
+      avatarInputRef.current.value = "";
+    }
+  };
+
+  const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const folder = brokerage?.id || "temp";
+    const { url, error } = await upload(file, { bucket: "logos", folder });
+    
+    if (error) {
+      toast.error(error);
+      return;
+    }
+
+    if (url) {
+      setBrokerageForm(prev => ({ ...prev, logo_url: url }));
+      // Auto-save if brokerage exists
+      if (brokerage) {
+        const { error: saveError } = await updateBrokerage({ logo_url: url });
+        if (saveError) {
+          toast.error("Failed to save logo");
+        } else {
+          toast.success("Logo updated successfully");
+        }
+      }
+    }
+    
+    // Reset input
+    if (logoInputRef.current) {
+      logoInputRef.current.value = "";
+    }
+  };
+
   const tabs = [
     { id: "profile", label: "Profile", icon: User },
     { id: "brokerage", label: "Brokerage", icon: Building2 },
@@ -257,9 +321,26 @@ export default function Settings() {
                       </AvatarFallback>
                     </Avatar>
                     <div className="space-y-2">
-                      <Button variant="outline" size="sm" className="gap-2">
-                        <Camera className="h-4 w-4" />
-                        Change Photo
+                      <input
+                        ref={avatarInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/gif,image/webp"
+                        className="hidden"
+                        onChange={handleAvatarUpload}
+                      />
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="gap-2"
+                        onClick={() => avatarInputRef.current?.click()}
+                        disabled={isUploading}
+                      >
+                        {isUploading ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Camera className="h-4 w-4" />
+                        )}
+                        {isUploading ? "Uploading..." : "Change Photo"}
                       </Button>
                       <p className="text-xs text-muted-foreground">
                         JPG, PNG or GIF. Max 2MB.
@@ -343,17 +424,34 @@ export default function Settings() {
                 <CardContent className="space-y-6">
                   {/* Logo Section */}
                   <div className="flex items-center gap-6">
-                    <div className="h-20 w-20 rounded-lg bg-muted flex items-center justify-center">
+                    <div className="h-20 w-20 rounded-lg bg-muted flex items-center justify-center overflow-hidden">
                       {brokerageForm.logo_url ? (
-                        <img src={brokerageForm.logo_url} alt="Brokerage logo" className="h-full w-full object-contain rounded-lg" />
+                        <img src={brokerageForm.logo_url} alt="Brokerage logo" className="h-full w-full object-contain" />
                       ) : (
                         <Building2 className="h-8 w-8 text-muted-foreground" />
                       )}
                     </div>
                     <div className="space-y-2">
-                      <Button variant="outline" size="sm" className="gap-2">
-                        <Upload className="h-4 w-4" />
-                        Upload Logo
+                      <input
+                        ref={logoInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml"
+                        className="hidden"
+                        onChange={handleLogoUpload}
+                      />
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="gap-2"
+                        onClick={() => logoInputRef.current?.click()}
+                        disabled={isUploading}
+                      >
+                        {isUploading ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Upload className="h-4 w-4" />
+                        )}
+                        {isUploading ? "Uploading..." : "Upload Logo"}
                       </Button>
                       <p className="text-xs text-muted-foreground">
                         Recommended: 200x200px, PNG or SVG
