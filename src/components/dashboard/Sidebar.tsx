@@ -36,6 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useBuyers, type Buyer } from "@/hooks/useBuyers";
+import { useAuth } from "@/hooks/useAuth";
 import { type WorkspaceStatus, type Workspace } from "@/types/workspace";
 
 // Map stage name from database to stage number
@@ -98,6 +99,14 @@ export function Sidebar({ collapsed, agentExpanded = false, onAgentExpandedChang
   const [showFilters, setShowFilters] = useState(false);
 
   const { buyers, isLoading } = useBuyers();
+  const { profile, isAuthenticated } = useAuth();
+
+  // Get user initials
+  const userInitials = profile?.name
+    ? profile.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
+    : "?";
+  const userName = profile?.name || "Guest";
+  const userRole = profile?.role || "Agent";
 
   // Check if we're on agent-related pages
   const isAgentActive = location.pathname === "/agentgpt" || location.pathname.startsWith("/workspace");
@@ -337,13 +346,16 @@ export function Sidebar({ collapsed, agentExpanded = false, onAgentExpandedChang
 
         {/* Footer - User section */}
         <div className="border-t border-border/30 p-3">
-          <div className="flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors">
+          <div 
+            className="flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
+            onClick={() => navigate("/settings")}
+          >
             <div className="w-8 h-8 rounded-full bg-foreground/10 flex items-center justify-center shrink-0">
-              <span className="text-xs font-medium text-foreground/70">JS</span>
+              <span className="text-xs font-medium text-foreground/70">{userInitials}</span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-foreground truncate">John Smith</p>
-              <p className="text-xs text-muted-foreground truncate">Agent</p>
+              <p className="text-sm font-medium text-foreground truncate">{userName}</p>
+              <p className="text-xs text-muted-foreground truncate">{userRole}</p>
             </div>
           </div>
         </div>
@@ -462,17 +474,23 @@ export function Sidebar({ collapsed, agentExpanded = false, onAgentExpandedChang
         collapsed ? "flex justify-center" : ""
       )}>
         {collapsed ? (
-          <div className="w-8 h-8 rounded-full bg-foreground/10 flex items-center justify-center">
-            <span className="text-xs font-medium text-foreground/70">JS</span>
+          <div 
+            className="w-8 h-8 rounded-full bg-foreground/10 flex items-center justify-center cursor-pointer hover:bg-foreground/20 transition-colors"
+            onClick={() => navigate("/settings")}
+          >
+            <span className="text-xs font-medium text-foreground/70">{userInitials}</span>
           </div>
         ) : (
-          <div className="flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors">
+          <div 
+            className="flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
+            onClick={() => navigate("/settings")}
+          >
             <div className="w-8 h-8 rounded-full bg-foreground/10 flex items-center justify-center shrink-0">
-              <span className="text-xs font-medium text-foreground/70">JS</span>
+              <span className="text-xs font-medium text-foreground/70">{userInitials}</span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-foreground truncate">John Smith</p>
-              <p className="text-xs text-muted-foreground truncate">Agent</p>
+              <p className="text-sm font-medium text-foreground truncate">{userName}</p>
+              <p className="text-xs text-muted-foreground truncate">{userRole}</p>
             </div>
           </div>
         )}
