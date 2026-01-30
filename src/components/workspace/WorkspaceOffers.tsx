@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   FileText,
   DollarSign,
@@ -13,7 +14,6 @@ import {
   Sparkles,
   Lock,
   Plus,
-  ExternalLink,
   Shield,
   TrendingUp,
   TrendingDown,
@@ -23,10 +23,13 @@ import {
   XCircle,
   AlertCircle,
   Loader2,
+  Home,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useOffers, Offer } from "@/hooks/useOffers";
 import { useBuyerProperties } from "@/hooks/useBuyerProperties";
+import { useOfferScenarios, AIOfferScenario } from "@/hooks/useOfferScenarios";
 import { CreateOfferDialog } from "./CreateOfferDialog";
 import { OfferDetailModal } from "./OfferDetailModal";
 
@@ -35,77 +38,19 @@ interface WorkspaceOffersProps {
   onAgentCommand?: (command: string) => void;
 }
 
-interface OfferScenario {
-  id: string;
-  name: string;
-  price: number;
-  earnestMoney: number;
-  closingCostCredit: number;
-  contingencies: string[];
-  competitiveness: "conservative" | "competitive" | "aggressive";
-  notes: string;
-  rationale: string;
-  requiresApproval: boolean;
-  approved: boolean;
-}
-
-const mockScenarios: OfferScenario[] = [
-  {
-    id: "1",
-    name: "Conservative",
-    price: 470000,
-    earnestMoney: 10000,
-    closingCostCredit: 5000,
-    contingencies: ["financing", "inspection", "appraisal"],
-    competitiveness: "conservative",
-    notes: "Lower risk with all standard contingencies. May be less competitive in a hot market.",
-    rationale: "Best for risk-averse buyers. All protections in place, but 3% below asking may require negotiation.",
-    requiresApproval: true,
-    approved: true,
-  },
-  {
-    id: "2",
-    name: "Competitive",
-    price: 485000,
-    earnestMoney: 15000,
-    closingCostCredit: 0,
-    contingencies: ["financing", "inspection"],
-    competitiveness: "competitive",
-    notes: "At asking price with reduced contingencies. Good balance of risk and competitiveness.",
-    rationale: "Balanced approach. At asking price with waived appraisal contingency shows seller confidence.",
-    requiresApproval: true,
-    approved: true,
-  },
-  {
-    id: "3",
-    name: "Aggressive",
-    price: 495000,
-    earnestMoney: 20000,
-    closingCostCredit: 0,
-    contingencies: ["inspection"],
-    competitiveness: "aggressive",
-    notes: "Above asking with minimal contingencies. Strongest competitive position but higher risk.",
-    rationale: "For competitive markets. 2% over asking with only inspection contingency. Requires strong financials.",
-    requiresApproval: true,
-    approved: false,
-  },
-];
-
 export function WorkspaceOffers({ buyerId, onAgentCommand }: WorkspaceOffersProps) {
   const [activeTab, setActiveTab] = useState<"active" | "scenarios" | "hypothetical">("active");
   const [hypotheticalPrice, setHypotheticalPrice] = useState([485000]);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [streamedScenarios, setStreamedScenarios] = useState<string>("");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [selectedOffer, setSelectedOffer] = useState<Offer | null>(null);
+  const [scenarioPropertyId, setScenarioPropertyId] = useState<string>("");
   const [prefilledValues, setPrefilledValues] = useState<{
     offerAmount?: number;
     earnestMoney?: number;
     contingencies?: string[];
     closingCostCredit?: number;
+    propertyId?: string;
   } | undefined>();
-
-  const listingPrice = 485000;
 
   const { 
     offers, 
@@ -120,9 +65,25 @@ export function WorkspaceOffers({ buyerId, onAgentCommand }: WorkspaceOffersProp
 
   const { properties, fetchProperties } = useBuyerProperties(buyerId);
 
+  const {
+    scenarios: aiScenarios,
+    isGenerating,
+    propertyInfo,
+    error: scenarioError,
+    generateScenarios,
+    clearScenarios,
+  } = useOfferScenarios(buyerId);
+
   useEffect(() => {
     fetchProperties();
   }, [fetchProperties]);
+
+  // Set default property for scenarios when properties load
+  useEffect(() => {
+    if (properties.length > 0 && !scenarioPropertyId) {
+      setScenarioPropertyId(properties[0].propertyId);
+    }
+  }, [properties, scenarioPropertyId]);
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -132,7 +93,7 @@ export function WorkspaceOffers({ buyerId, onAgentCommand }: WorkspaceOffersProp
     }).format(price);
   };
 
-  const getCompetitivenessColor = (level: OfferScenario["competitiveness"]) => {
+  const getCompetitivenessColor = (level: AIOfferScenario["competitiveness"]) => {
     switch (level) {
       case "conservative":
         return "bg-muted text-muted-foreground border-border";
@@ -175,6 +136,7 @@ export function WorkspaceOffers({ buyerId, onAgentCommand }: WorkspaceOffersProp
     }
   };
 
+  const listingPrice = propertyInfo?.price || 485000;
   const priceDiff = hypotheticalPrice[0] - listingPrice;
   const priceDiffPercent = ((priceDiff / listingPrice) * 100).toFixed(1);
 
@@ -183,77 +145,22 @@ export function WorkspaceOffers({ buyerId, onAgentCommand }: WorkspaceOffersProp
     setShowCreateDialog(true);
   };
 
-  const handleUseScenario = (scenario: OfferScenario) => {
+  const handleUseScenario = (scenario: AIOfferScenario) => {
     setPrefilledValues({
-      offerAmount: scenario.price,
-      earnestMoney: scenario.earnestMoney,
+      offerAmount: scenario.offer_amount,
+      earnestMoney: scenario.earnest_money,
       contingencies: scenario.contingencies,
-      closingCostCredit: scenario.closingCostCredit,
+      propertyId: scenarioPropertyId,
     });
     setShowCreateDialog(true);
   };
 
-  const handleGenerateScenarios = () => {
-    setIsGenerating(true);
-    setStreamedScenarios("");
-    
-    const scenarios = `## AI-Generated Offer Scenarios
-
-Based on buyer profile, market analysis, and property specifics:
-
----
-
-### Conservative Offer — $470,000
-
-| Component | Value |
-|-----------|-------|
-| Offer Price | $470,000 (-3.1% below asking) |
-| Earnest Money | $10,000 (2.1%) |
-| Closing Credit | $5,000 requested |
-| Contingencies | Financing, Inspection, Appraisal |
-
-**Rationale:** Provides maximum buyer protection with all standard contingencies.
-
----
-
-### Competitive Offer — $485,000
-
-| Component | Value |
-|-----------|-------|
-| Offer Price | $485,000 (at asking) |
-| Earnest Money | $15,000 (3.1%) |
-| Closing Credit | None |
-| Contingencies | Financing, Inspection |
-
-**Rationale:** At asking price with waived appraisal contingency demonstrates confidence.
-
----
-
-### Aggressive Offer — $495,000
-
-| Component | Value |
-|-----------|-------|
-| Offer Price | $495,000 (+2.1% above asking) |
-| Earnest Money | $20,000 (4.0%) |
-| Closing Credit | None |
-| Contingencies | Inspection only |
-
-**Rationale:** For competitive situations with multiple offers expected.
-
----
-
-**Next Steps:** Select a scenario to pre-fill your offer, or create a custom offer.`;
-
-    let index = 0;
-    const interval = setInterval(() => {
-      if (index < scenarios.length) {
-        setStreamedScenarios(scenarios.slice(0, index + 20));
-        index += 20;
-      } else {
-        clearInterval(interval);
-        setIsGenerating(false);
-      }
-    }, 10);
+  const handleGenerateScenarios = async () => {
+    if (!scenarioPropertyId) {
+      return;
+    }
+    clearScenarios();
+    await generateScenarios(scenarioPropertyId);
   };
 
   const handleOpenOffer = (offer: Offer) => {
@@ -292,6 +199,11 @@ Based on buyer profile, market analysis, and property specifics:
                   {allOffers.length}
                 </Badge>
               )}
+              {tab === "scenarios" && aiScenarios.length > 0 && (
+                <Badge variant="secondary" className="ml-2 text-xs bg-primary/10 text-primary">
+                  AI
+                </Badge>
+              )}
             </button>
           ))}
         </div>
@@ -306,23 +218,6 @@ Based on buyer profile, market analysis, and property specifics:
 
       {/* Content */}
       <div className="flex-1 overflow-auto">
-        {/* Streamed Scenarios */}
-        {streamedScenarios && activeTab === "scenarios" && (
-          <div className="px-6 py-4 border-b border-border bg-muted/30">
-            <div className="flex items-center gap-2 mb-3">
-              <Sparkles className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium text-foreground">AI-Generated Scenarios</span>
-              {isGenerating && (
-                <span className="text-xs text-muted-foreground animate-pulse">Streaming...</span>
-              )}
-            </div>
-            <div className="prose prose-sm max-w-none text-foreground font-mono text-sm whitespace-pre-wrap leading-relaxed">
-              {streamedScenarios}
-              {isGenerating && <span className="animate-pulse">▊</span>}
-            </div>
-          </div>
-        )}
-
         {activeTab === "active" && (
           <div className="p-6">
             {isLoading ? (
@@ -452,136 +347,257 @@ Based on buyer profile, market analysis, and property specifics:
 
         {activeTab === "scenarios" && (
           <div className="p-6">
-            {/* Generate Button */}
-            <div className="mb-6">
-              <Button
-                onClick={handleGenerateScenarios}
-                disabled={isGenerating}
-                variant="outline"
-                className="w-full border-border"
-              >
-                <Sparkles className="h-4 w-4 mr-2" />
-                {isGenerating ? "Generating Scenarios..." : "Generate AI Scenarios"}
-              </Button>
-            </div>
-
-            {/* Scenarios Table */}
-            <div className="border border-border rounded-none overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-border hover:bg-transparent">
-                    <TableHead className="text-muted-foreground font-medium">Scenario</TableHead>
-                    <TableHead className="text-muted-foreground font-medium">Price</TableHead>
-                    <TableHead className="text-muted-foreground font-medium">Earnest</TableHead>
-                    <TableHead className="text-muted-foreground font-medium">Contingencies</TableHead>
-                    <TableHead className="text-muted-foreground font-medium">Status</TableHead>
-                    <TableHead className="text-muted-foreground font-medium text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {mockScenarios.map((scenario) => (
-                    <TableRow 
-                      key={scenario.id} 
-                      className={cn(
-                        "border-border",
-                        !scenario.approved && "opacity-60"
-                      )}
-                    >
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-foreground">{scenario.name}</span>
-                          <Badge 
-                            variant="outline" 
-                            className={cn("text-xs border", getCompetitivenessColor(scenario.competitiveness))}
-                          >
-                            {scenario.competitiveness}
-                          </Badge>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <span className="font-medium text-foreground">{formatPrice(scenario.price)}</span>
-                          <span className="text-xs text-muted-foreground ml-2">
-                            {scenario.price > listingPrice ? "+" : ""}
-                            {((scenario.price - listingPrice) / listingPrice * 100).toFixed(1)}%
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-foreground">
-                        {formatPrice(scenario.earnestMoney)}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {scenario.contingencies.map((c) => (
-                            <Badge key={c} variant="secondary" className="text-xs bg-muted text-muted-foreground border-0 capitalize">
-                              {c}
-                            </Badge>
-                          ))}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {scenario.approved ? (
-                          <div className="flex items-center gap-1.5 text-success">
-                            <CheckCircle2 className="h-4 w-4" />
-                            <span className="text-sm">Ready</span>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1.5 text-muted-foreground">
-                            <Lock className="h-4 w-4" />
-                            <span className="text-sm">Pending</span>
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={!scenario.approved}
-                          onClick={() => handleUseScenario(scenario)}
-                          className="text-muted-foreground hover:text-foreground"
-                        >
-                          <DollarSign className="h-4 w-4 mr-1" />
-                          Use This
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-
-            {/* Rationale Section */}
-            <div className="mt-6 space-y-3">
-              <h3 className="text-sm font-medium text-foreground">Scenario Rationale</h3>
-              {mockScenarios.filter(s => s.approved).map((scenario) => (
-                <div key={scenario.id} className="p-4 border border-border bg-card">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <span className="font-medium text-foreground">{scenario.name}</span>
-                      <span className="text-muted-foreground mx-2">—</span>
-                      <span className="text-muted-foreground">{scenario.rationale}</span>
-                    </div>
-                    <Badge variant="outline" className={cn("ml-4 border", getCompetitivenessColor(scenario.competitiveness))}>
-                      {scenario.competitiveness}
-                    </Badge>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Compliance Notice */}
-            <div className="mt-6 p-4 border border-border bg-muted/30">
-              <div className="flex items-start gap-3">
-                <Shield className="h-5 w-5 text-muted-foreground mt-0.5" />
-                <div>
-                  <p className="font-medium text-foreground">Compliance Status</p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    All scenarios verified against regulatory requirements. Pre-approval on file, agency disclosures signed. 
-                    Aggressive scenario requires additional appraisal gap acknowledgment before submission.
+            {/* Property Selection & Generate Button */}
+            <div className="mb-6 space-y-4">
+              {properties.length === 0 ? (
+                <div className="border border-border p-8 text-center bg-muted/30">
+                  <Home className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+                  <p className="font-medium text-foreground mb-2">Add Properties First</p>
+                  <p className="text-sm text-muted-foreground">
+                    Save properties to this buyer's profile to generate AI offer scenarios.
                   </p>
                 </div>
-              </div>
+              ) : (
+                <div className="flex items-end gap-4">
+                  <div className="flex-1">
+                    <label className="text-sm font-medium text-foreground mb-2 block">
+                      Select Property for Scenarios
+                    </label>
+                    <Select value={scenarioPropertyId} onValueChange={setScenarioPropertyId}>
+                      <SelectTrigger className="border-border">
+                        <SelectValue placeholder="Choose a property..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {properties.map((bp) => (
+                          <SelectItem key={bp.propertyId} value={bp.propertyId}>
+                            <div className="flex items-center gap-2">
+                              <Home className="h-4 w-4 text-muted-foreground" />
+                              <span>{bp.property?.address}</span>
+                              <span className="text-muted-foreground">
+                                — {formatPrice(bp.property?.price || 0)}
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    onClick={handleGenerateScenarios}
+                    disabled={isGenerating || !scenarioPropertyId}
+                    className="bg-foreground text-background hover:bg-foreground/90"
+                  >
+                    {isGenerating ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Generating...
+                      </>
+                    ) : aiScenarios.length > 0 ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Regenerate
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-4 w-4 mr-2" />
+                        Generate AI Scenarios
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
             </div>
+
+            {/* Error State */}
+            {scenarioError && (
+              <div className="mb-6 p-4 border border-destructive/30 bg-destructive/5">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="h-5 w-5 text-destructive mt-0.5" />
+                  <div>
+                    <p className="font-medium text-foreground">Generation Failed</p>
+                    <p className="text-sm text-muted-foreground mt-1">{scenarioError}</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-3"
+                      onClick={handleGenerateScenarios}
+                    >
+                      Try Again
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Loading State */}
+            {isGenerating && (
+              <div className="border border-border p-12 text-center bg-muted/30">
+                <Loader2 className="h-10 w-10 animate-spin text-muted-foreground mx-auto mb-4" />
+                <p className="font-medium text-foreground mb-2">Analyzing Property & Market Data</p>
+                <p className="text-sm text-muted-foreground">
+                  Generating personalized offer strategies based on buyer profile and property details...
+                </p>
+              </div>
+            )}
+
+            {/* AI Scenarios Table */}
+            {!isGenerating && aiScenarios.length > 0 && (
+              <>
+                {/* Property Info Banner */}
+                {propertyInfo && (
+                  <div className="mb-4 p-4 border border-border bg-muted/30 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Sparkles className="h-5 w-5 text-primary" />
+                      <div>
+                        <p className="font-medium text-foreground">AI Scenarios for {propertyInfo.address}</p>
+                        <p className="text-sm text-muted-foreground">Listed at {formatPrice(propertyInfo.price)}</p>
+                      </div>
+                    </div>
+                    <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">
+                      AI Generated
+                    </Badge>
+                  </div>
+                )}
+
+                <div className="border border-border rounded-none overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-border hover:bg-transparent">
+                        <TableHead className="text-muted-foreground font-medium">Scenario</TableHead>
+                        <TableHead className="text-muted-foreground font-medium">Offer Price</TableHead>
+                        <TableHead className="text-muted-foreground font-medium">Earnest</TableHead>
+                        <TableHead className="text-muted-foreground font-medium">Contingencies</TableHead>
+                        <TableHead className="text-muted-foreground font-medium">Status</TableHead>
+                        <TableHead className="text-muted-foreground font-medium text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {aiScenarios.map((scenario) => {
+                        const scenarioListPrice = propertyInfo?.price || 0;
+                        const diff = scenarioListPrice > 0 ? scenario.offer_amount - scenarioListPrice : 0;
+                        const diffPercent = scenarioListPrice > 0 
+                          ? ((diff / scenarioListPrice) * 100).toFixed(1) 
+                          : "0";
+                        
+                        return (
+                          <TableRow 
+                            key={scenario.id} 
+                            className={cn(
+                              "border-border",
+                              scenario.status === "pending" && "opacity-60"
+                            )}
+                          >
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-foreground">{scenario.name}</span>
+                                <Badge 
+                                  variant="outline" 
+                                  className={cn("text-xs border", getCompetitivenessColor(scenario.competitiveness))}
+                                >
+                                  {scenario.competitiveness}
+                                </Badge>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div>
+                                <span className="font-medium text-foreground">{formatPrice(scenario.offer_amount)}</span>
+                                <span className={cn(
+                                  "text-xs ml-2",
+                                  diff > 0 ? "text-success" : diff < 0 ? "text-destructive" : "text-muted-foreground"
+                                )}>
+                                  {diff >= 0 ? "+" : ""}{diffPercent}%
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-foreground">
+                              {formatPrice(scenario.earnest_money)}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-wrap gap-1">
+                                {scenario.contingencies.map((c) => (
+                                  <Badge key={c} variant="secondary" className="text-xs bg-muted text-muted-foreground border-0 capitalize">
+                                    {c}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              {scenario.status === "ready" ? (
+                                <div className="flex items-center gap-1.5 text-success">
+                                  <CheckCircle2 className="h-4 w-4" />
+                                  <span className="text-sm">Ready</span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5 text-muted-foreground">
+                                  <Lock className="h-4 w-4" />
+                                  <span className="text-sm">Over Budget</span>
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleUseScenario(scenario)}
+                                className="text-muted-foreground hover:text-foreground"
+                              >
+                                <DollarSign className="h-4 w-4 mr-1" />
+                                Use This
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* Rationale Section */}
+                <div className="mt-6 space-y-3">
+                  <h3 className="text-sm font-medium text-foreground">Strategy Rationale</h3>
+                  {aiScenarios.map((scenario) => (
+                    <div key={scenario.id} className="p-4 border border-border bg-card">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <span className="font-medium text-foreground">{scenario.name}</span>
+                          <span className="text-muted-foreground mx-2">—</span>
+                          <span className="text-muted-foreground">{scenario.rationale}</span>
+                        </div>
+                        <Badge variant="outline" className={cn("ml-4 border", getCompetitivenessColor(scenario.competitiveness))}>
+                          {scenario.competitiveness}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Compliance Notice */}
+                <div className="mt-6 p-4 border border-border bg-muted/30">
+                  <div className="flex items-start gap-3">
+                    <Shield className="h-5 w-5 text-muted-foreground mt-0.5" />
+                    <div>
+                      <p className="font-medium text-foreground">AI-Generated Recommendations</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        These scenarios are based on property data and buyer profile. Always review with your client before submitting any offer.
+                        Market conditions may change rapidly.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Empty State - No scenarios generated yet */}
+            {!isGenerating && aiScenarios.length === 0 && properties.length > 0 && !scenarioError && (
+              <div className="border border-border p-12 text-center">
+                <Sparkles className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="font-medium text-foreground mb-2">Generate AI Offer Scenarios</h3>
+                <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                  Select a property above and click "Generate AI Scenarios" to get personalized offer strategies
+                  based on market data and buyer profile.
+                </p>
+              </div>
+            )}
           </div>
         )}
 
