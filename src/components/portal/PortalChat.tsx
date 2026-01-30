@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Loader2, Menu, Bot } from "lucide-react";
+import { Send, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ChatMessage } from "./ChatMessage";
 import { usePortalMessages } from "@/hooks/usePortalMessages";
@@ -7,10 +7,9 @@ import type { PortalBuyer } from "@/pages/BuyerPortal";
 
 interface PortalChatProps {
   buyer: PortalBuyer;
-  onOpenMenu?: () => void;
 }
 
-export function PortalChat({ buyer, onOpenMenu }: PortalChatProps) {
+export function PortalChat({ buyer }: PortalChatProps) {
   const {
     messages,
     isLoading: isLoadingHistory,
@@ -194,24 +193,6 @@ What's on your mind?`;
 
   return (
     <div className="flex flex-col h-full bg-background">
-      {/* Minimal Top Bar */}
-      <header className="flex items-center gap-3 px-4 py-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          className="lg:hidden h-9 w-9"
-          onClick={onOpenMenu}
-        >
-          <Menu className="h-5 w-5" />
-        </Button>
-        <div className="flex items-center gap-2">
-          <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center">
-            <Bot className="h-4 w-4 text-primary" />
-          </div>
-          <span className="font-medium text-foreground">AgentGPT</span>
-        </div>
-      </header>
-
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">

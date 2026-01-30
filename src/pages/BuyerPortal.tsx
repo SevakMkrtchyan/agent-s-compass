@@ -1,13 +1,29 @@
 import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
+import { 
+  MessageCircle, 
+  LayoutGrid, 
+  Home, 
+  DollarSign, 
+  FolderOpen,
+  Info,
+  Sparkles,
+  PanelLeftClose,
+  PanelLeft,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { PortalLayout } from "@/components/portal/PortalLayout";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
+import { Loader2 } from "lucide-react";
+
+// Portal Components
 import { PortalChat } from "@/components/portal/PortalChat";
 import { PortalDashboard } from "@/components/portal/PortalDashboard";
 import { PortalProperties } from "@/components/portal/PortalProperties";
 import { PortalOffers } from "@/components/portal/PortalOffers";
 import { PortalDocuments } from "@/components/portal/PortalDocuments";
-import { Loader2 } from "lucide-react";
+import { PortalSidebar } from "@/components/portal/PortalSidebar";
 
 export interface PortalBuyer {
   id: string;
@@ -29,6 +45,33 @@ export interface PortalBuyer {
 
 type PortalTab = "chat" | "dashboard" | "properties" | "offers" | "documents";
 
+const PORTAL_TABS: { id: PortalTab; label: string; icon: React.ElementType }[] = [
+  { id: "chat", label: "Chat", icon: MessageCircle },
+  { id: "dashboard", label: "Progress", icon: LayoutGrid },
+  { id: "properties", label: "Properties", icon: Home },
+  { id: "offers", label: "Offers", icon: DollarSign },
+  { id: "documents", label: "Documents", icon: FolderOpen },
+];
+
+// Map stage name to stage number and emoji
+const getStageInfo = (stageName: string | null): { number: number; emoji: string; name: string } => {
+  const stageMap: Record<string, { number: number; emoji: string }> = {
+    "Readiness & Expectations": { number: 0, emoji: "🎯" },
+    "Financing & Capability": { number: 1, emoji: "💰" },
+    "Market Intelligence & Search Setup": { number: 2, emoji: "🔍" },
+    "Touring, Filtering & Convergence": { number: 3, emoji: "🏠" },
+    "Offer Strategy & Submission": { number: 4, emoji: "📝" },
+    "Negotiation & Contract": { number: 5, emoji: "🤝" },
+    "Due Diligence & Inspections": { number: 6, emoji: "🔬" },
+    "Appraisal & Lending": { number: 7, emoji: "📊" },
+    "Final Walkthrough & Preparation": { number: 8, emoji: "✅" },
+    "Closing & Post-Close": { number: 9, emoji: "🎉" },
+  };
+  
+  const info = stageMap[stageName || ""] || { number: 1, emoji: "📋" };
+  return { ...info, name: stageName || "Getting Started" };
+};
+
 export default function BuyerPortal() {
   const { buyerId } = useParams();
   const [searchParams] = useSearchParams();
@@ -38,6 +81,7 @@ export default function BuyerPortal() {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [activeTab, setActiveTab] = useState<PortalTab>("chat");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     async function verifyAccess() {
@@ -96,17 +140,129 @@ export default function BuyerPortal() {
     );
   }
 
+  const stageInfo = getStageInfo(buyer.current_stage);
+
   return (
-    <PortalLayout 
-      buyer={buyer} 
-      activeTab={activeTab} 
-      onTabChange={setActiveTab}
-      renderChat={(onOpenMenu) => <PortalChat buyer={buyer} onOpenMenu={onOpenMenu} />}
-    >
-      {activeTab === "dashboard" && <PortalDashboard buyer={buyer} />}
-      {activeTab === "properties" && <PortalProperties buyerId={buyer.id} />}
-      {activeTab === "offers" && <PortalOffers buyerId={buyer.id} />}
-      {activeTab === "documents" && <PortalDocuments buyerId={buyer.id} />}
-    </PortalLayout>
+    <div className="min-h-screen bg-background">
+      {/* Sidebar */}
+      <PortalSidebar 
+        collapsed={sidebarCollapsed}
+        buyerName={buyer.name}
+      />
+
+      {/* Main Content */}
+      <div
+        className={cn(
+          "transition-all duration-200 min-h-screen",
+          sidebarCollapsed ? "ml-[58px]" : "ml-[240px]"
+        )}
+      >
+        {/* Top Bar - matches agent TopBar */}
+        <header className="h-14 bg-card border-b flex items-center justify-between px-4">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            >
+              {sidebarCollapsed ? (
+                <PanelLeft className="h-4 w-4" />
+              ) : (
+                <PanelLeftClose className="h-4 w-4" />
+              )}
+            </Button>
+            <div className="h-6 w-px bg-border" />
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-primary" />
+              <span className="font-semibold text-foreground">AgentGPT</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-muted-foreground">Buyer Portal</span>
+            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+              <span className="text-xs font-medium text-primary">
+                {buyer.name.charAt(0).toUpperCase()}
+              </span>
+            </div>
+          </div>
+        </header>
+
+        {/* Workspace Layout - matches agent workspace */}
+        <div className="h-[calc(100vh-56px)] flex flex-col">
+          {/* Header Bar with buyer info */}
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-border/30 bg-[#f9fafb]">
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 rounded-md bg-foreground/10 flex items-center justify-center">
+                <span className="text-xs font-medium text-foreground">
+                  {buyer.name.split(" ").map((n) => n[0]).join("")}
+                </span>
+              </div>
+              <div>
+                <span className="text-sm font-medium text-foreground">{buyer.name}</span>
+                <span className="text-sm text-muted-foreground ml-2">
+                  · {stageInfo.emoji} Stage {stageInfo.number}: {stageInfo.name}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" className="h-8 text-muted-foreground">
+                <Info className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Tab Navigation - matches agent workspace */}
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as PortalTab)} className="flex-1 flex flex-col overflow-hidden">
+            <div className="border-b border-border/30 bg-[#f9fafb] flex-shrink-0">
+              <TabsList className="h-auto bg-transparent px-4 gap-1">
+                {PORTAL_TABS.map((tab) => {
+                  const Icon = tab.icon;
+                  return (
+                    <TabsTrigger
+                      key={tab.id}
+                      value={tab.id}
+                      className={cn(
+                        "h-10 px-4 gap-2 text-sm transition-all border-b-2 border-transparent -mb-px rounded-none",
+                        "data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:shadow-none",
+                        "text-muted-foreground hover:text-foreground bg-transparent"
+                      )}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {tab.label}
+                    </TabsTrigger>
+                  );
+                })}
+              </TabsList>
+            </div>
+
+            {/* Chat Tab */}
+            <TabsContent value="chat" className="flex-1 m-0 p-0 overflow-hidden">
+              <PortalChat buyer={buyer} />
+            </TabsContent>
+
+            {/* Dashboard/Progress Tab */}
+            <TabsContent value="dashboard" className="flex-1 m-0 overflow-auto p-6">
+              <PortalDashboard buyer={buyer} />
+            </TabsContent>
+
+            {/* Properties Tab */}
+            <TabsContent value="properties" className="flex-1 m-0 overflow-auto p-6">
+              <PortalProperties buyerId={buyer.id} />
+            </TabsContent>
+
+            {/* Offers Tab */}
+            <TabsContent value="offers" className="flex-1 m-0 overflow-auto p-6">
+              <PortalOffers buyerId={buyer.id} />
+            </TabsContent>
+
+            {/* Documents Tab */}
+            <TabsContent value="documents" className="flex-1 m-0 overflow-auto p-6">
+              <PortalDocuments buyerId={buyer.id} />
+            </TabsContent>
+          </Tabs>
+        </div>
+      </div>
+    </div>
   );
 }
