@@ -1,63 +1,11 @@
-import { AlertCircle, Clock, CheckCircle2, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ScrollArea } from "@/components/ui/scroll-area";
-
-interface ActionItem {
-  id: string;
-  type: "urgent" | "pending" | "completed";
-  title: string;
-  description: string;
-  buyerId?: string;
-  buyerName?: string;
-}
+import { useActionQueue, type ActionItem } from "@/hooks/useDashboardData";
+import { Loader2 } from "lucide-react";
 
 interface ActionQueueProps {
   onActionClick: (action: ActionItem) => void;
 }
-
-// Mock action items
-const mockActions: ActionItem[] = [
-  {
-    id: "1",
-    type: "urgent",
-    title: "AI Content Pending",
-    description: "Property analysis needs approval",
-    buyerId: "1",
-    buyerName: "Sarah Johnson",
-  },
-  {
-    id: "2",
-    type: "urgent",
-    title: "Deadline Tomorrow",
-    description: "Inspection contingency expires",
-    buyerId: "2",
-    buyerName: "Michael Chen",
-  },
-  {
-    id: "3",
-    type: "pending",
-    title: "Missing Documents",
-    description: "Pre-approval letter needed",
-    buyerId: "3",
-    buyerName: "Emily Rodriguez",
-  },
-  {
-    id: "4",
-    type: "pending",
-    title: "Review Requested",
-    description: "Offer strategy ready for review",
-    buyerId: "1",
-    buyerName: "Sarah Johnson",
-  },
-  {
-    id: "5",
-    type: "completed",
-    title: "Content Approved",
-    description: "Stage 2 orientation approved",
-    buyerId: "2",
-    buyerName: "Michael Chen",
-  },
-];
 
 const typeConfig = {
   urgent: {
@@ -78,14 +26,33 @@ const typeConfig = {
 };
 
 export function ActionQueue({ onActionClick }: ActionQueueProps) {
-  const urgentCount = mockActions.filter((a) => a.type === "urgent").length;
-  const pendingCount = mockActions.filter((a) => a.type === "pending").length;
+  const { data: actions = [], isLoading } = useActionQueue();
+
+  if (isLoading) {
+    return (
+      <div className="bg-card rounded-xl border shadow-sm p-8 flex items-center justify-center">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (actions.length === 0) {
+    return (
+      <div className="bg-card rounded-xl border p-8 text-center">
+        <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-muted/50 mb-4">
+          <span className="text-2xl">✓</span>
+        </div>
+        <p className="text-foreground font-medium mb-1">All caught up!</p>
+        <p className="text-muted-foreground text-sm">No urgent items in your pipeline.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-card rounded-xl border shadow-sm">
       {/* Action Items */}
       <div className="divide-y divide-border/30">
-        {mockActions.map((action) => {
+        {actions.map((action) => {
           const config = typeConfig[action.type];
 
           return (
