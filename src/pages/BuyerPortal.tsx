@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, useSearchParams, Navigate } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { PortalLayout } from "@/components/portal/PortalLayout";
 import { PortalChat } from "@/components/portal/PortalChat";
@@ -96,30 +96,17 @@ export default function BuyerPortal() {
     );
   }
 
-  const renderContent = () => {
-    switch (activeTab) {
-      case "chat":
-        return <PortalChat buyer={buyer} />;
-      case "dashboard":
-        return <PortalDashboard buyer={buyer} />;
-      case "properties":
-        return <PortalProperties buyerId={buyer.id} />;
-      case "offers":
-        return <PortalOffers buyerId={buyer.id} />;
-      case "documents":
-        return <PortalDocuments buyerId={buyer.id} />;
-      default:
-        return <PortalChat buyer={buyer} />;
-    }
-  };
-
   return (
     <PortalLayout 
       buyer={buyer} 
       activeTab={activeTab} 
       onTabChange={setActiveTab}
+      renderChat={(onOpenMenu) => <PortalChat buyer={buyer} onOpenMenu={onOpenMenu} />}
     >
-      {renderContent()}
+      {activeTab === "dashboard" && <PortalDashboard buyer={buyer} />}
+      {activeTab === "properties" && <PortalProperties buyerId={buyer.id} />}
+      {activeTab === "offers" && <PortalOffers buyerId={buyer.id} />}
+      {activeTab === "documents" && <PortalDocuments buyerId={buyer.id} />}
     </PortalLayout>
   );
 }

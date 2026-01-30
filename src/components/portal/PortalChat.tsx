@@ -1,18 +1,16 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Loader2, Bot } from "lucide-react";
+import { Send, Loader2, Menu, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import { ChatMessage } from "./ChatMessage";
 import { usePortalMessages } from "@/hooks/usePortalMessages";
 import type { PortalBuyer } from "@/pages/BuyerPortal";
 
 interface PortalChatProps {
   buyer: PortalBuyer;
+  onOpenMenu?: () => void;
 }
 
-export function PortalChat({ buyer }: PortalChatProps) {
+export function PortalChat({ buyer, onOpenMenu }: PortalChatProps) {
   const {
     messages,
     isLoading: isLoadingHistory,
@@ -24,13 +22,22 @@ export function PortalChat({ buyer }: PortalChatProps) {
 
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Add welcome message if no history
   useEffect(() => {
     if (!isLoadingHistory && messages.length === 0) {
-      const welcomeContent = `Hi ${buyer.name.split(" ")[0]}! 👋 I'm here to help with your home purchase. I can answer questions about:\n\n- Your current stage in the buying process\n- Properties you're considering\n- Offers and their status\n- General home buying guidance\n\nWhat would you like to know?`;
+      const welcomeContent = `Hey ${buyer.name.split(" ")[0]}! 👋
+
+I'm here to help you through your home buying journey. Ask me anything about:
+
+• Where you are in the process
+• Properties you're looking at
+• Your offers and their status
+• General home buying tips
+
+What's on your mind?`;
       
       setMessages([{
         id: "welcome",
@@ -42,11 +49,23 @@ export function PortalChat({ buyer }: PortalChatProps) {
     }
   }, [isLoadingHistory, messages.length, buyer.name, buyer.id, setMessages]);
 
+  // Scroll to bottom on new messages
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Auto-focus textarea on load
+  useEffect(() => {
+    textareaRef.current?.focus();
+  }, [isLoadingHistory]);
+
+  // Auto-resize textarea
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+    const textarea = e.target;
+    textarea.style.height = "auto";
+    textarea.style.height = Math.min(textarea.scrollHeight, 200) + "px";
+  };
 
   const handleSend = async () => {
     const trimmedInput = input.trim();
@@ -55,6 +74,12 @@ export function PortalChat({ buyer }: PortalChatProps) {
     // Add user message
     await addMessage("user", trimmedInput);
     setInput("");
+    
+    // Reset textarea height
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
+    
     setIsStreaming(true);
 
     // Create placeholder for assistant response
@@ -142,7 +167,7 @@ export function PortalChat({ buyer }: PortalChatProps) {
     } catch (error) {
       console.error("Chat error:", error);
       updateLastAssistantMessage(
-        "I'm sorry, I'm having trouble connecting right now. Please try again in a moment."
+        "Sorry, I'm having trouble connecting right now. Please try again in a moment."
       );
     } finally {
       setIsStreaming(false);
@@ -158,7 +183,7 @@ export function PortalChat({ buyer }: PortalChatProps) {
 
   if (isLoadingHistory) {
     return (
-      <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
+      <div className="flex items-center justify-center h-full">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           <p className="text-sm text-muted-foreground">Loading conversation...</p>
@@ -168,57 +193,61 @@ export function PortalChat({ buyer }: PortalChatProps) {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)]">
-      {/* Header */}
-      <div className="px-6 py-4 border-b bg-card">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-            <Bot className="h-5 w-5 text-primary" />
+    <div className="flex flex-col h-full bg-background">
+      {/* Minimal Top Bar */}
+      <header className="flex items-center gap-3 px-4 py-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          className="lg:hidden h-9 w-9"
+          onClick={onOpenMenu}
+        >
+          <Menu className="h-5 w-5" />
+        </Button>
+        <div className="flex items-center gap-2">
+          <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center">
+            <Bot className="h-4 w-4 text-primary" />
           </div>
-          <div>
-            <h2 className="font-semibold text-foreground">AgentGPT Assistant</h2>
-            <p className="text-xs text-muted-foreground">
-              Your AI guide for the home buying journey
-            </p>
-          </div>
+          <span className="font-medium text-foreground">AgentGPT</span>
         </div>
-      </div>
+      </header>
 
-      {/* Messages */}
-      <ScrollArea className="flex-1 p-6" ref={scrollRef}>
-        <div className="max-w-3xl mx-auto space-y-6">
+      {/* Messages Area */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
           {messages.map((message) => (
             <ChatMessage
               key={message.id}
               role={message.role}
               content={message.content}
-              timestamp={message.created_at}
-              buyerName={buyer.name}
             />
           ))}
           
           {isStreaming && messages[messages.length - 1]?.content === "" && (
-            <div className="flex items-center gap-2 text-muted-foreground ml-11">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span className="text-sm">Thinking...</span>
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <div className="flex gap-1">
+                <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+              </div>
             </div>
           )}
+          
+          <div ref={messagesEndRef} />
         </div>
-      </ScrollArea>
+      </div>
 
-      <Separator />
-
-      {/* Input */}
-      <div className="p-4 bg-card">
+      {/* Input Area */}
+      <div className="border-t bg-background p-4">
         <div className="max-w-3xl mx-auto">
-          <div className="flex gap-3">
-            <Textarea
+          <div className="relative flex items-end gap-2 bg-muted/50 rounded-2xl border border-border p-2">
+            <textarea
               ref={textareaRef}
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={handleInputChange}
               onKeyDown={handleKeyDown}
-              placeholder="Ask a question about your home purchase..."
-              className="min-h-[48px] max-h-[120px] resize-none bg-background"
+              placeholder="Message AgentGPT..."
+              className="flex-1 bg-transparent border-0 resize-none px-3 py-2 text-sm focus:outline-none placeholder:text-muted-foreground min-h-[44px] max-h-[200px]"
               rows={1}
               disabled={isStreaming}
             />
@@ -226,17 +255,17 @@ export function PortalChat({ buyer }: PortalChatProps) {
               onClick={handleSend}
               disabled={!input.trim() || isStreaming}
               size="icon"
-              className="h-12 w-12 flex-shrink-0"
+              className="h-9 w-9 rounded-xl flex-shrink-0"
             >
               {isStreaming ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <Send className="h-5 w-5" />
+                <Send className="h-4 w-4" />
               )}
             </Button>
           </div>
           <p className="text-xs text-muted-foreground mt-2 text-center">
-            I can answer questions but cannot take actions. Contact your agent for changes.
+            I can answer questions but can't take actions. Contact your agent for changes.
           </p>
         </div>
       </div>
