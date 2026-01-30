@@ -1,13 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   FileText,
   DollarSign,
-  Calendar,
   AlertTriangle,
   CheckCircle2,
   Clock,
@@ -24,8 +22,13 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useOffers, Offer } from "@/hooks/useOffers";
+import { useBuyerProperties } from "@/hooks/useBuyerProperties";
+import { CreateOfferDialog } from "./CreateOfferDialog";
+import { OfferDetailModal } from "./OfferDetailModal";
 
 interface WorkspaceOffersProps {
   buyerId: string;
@@ -46,18 +49,6 @@ interface OfferScenario {
   approved: boolean;
 }
 
-interface ActiveOffer {
-  id: string;
-  property: string;
-  amount: number;
-  listPrice: number;
-  status: "pending" | "countered" | "accepted" | "rejected";
-  submittedDate: string;
-  expiresDate: string;
-  earnestMoney: number;
-  contingencies: string[];
-}
-
 const mockScenarios: OfferScenario[] = [
   {
     id: "1",
@@ -65,7 +56,7 @@ const mockScenarios: OfferScenario[] = [
     price: 470000,
     earnestMoney: 10000,
     closingCostCredit: 5000,
-    contingencies: ["Financing", "Inspection", "Appraisal"],
+    contingencies: ["financing", "inspection", "appraisal"],
     competitiveness: "conservative",
     notes: "Lower risk with all standard contingencies. May be less competitive in a hot market.",
     rationale: "Best for risk-averse buyers. All protections in place, but 3% below asking may require negotiation.",
@@ -78,7 +69,7 @@ const mockScenarios: OfferScenario[] = [
     price: 485000,
     earnestMoney: 15000,
     closingCostCredit: 0,
-    contingencies: ["Financing", "Inspection"],
+    contingencies: ["financing", "inspection"],
     competitiveness: "competitive",
     notes: "At asking price with reduced contingencies. Good balance of risk and competitiveness.",
     rationale: "Balanced approach. At asking price with waived appraisal contingency shows seller confidence.",
@@ -91,7 +82,7 @@ const mockScenarios: OfferScenario[] = [
     price: 495000,
     earnestMoney: 20000,
     closingCostCredit: 0,
-    contingencies: ["Inspection"],
+    contingencies: ["inspection"],
     competitiveness: "aggressive",
     notes: "Above asking with minimal contingencies. Strongest competitive position but higher risk.",
     rationale: "For competitive markets. 2% over asking with only inspection contingency. Requires strong financials.",
@@ -100,39 +91,38 @@ const mockScenarios: OfferScenario[] = [
   },
 ];
 
-const mockActiveOffers: ActiveOffer[] = [
-  {
-    id: "offer-1",
-    property: "1847 Magnolia Ave, Burbank",
-    amount: 485000,
-    listPrice: 485000,
-    status: "pending",
-    submittedDate: "2025-01-14",
-    expiresDate: "2025-01-16",
-    earnestMoney: 15000,
-    contingencies: ["Financing", "Inspection"],
-  },
-  {
-    id: "offer-2",
-    property: "2234 Oak Street, Glendale",
-    amount: 520000,
-    listPrice: 515000,
-    status: "countered",
-    submittedDate: "2025-01-12",
-    expiresDate: "2025-01-17",
-    earnestMoney: 20000,
-    contingencies: ["Inspection"],
-  },
-];
-
 export function WorkspaceOffers({ buyerId, onAgentCommand }: WorkspaceOffersProps) {
-  const [activeTab, setActiveTab] = useState<"scenarios" | "hypothetical" | "active">("scenarios");
+  const [activeTab, setActiveTab] = useState<"active" | "scenarios" | "hypothetical">("active");
   const [hypotheticalPrice, setHypotheticalPrice] = useState([485000]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [streamedScenarios, setStreamedScenarios] = useState<string>("");
-  const [selectedOffer, setSelectedOffer] = useState<ActiveOffer | null>(null);
-  const [showOfferDetail, setShowOfferDetail] = useState(false);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [selectedOffer, setSelectedOffer] = useState<Offer | null>(null);
+  const [prefilledValues, setPrefilledValues] = useState<{
+    offerAmount?: number;
+    earnestMoney?: number;
+    contingencies?: string[];
+    closingCostCredit?: number;
+  } | undefined>();
+
   const listingPrice = 485000;
+
+  const { 
+    offers, 
+    isLoading, 
+    createOffer, 
+    updateOffer, 
+    deleteOffer,
+    activeOffers,
+    drafts,
+    closedOffers,
+  } = useOffers(buyerId);
+
+  const { properties, fetchProperties } = useBuyerProperties(buyerId);
+
+  useEffect(() => {
+    fetchProperties();
+  }, [fetchProperties]);
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -153,28 +143,34 @@ export function WorkspaceOffers({ buyerId, onAgentCommand }: WorkspaceOffersProp
     }
   };
 
-  const getStatusColor = (status: ActiveOffer["status"]) => {
+  const getStatusColor = (status: Offer["status"]) => {
     switch (status) {
-      case "pending":
+      case "Draft":
         return "bg-muted text-muted-foreground";
-      case "countered":
+      case "Submitted":
+        return "bg-primary/10 text-primary";
+      case "Countered":
         return "bg-warning/10 text-warning";
-      case "accepted":
+      case "Accepted":
         return "bg-success/10 text-success";
-      case "rejected":
+      case "Rejected":
+      case "Withdrawn":
         return "bg-destructive/10 text-destructive";
     }
   };
 
-  const getStatusIcon = (status: ActiveOffer["status"]) => {
+  const getStatusIcon = (status: Offer["status"]) => {
     switch (status) {
-      case "pending":
+      case "Draft":
+        return <FileText className="h-3.5 w-3.5" />;
+      case "Submitted":
         return <Clock className="h-3.5 w-3.5" />;
-      case "countered":
+      case "Countered":
         return <AlertCircle className="h-3.5 w-3.5" />;
-      case "accepted":
+      case "Accepted":
         return <CheckCircle className="h-3.5 w-3.5" />;
-      case "rejected":
+      case "Rejected":
+      case "Withdrawn":
         return <XCircle className="h-3.5 w-3.5" />;
     }
   };
@@ -183,13 +179,27 @@ export function WorkspaceOffers({ buyerId, onAgentCommand }: WorkspaceOffersProp
   const priceDiffPercent = ((priceDiff / listingPrice) * 100).toFixed(1);
 
   const handleNewOffer = () => {
+    setPrefilledValues(undefined);
+    setShowCreateDialog(true);
+  };
+
+  const handleUseScenario = (scenario: OfferScenario) => {
+    setPrefilledValues({
+      offerAmount: scenario.price,
+      earnestMoney: scenario.earnestMoney,
+      contingencies: scenario.contingencies,
+      closingCostCredit: scenario.closingCostCredit,
+    });
+    setShowCreateDialog(true);
+  };
+
+  const handleGenerateScenarios = () => {
     setIsGenerating(true);
     setStreamedScenarios("");
     
-    // Simulate streaming scenarios
-    const scenarios = `## AI-Generated Offer Scenarios for 1847 Magnolia Ave
+    const scenarios = `## AI-Generated Offer Scenarios
 
-Based on Sarah Johnson's buyer profile (first-time buyer, pre-approved $525K, conservative risk tolerance), market analysis, and property specifics:
+Based on buyer profile, market analysis, and property specifics:
 
 ---
 
@@ -202,9 +212,7 @@ Based on Sarah Johnson's buyer profile (first-time buyer, pre-approved $525K, co
 | Closing Credit | $5,000 requested |
 | Contingencies | Financing, Inspection, Appraisal |
 
-**Rationale:** Provides maximum buyer protection with all standard contingencies. The lower price tests seller flexibility. Recommended for buyers prioritizing security over speed.
-
-**Compliance Check:** ✅ Pre-approval verified, ✅ Agency disclosure signed, ✅ Within loan limits
+**Rationale:** Provides maximum buyer protection with all standard contingencies.
 
 ---
 
@@ -217,9 +225,7 @@ Based on Sarah Johnson's buyer profile (first-time buyer, pre-approved $525K, co
 | Closing Credit | None |
 | Contingencies | Financing, Inspection |
 
-**Rationale:** At asking price with waived appraisal contingency demonstrates confidence. Higher earnest money shows commitment. Good balance for markets with 10-15 DOM average.
-
-**Compliance Check:** ✅ Pre-approval verified, ✅ Agency disclosure signed, ⚠️ Appraisal waiver requires cash reserve verification
+**Rationale:** At asking price with waived appraisal contingency demonstrates confidence.
 
 ---
 
@@ -232,13 +238,11 @@ Based on Sarah Johnson's buyer profile (first-time buyer, pre-approved $525K, co
 | Closing Credit | None |
 | Contingencies | Inspection only |
 
-**Rationale:** For competitive situations with multiple offers expected. Above asking with minimal contingencies positions strongly. Requires buyer to have cash reserves for potential appraisal gap.
-
-**Compliance Check:** ✅ Pre-approval verified, ✅ Agency disclosure signed, ⚠️ Requires signed appraisal gap acknowledgment
+**Rationale:** For competitive situations with multiple offers expected.
 
 ---
 
-**Next Steps:** Select a scenario to generate full offer documents, or request modifications.`;
+**Next Steps:** Select a scenario to pre-fill your offer, or create a custom offer.`;
 
     let index = 0;
     const interval = setInterval(() => {
@@ -252,26 +256,26 @@ Based on Sarah Johnson's buyer profile (first-time buyer, pre-approved $525K, co
     }, 10);
   };
 
-  const handleOpenOffer = (offer: ActiveOffer) => {
+  const handleOpenOffer = (offer: Offer) => {
     setSelectedOffer(offer);
-    setShowOfferDetail(true);
-    if (onAgentCommand) {
-      onAgentCommand(`Review and draft strategy for offer on ${offer.property}. Check compliance requirements and suggest response options.`);
-    }
   };
 
-  const handleViewInWorkspace = (offer: ActiveOffer) => {
-    if (onAgentCommand) {
-      onAgentCommand(`Open offer details for ${offer.property} - Current status: ${offer.status}, Amount: ${formatPrice(offer.amount)}`);
+  const handleUpdateStatus = async (offerId: string, status: Offer["status"]) => {
+    const success = await updateOffer(offerId, { status });
+    if (success) {
+      setSelectedOffer(prev => prev?.id === offerId ? { ...prev, status } : prev);
     }
+    return success;
   };
+
+  const allOffers = [...drafts, ...activeOffers, ...closedOffers];
 
   return (
     <div className="h-full flex flex-col -mx-6 -mt-6">
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-border">
         <div className="flex items-center gap-1">
-          {["scenarios", "hypothetical", "active"].map((tab) => (
+          {["active", "scenarios", "hypothetical"].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab as typeof activeTab)}
@@ -282,24 +286,28 @@ Based on Sarah Johnson's buyer profile (first-time buyer, pre-approved $525K, co
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
-              {tab === "scenarios" ? "Offer Scenarios" : tab === "hypothetical" ? "What-If Explorer" : "Active Offers"}
+              {tab === "active" ? "Active Offers" : tab === "scenarios" ? "Offer Scenarios" : "What-If Explorer"}
+              {tab === "active" && allOffers.length > 0 && (
+                <Badge variant="secondary" className="ml-2 text-xs">
+                  {allOffers.length}
+                </Badge>
+              )}
             </button>
           ))}
         </div>
         <Button
           onClick={handleNewOffer}
-          disabled={isGenerating}
           className="bg-foreground text-background hover:bg-foreground/90"
         >
           <Plus className="h-4 w-4 mr-2" />
-          {isGenerating ? "Generating..." : "New Offer"}
+          New Offer
         </Button>
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-auto">
         {/* Streamed Scenarios */}
-        {streamedScenarios && (
+        {streamedScenarios && activeTab === "scenarios" && (
           <div className="px-6 py-4 border-b border-border bg-muted/30">
             <div className="flex items-center gap-2 mb-3">
               <Sparkles className="h-4 w-4 text-muted-foreground" />
@@ -315,8 +323,148 @@ Based on Sarah Johnson's buyer profile (first-time buyer, pre-approved $525K, co
           </div>
         )}
 
+        {activeTab === "active" && (
+          <div className="p-6">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : allOffers.length > 0 ? (
+              <>
+                <div className="border border-border rounded-none overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-border hover:bg-transparent">
+                        <TableHead className="text-muted-foreground font-medium">Property</TableHead>
+                        <TableHead className="text-muted-foreground font-medium">Amount</TableHead>
+                        <TableHead className="text-muted-foreground font-medium">vs List</TableHead>
+                        <TableHead className="text-muted-foreground font-medium">Status</TableHead>
+                        <TableHead className="text-muted-foreground font-medium">Earnest</TableHead>
+                        <TableHead className="text-muted-foreground font-medium">Created</TableHead>
+                        <TableHead className="text-muted-foreground font-medium text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {allOffers.map((offer) => {
+                        const listPrice = offer.property?.price || 0;
+                        const diff = listPrice > 0 ? offer.offerAmount - listPrice : 0;
+                        const diffPercent = listPrice > 0 ? ((diff / listPrice) * 100).toFixed(1) : "0";
+                        return (
+                          <TableRow key={offer.id} className="border-border">
+                            <TableCell>
+                              <span className="font-medium text-foreground">
+                                {offer.property?.address || "Unknown Property"}
+                              </span>
+                              {offer.property && (
+                                <p className="text-xs text-muted-foreground">
+                                  {offer.property.city}, {offer.property.state}
+                                </p>
+                              )}
+                            </TableCell>
+                            <TableCell className="font-medium text-foreground">
+                              {formatPrice(offer.offerAmount)}
+                            </TableCell>
+                            <TableCell>
+                              {listPrice > 0 ? (
+                                <span className={cn(
+                                  diff > 0 ? "text-success" : diff < 0 ? "text-destructive" : "text-muted-foreground"
+                                )}>
+                                  {diff >= 0 ? "+" : ""}{diffPercent}%
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Badge 
+                                variant="outline" 
+                                className={cn("border-0 flex items-center gap-1 w-fit", getStatusColor(offer.status))}
+                              >
+                                {getStatusIcon(offer.status)}
+                                {offer.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-foreground">
+                              {formatPrice(offer.fieldValues.earnestMoney || 0)}
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {new Date(offer.createdAt).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleOpenOffer(offer)}
+                                className="text-muted-foreground hover:text-foreground"
+                              >
+                                <Eye className="h-4 w-4 mr-1" />
+                                Open
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* Counter Offer Notice */}
+                {activeOffers.some(o => o.status === "Countered") && (
+                  <div className="mt-6 p-4 border border-warning/30 bg-warning/5">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="h-5 w-5 text-warning mt-0.5" />
+                      <div>
+                        <p className="font-medium text-foreground">Counter Offer Received</p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          You have a counter offer pending. Click "Open" to review and respond.
+                        </p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-3 border-border text-foreground"
+                          onClick={() => {
+                            const counterOffer = activeOffers.find(o => o.status === "Countered");
+                            if (counterOffer) handleOpenOffer(counterOffer);
+                          }}
+                        >
+                          Review Counter Offer
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="border border-border p-12 text-center">
+                <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="font-medium text-foreground mb-2">No Offers Yet</h3>
+                <p className="text-sm text-muted-foreground max-w-md mx-auto mb-4">
+                  Create your first offer to get started. You can also explore AI-generated offer scenarios in the Offer Scenarios tab.
+                </p>
+                <Button onClick={handleNewOffer}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create First Offer
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
         {activeTab === "scenarios" && (
           <div className="p-6">
+            {/* Generate Button */}
+            <div className="mb-6">
+              <Button
+                onClick={handleGenerateScenarios}
+                disabled={isGenerating}
+                variant="outline"
+                className="w-full border-border"
+              >
+                <Sparkles className="h-4 w-4 mr-2" />
+                {isGenerating ? "Generating Scenarios..." : "Generate AI Scenarios"}
+              </Button>
+            </div>
+
             {/* Scenarios Table */}
             <div className="border border-border rounded-none overflow-hidden">
               <Table>
@@ -365,7 +513,7 @@ Based on Sarah Johnson's buyer profile (first-time buyer, pre-approved $525K, co
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
                           {scenario.contingencies.map((c) => (
-                            <Badge key={c} variant="secondary" className="text-xs bg-muted text-muted-foreground border-0">
+                            <Badge key={c} variant="secondary" className="text-xs bg-muted text-muted-foreground border-0 capitalize">
                               {c}
                             </Badge>
                           ))}
@@ -375,7 +523,7 @@ Based on Sarah Johnson's buyer profile (first-time buyer, pre-approved $525K, co
                         {scenario.approved ? (
                           <div className="flex items-center gap-1.5 text-success">
                             <CheckCircle2 className="h-4 w-4" />
-                            <span className="text-sm">Approved</span>
+                            <span className="text-sm">Ready</span>
                           </div>
                         ) : (
                           <div className="flex items-center gap-1.5 text-muted-foreground">
@@ -389,11 +537,11 @@ Based on Sarah Johnson's buyer profile (first-time buyer, pre-approved $525K, co
                           variant="ghost"
                           size="sm"
                           disabled={!scenario.approved}
-                          onClick={() => onAgentCommand?.(`Draft offer using ${scenario.name} scenario at ${formatPrice(scenario.price)}`)}
+                          onClick={() => handleUseScenario(scenario)}
                           className="text-muted-foreground hover:text-foreground"
                         >
-                          <Eye className="h-4 w-4 mr-1" />
-                          Open
+                          <DollarSign className="h-4 w-4 mr-1" />
+                          Use This
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -428,7 +576,7 @@ Based on Sarah Johnson's buyer profile (first-time buyer, pre-approved $525K, co
                 <div>
                   <p className="font-medium text-foreground">Compliance Status</p>
                   <p className="text-sm text-muted-foreground mt-1">
-                    All scenarios verified against CA DRE requirements. Pre-approval on file, agency disclosures signed. 
+                    All scenarios verified against regulatory requirements. Pre-approval on file, agency disclosures signed. 
                     Aggressive scenario requires additional appraisal gap acknowledgment before submission.
                   </p>
                 </div>
@@ -510,212 +658,29 @@ Based on Sarah Johnson's buyer profile (first-time buyer, pre-approved $525K, co
             </div>
           </div>
         )}
-
-        {activeTab === "active" && (
-          <div className="p-6">
-            {mockActiveOffers.length > 0 ? (
-              <div className="border border-border rounded-none overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-border hover:bg-transparent">
-                      <TableHead className="text-muted-foreground font-medium">Property</TableHead>
-                      <TableHead className="text-muted-foreground font-medium">Amount</TableHead>
-                      <TableHead className="text-muted-foreground font-medium">vs List</TableHead>
-                      <TableHead className="text-muted-foreground font-medium">Status</TableHead>
-                      <TableHead className="text-muted-foreground font-medium">Submitted</TableHead>
-                      <TableHead className="text-muted-foreground font-medium">Expires</TableHead>
-                      <TableHead className="text-muted-foreground font-medium text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {mockActiveOffers.map((offer) => {
-                      const diff = offer.amount - offer.listPrice;
-                      const diffPercent = ((diff / offer.listPrice) * 100).toFixed(1);
-                      return (
-                        <TableRow key={offer.id} className="border-border">
-                          <TableCell>
-                            <span className="font-medium text-foreground">{offer.property}</span>
-                          </TableCell>
-                          <TableCell className="font-medium text-foreground">
-                            {formatPrice(offer.amount)}
-                          </TableCell>
-                          <TableCell>
-                            <span className={cn(
-                              diff > 0 ? "text-success" : diff < 0 ? "text-destructive" : "text-muted-foreground"
-                            )}>
-                              {diff >= 0 ? "+" : ""}{diffPercent}%
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <Badge 
-                              variant="outline" 
-                              className={cn("border-0 flex items-center gap-1 w-fit", getStatusColor(offer.status))}
-                            >
-                              {getStatusIcon(offer.status)}
-                              {offer.status.charAt(0).toUpperCase() + offer.status.slice(1)}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {new Date(offer.submittedDate).toLocaleDateString()}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {new Date(offer.expiresDate).toLocaleDateString()}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleOpenOffer(offer)}
-                                className="text-muted-foreground hover:text-foreground"
-                              >
-                                <Eye className="h-4 w-4 mr-1" />
-                                Open
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleViewInWorkspace(offer)}
-                                className="text-muted-foreground hover:text-foreground"
-                              >
-                                <ExternalLink className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            ) : (
-              <div className="border border-border p-12 text-center">
-                <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="font-medium text-foreground mb-2">No Active Offers</h3>
-                <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                  When you're ready to make an offer, your agent will prepare the documents and guide you through the process.
-                </p>
-              </div>
-            )}
-
-            {/* Status Update Notice */}
-            {mockActiveOffers.some(o => o.status === "countered") && (
-              <div className="mt-6 p-4 border border-warning/30 bg-warning/5">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className="h-5 w-5 text-warning mt-0.5" />
-                  <div>
-                    <p className="font-medium text-foreground">Counter Offer Received</p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      You have a counter offer pending on 2234 Oak Street. Click "Open" to review with AgentGPT and draft your response.
-                    </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-3 border-border text-foreground"
-                      onClick={() => {
-                        const counterOffer = mockActiveOffers.find(o => o.status === "countered");
-                        if (counterOffer) handleOpenOffer(counterOffer);
-                      }}
-                    >
-                      Review Counter Offer
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
-      {/* Offer Detail Dialog */}
-      <Dialog open={showOfferDetail} onOpenChange={setShowOfferDetail}>
-        <DialogContent className="max-w-2xl border-border bg-background">
-          <DialogHeader>
-            <DialogTitle className="text-foreground">Offer Details</DialogTitle>
-          </DialogHeader>
-          {selectedOffer && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-4 border border-border">
-                  <p className="text-sm text-muted-foreground">Property</p>
-                  <p className="font-medium text-foreground">{selectedOffer.property}</p>
-                </div>
-                <div className="p-4 border border-border">
-                  <p className="text-sm text-muted-foreground">Status</p>
-                  <Badge 
-                    variant="outline" 
-                    className={cn("mt-1 border-0 flex items-center gap-1 w-fit", getStatusColor(selectedOffer.status))}
-                  >
-                    {getStatusIcon(selectedOffer.status)}
-                    {selectedOffer.status.charAt(0).toUpperCase() + selectedOffer.status.slice(1)}
-                  </Badge>
-                </div>
-                <div className="p-4 border border-border">
-                  <p className="text-sm text-muted-foreground">Offer Amount</p>
-                  <p className="font-medium text-foreground">{formatPrice(selectedOffer.amount)}</p>
-                </div>
-                <div className="p-4 border border-border">
-                  <p className="text-sm text-muted-foreground">Earnest Money</p>
-                  <p className="font-medium text-foreground">{formatPrice(selectedOffer.earnestMoney)}</p>
-                </div>
-              </div>
+      {/* Create Offer Dialog */}
+      <CreateOfferDialog
+        isOpen={showCreateDialog}
+        onClose={() => {
+          setShowCreateDialog(false);
+          setPrefilledValues(undefined);
+        }}
+        onSubmit={createOffer}
+        properties={properties.map(p => ({ id: p.propertyId, property: p.property }))}
+        prefilledValues={prefilledValues}
+      />
 
-              <div className="p-4 border border-border">
-                <p className="text-sm text-muted-foreground mb-2">Contingencies</p>
-                <div className="flex flex-wrap gap-2">
-                  {selectedOffer.contingencies.map((c) => (
-                    <Badge key={c} variant="secondary" className="bg-muted text-muted-foreground border-0">
-                      {c}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-
-              {/* Compliance Check */}
-              <div className="p-4 border border-border bg-muted/30">
-                <div className="flex items-center gap-2 mb-3">
-                  <Shield className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-medium text-foreground">Compliance Check</span>
-                </div>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center gap-2 text-success">
-                    <CheckCircle className="h-4 w-4" />
-                    <span>Pre-approval verified and on file</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-success">
-                    <CheckCircle className="h-4 w-4" />
-                    <span>Agency disclosure signed</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-success">
-                    <CheckCircle className="h-4 w-4" />
-                    <span>Offer within loan limits</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-3">
-                <Button
-                  className="flex-1 bg-foreground text-background hover:bg-foreground/90"
-                  onClick={() => {
-                    onAgentCommand?.(`Draft response strategy for ${selectedOffer.status === "countered" ? "counter offer" : "offer"} on ${selectedOffer.property}`);
-                    setShowOfferDetail(false);
-                  }}
-                >
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  Draft Strategy with AI
-                </Button>
-                <Button
-                  variant="outline"
-                  className="border-border text-foreground"
-                  onClick={() => setShowOfferDetail(false)}
-                >
-                  Close
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* Offer Detail Modal */}
+      <OfferDetailModal
+        offer={selectedOffer}
+        isOpen={!!selectedOffer}
+        onClose={() => setSelectedOffer(null)}
+        onUpdateStatus={handleUpdateStatus}
+        onDelete={deleteOffer}
+        onAgentCommand={onAgentCommand}
+      />
     </div>
   );
 }
