@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.analyze-offer-template]
 verify_jwt = false
+
+[functions.generate-offer-scenarios]
+verify_jwt = false
