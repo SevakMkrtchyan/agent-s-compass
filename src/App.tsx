@@ -17,6 +17,7 @@ import WorkspaceList from "./pages/WorkspaceList";
 import Buyers from "./pages/Buyers";
 import OfferTemplates from "./pages/OfferTemplates";
 import BuyerPortal from "./pages/BuyerPortal";
+import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import { StagesTest } from "./components/dev/StagesTest";
 const queryClient = new QueryClient();
@@ -41,6 +42,7 @@ const App = () => (
           <Route path="/add-buyer" element={<AddBuyer />} />
           <Route path="/add-property" element={<AddProperty />} />
           <Route path="/offer-templates" element={<OfferTemplates />} />
+          <Route path="/settings" element={<Settings />} />
           {/* Buyers page */}
           <Route path="/buyers" element={<Buyers />} />
           {/* Buyer Portal - accessed via unique link */}
