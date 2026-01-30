@@ -233,6 +233,7 @@ export type Database = {
           nice_to_haves: string | null
           phone: string | null
           portal_link: string | null
+          portal_token: string | null
           pre_approval_amount: number | null
           pre_approval_status: string | null
           preferred_cities: string[] | null
@@ -257,6 +258,7 @@ export type Database = {
           nice_to_haves?: string | null
           phone?: string | null
           portal_link?: string | null
+          portal_token?: string | null
           pre_approval_amount?: number | null
           pre_approval_status?: string | null
           preferred_cities?: string[] | null
@@ -281,6 +283,7 @@ export type Database = {
           nice_to_haves?: string | null
           phone?: string | null
           portal_link?: string | null
+          portal_token?: string | null
           pre_approval_amount?: number | null
           pre_approval_status?: string | null
           preferred_cities?: string[] | null
@@ -803,6 +806,7 @@ export type Database = {
     }
     Functions: {
       clean_expired_cache: { Args: never; Returns: undefined }
+      generate_portal_token: { Args: never; Returns: string }
       match_buyer_context: {
         Args: {
           match_buyer_id: string
