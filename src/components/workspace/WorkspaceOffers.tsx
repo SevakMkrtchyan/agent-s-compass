@@ -30,8 +30,10 @@ import { cn } from "@/lib/utils";
 import { useOffers, Offer } from "@/hooks/useOffers";
 import { useBuyerProperties } from "@/hooks/useBuyerProperties";
 import { useOfferScenarios, AIOfferScenario } from "@/hooks/useOfferScenarios";
+import { useWhatIfAnalysis } from "@/hooks/useWhatIfAnalysis";
 import { CreateOfferDialog } from "./CreateOfferDialog";
 import { OfferDetailModal } from "./OfferDetailModal";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 interface WorkspaceOffersProps {
   buyerId: string;
@@ -74,6 +76,15 @@ export function WorkspaceOffers({ buyerId, onAgentCommand }: WorkspaceOffersProp
     clearScenarios,
   } = useOfferScenarios(buyerId);
 
+  const {
+    analysis: whatIfAnalysis,
+    context: whatIfContext,
+    isAnalyzing: isWhatIfAnalyzing,
+    error: whatIfError,
+    analyzeOffer,
+    clearAnalysis,
+  } = useWhatIfAnalysis(buyerId);
+
   useEffect(() => {
     fetchProperties();
   }, [fetchProperties]);
@@ -84,6 +95,23 @@ export function WorkspaceOffers({ buyerId, onAgentCommand }: WorkspaceOffersProp
       setScenarioPropertyId(properties[0].propertyId);
     }
   }, [properties, scenarioPropertyId]);
+
+  // Get the selected property for What-If Explorer
+  const selectedProperty = properties.find(p => p.propertyId === scenarioPropertyId)?.property;
+  
+  // Calculate slider range based on selected property (80% to 120% of asking)
+  const whatIfPropertyPrice = selectedProperty?.price || 500000;
+  const sliderMin = Math.round(whatIfPropertyPrice * 0.8);
+  const sliderMax = Math.round(whatIfPropertyPrice * 1.2);
+  const sliderStep = Math.round(whatIfPropertyPrice * 0.005) || 5000; // 0.5% increments
+
+  // Update hypothetical price when property changes
+  useEffect(() => {
+    if (selectedProperty?.price) {
+      setHypotheticalPrice([selectedProperty.price]);
+      clearAnalysis();
+    }
+  }, [scenarioPropertyId, selectedProperty?.price, clearAnalysis]);
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -136,9 +164,35 @@ export function WorkspaceOffers({ buyerId, onAgentCommand }: WorkspaceOffersProp
     }
   };
 
-  const listingPrice = propertyInfo?.price || 485000;
+  const listingPrice = selectedProperty?.price || propertyInfo?.price || 485000;
   const priceDiff = hypotheticalPrice[0] - listingPrice;
   const priceDiffPercent = ((priceDiff / listingPrice) * 100).toFixed(1);
+
+  const handleAnalyzeWhatIf = async () => {
+    if (!scenarioPropertyId || !hypotheticalPrice[0]) return;
+    await analyzeOffer(scenarioPropertyId, hypotheticalPrice[0]);
+  };
+
+  const handleCreateOfferFromWhatIf = () => {
+    setPrefilledValues({
+      offerAmount: hypotheticalPrice[0],
+      earnestMoney: Math.round(hypotheticalPrice[0] * 0.03),
+      contingencies: whatIfAnalysis?.recommended_contingencies || ["financing", "inspection"],
+      propertyId: scenarioPropertyId,
+    });
+    setShowCreateDialog(true);
+  };
+
+  const getLikelihoodColor = (likelihood: "High" | "Medium" | "Low") => {
+    switch (likelihood) {
+      case "High":
+        return "bg-success/10 text-success border-success/20";
+      case "Medium":
+        return "bg-warning/10 text-warning border-warning/20";
+      case "Low":
+        return "bg-destructive/10 text-destructive border-destructive/20";
+    }
+  };
 
   const handleNewOffer = () => {
     setPrefilledValues(undefined);
@@ -602,76 +656,261 @@ export function WorkspaceOffers({ buyerId, onAgentCommand }: WorkspaceOffersProp
         )}
 
         {activeTab === "hypothetical" && (
-          <div className="p-6">
-            <div className="border border-border bg-card p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <Calculator className="h-5 w-5 text-muted-foreground" />
-                <span className="font-medium text-foreground">Explore "What If" Scenarios</span>
+          <div className="p-6 space-y-6">
+            {/* Property Selection */}
+            {properties.length === 0 ? (
+              <div className="border border-border p-8 text-center bg-muted/30">
+                <Home className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+                <p className="font-medium text-foreground mb-2">Add Properties First</p>
+                <p className="text-sm text-muted-foreground">
+                  Save properties to this buyer's profile to explore what-if scenarios.
+                </p>
               </div>
-              <p className="text-sm text-muted-foreground mb-6">
-                Adjust the price slider to see how different offer amounts might compare. This is for educational exploration only.
-              </p>
-
-              <div className="space-y-6">
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-sm text-muted-foreground">Offer Price</span>
-                    <span className="text-2xl font-medium text-foreground">{formatPrice(hypotheticalPrice[0])}</span>
-                  </div>
-                  <Slider
-                    value={hypotheticalPrice}
-                    onValueChange={setHypotheticalPrice}
-                    min={400000}
-                    max={550000}
-                    step={5000}
-                    className="my-4"
-                  />
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>{formatPrice(400000)}</span>
-                    <span>Asking: {formatPrice(listingPrice)}</span>
-                    <span>{formatPrice(550000)}</span>
+            ) : (
+              <>
+                {/* Property Info Header */}
+                <div className="border border-border bg-card p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Home className="h-5 w-5 text-muted-foreground" />
+                      <div>
+                        <p className="font-medium text-foreground">
+                          {selectedProperty?.address || "Select a property"}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Listed at {formatPrice(whatIfPropertyPrice)}
+                        </p>
+                      </div>
+                    </div>
+                    <Select value={scenarioPropertyId} onValueChange={(val) => {
+                      setScenarioPropertyId(val);
+                    }}>
+                      <SelectTrigger className="w-[280px] border-border">
+                        <SelectValue placeholder="Choose a property..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {properties.map((bp) => (
+                          <SelectItem key={bp.propertyId} value={bp.propertyId}>
+                            {bp.property?.address} — {formatPrice(bp.property?.price || 0)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
-                <div className="grid md:grid-cols-3 gap-4">
-                  <div className="p-4 border border-border bg-background">
-                    <p className="text-sm text-muted-foreground mb-1">vs Asking Price</p>
-                    <div className="flex items-center gap-2">
-                      {priceDiff > 0 ? (
-                        <TrendingUp className="h-4 w-4 text-success" />
-                      ) : priceDiff < 0 ? (
-                        <TrendingDown className="h-4 w-4 text-destructive" />
+                {/* Price Slider */}
+                <div className="border border-border bg-card p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Calculator className="h-5 w-5 text-muted-foreground" />
+                    <span className="font-medium text-foreground">Explore Different Offer Prices</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-6">
+                    Adjust the slider to test different offer amounts. Calculations update in real-time.
+                  </p>
+
+                  <div className="space-y-6">
+                    <div>
+                      <div className="flex items-center justify-between mb-4">
+                        <span className="text-sm text-muted-foreground">Your Offer Price</span>
+                        <span className="text-2xl font-medium text-foreground">{formatPrice(hypotheticalPrice[0])}</span>
+                      </div>
+                      <Slider
+                        value={hypotheticalPrice}
+                        onValueChange={(val) => {
+                          setHypotheticalPrice(val);
+                          // Clear previous analysis when slider changes
+                          if (whatIfAnalysis) clearAnalysis();
+                        }}
+                        min={sliderMin}
+                        max={sliderMax}
+                        step={sliderStep}
+                        className="my-4"
+                      />
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>{formatPrice(sliderMin)} (80%)</span>
+                        <span>Asking: {formatPrice(whatIfPropertyPrice)}</span>
+                        <span>{formatPrice(sliderMax)} (120%)</span>
+                      </div>
+                    </div>
+
+                    {/* Real-time Calculations */}
+                    <div className="grid md:grid-cols-3 gap-4">
+                      <div className="p-4 border border-border bg-background">
+                        <p className="text-sm text-muted-foreground mb-1">vs Asking Price</p>
+                        <div className="flex items-center gap-2">
+                          {priceDiff > 0 ? (
+                            <TrendingUp className="h-4 w-4 text-success" />
+                          ) : priceDiff < 0 ? (
+                            <TrendingDown className="h-4 w-4 text-destructive" />
+                          ) : (
+                            <Minus className="h-4 w-4 text-muted-foreground" />
+                          )}
+                          <span className={cn(
+                            "text-lg font-medium",
+                            priceDiff > 0 ? "text-success" : priceDiff < 0 ? "text-destructive" : "text-foreground"
+                          )}>
+                            {priceDiff >= 0 ? "+" : ""}{formatPrice(priceDiff)} ({priceDiff >= 0 ? "+" : ""}{priceDiffPercent}%)
+                          </span>
+                        </div>
+                      </div>
+                      <div className="p-4 border border-border bg-background">
+                        <p className="text-sm text-muted-foreground mb-1">Suggested Earnest (3%)</p>
+                        <p className="text-lg font-medium text-foreground">{formatPrice(hypotheticalPrice[0] * 0.03)}</p>
+                      </div>
+                      <div className="p-4 border border-border bg-background">
+                        <p className="text-sm text-muted-foreground mb-1">Estimated Down (20%)</p>
+                        <p className="text-lg font-medium text-foreground">{formatPrice(hypotheticalPrice[0] * 0.2)}</p>
+                      </div>
+                    </div>
+
+                    {/* Analyze Button */}
+                    <Button 
+                      onClick={handleAnalyzeWhatIf}
+                      disabled={isWhatIfAnalyzing || !scenarioPropertyId}
+                      className="w-full bg-foreground text-background hover:bg-foreground/90"
+                    >
+                      {isWhatIfAnalyzing ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Analyzing...
+                        </>
                       ) : (
-                        <Minus className="h-4 w-4 text-muted-foreground" />
+                        <>
+                          <Sparkles className="h-4 w-4 mr-2" />
+                          Analyze This Price with AI
+                        </>
                       )}
-                      <span className={cn(
-                        "text-lg font-medium",
-                        priceDiff > 0 ? "text-success" : priceDiff < 0 ? "text-destructive" : "text-foreground"
-                      )}>
-                        {priceDiff >= 0 ? "+" : ""}{formatPrice(priceDiff)} ({priceDiff >= 0 ? "+" : ""}{priceDiffPercent}%)
-                      </span>
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Error State */}
+                {whatIfError && (
+                  <div className="p-4 border border-destructive/30 bg-destructive/5">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="h-5 w-5 text-destructive mt-0.5" />
+                      <div>
+                        <p className="font-medium text-foreground">Analysis Failed</p>
+                        <p className="text-sm text-muted-foreground mt-1">{whatIfError}</p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-3"
+                          onClick={handleAnalyzeWhatIf}
+                        >
+                          Try Again
+                        </Button>
+                      </div>
                     </div>
                   </div>
-                  <div className="p-4 border border-border bg-background">
-                    <p className="text-sm text-muted-foreground mb-1">Suggested Earnest (3%)</p>
-                    <p className="text-lg font-medium text-foreground">{formatPrice(hypotheticalPrice[0] * 0.03)}</p>
+                )}
+
+                {/* AI Analysis Results */}
+                {whatIfAnalysis && (
+                  <div className="border border-border bg-card">
+                    {/* Header */}
+                    <div className="p-4 border-b border-border flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Sparkles className="h-5 w-5 text-primary" />
+                        <span className="font-medium text-foreground">AI Analysis: {formatPrice(whatIfContext?.offer_amount || hypotheticalPrice[0])}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className={cn("border", getCompetitivenessColor(whatIfAnalysis.competitiveness))}>
+                          {whatIfAnalysis.competitiveness}
+                        </Badge>
+                        <Badge variant="outline" className={cn("border", getLikelihoodColor(whatIfAnalysis.likelihood))}>
+                          {whatIfAnalysis.likelihood} Likelihood
+                        </Badge>
+                      </div>
+                    </div>
+
+                    {/* Strategy Assessment */}
+                    <div className="p-4 border-b border-border">
+                      <p className="text-sm font-medium text-muted-foreground mb-2">Strategy Assessment</p>
+                      <p className="text-foreground">{whatIfAnalysis.strategy_assessment}</p>
+                    </div>
+
+                    {/* Recommended Contingencies */}
+                    <div className="p-4 border-b border-border">
+                      <p className="text-sm font-medium text-muted-foreground mb-2">Recommended Contingencies</p>
+                      <div className="flex flex-wrap gap-2">
+                        {whatIfAnalysis.recommended_contingencies.map((contingency, idx) => (
+                          <Badge key={idx} variant="outline" className="bg-primary/5 text-primary border-primary/20">
+                            <CheckCircle2 className="h-3 w-3 mr-1" />
+                            {contingency}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Expandable Sections */}
+                    <Accordion type="multiple" className="w-full">
+                      <AccordionItem value="risks" className="border-b border-border">
+                        <AccordionTrigger className="px-4 py-3 text-sm font-medium hover:no-underline">
+                          <div className="flex items-center gap-2">
+                            <AlertTriangle className="h-4 w-4 text-warning" />
+                            Risks & Considerations ({whatIfAnalysis.risks.length})
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="px-4 pb-4">
+                          <ul className="space-y-2">
+                            {whatIfAnalysis.risks.map((risk, idx) => (
+                              <li key={idx} className="flex items-start gap-2 text-sm text-muted-foreground">
+                                <span className="text-warning mt-0.5">•</span>
+                                {risk}
+                              </li>
+                            ))}
+                          </ul>
+                        </AccordionContent>
+                      </AccordionItem>
+                      <AccordionItem value="tips" className="border-0">
+                        <AccordionTrigger className="px-4 py-3 text-sm font-medium hover:no-underline">
+                          <div className="flex items-center gap-2">
+                            <TrendingUp className="h-4 w-4 text-success" />
+                            Negotiation Tips ({whatIfAnalysis.negotiation_tips.length})
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="px-4 pb-4">
+                          <ul className="space-y-2">
+                            {whatIfAnalysis.negotiation_tips.map((tip, idx) => (
+                              <li key={idx} className="flex items-start gap-2 text-sm text-muted-foreground">
+                                <span className="text-success mt-0.5">•</span>
+                                {tip}
+                              </li>
+                            ))}
+                          </ul>
+                        </AccordionContent>
+                      </AccordionItem>
+                    </Accordion>
+
+                    {/* Create Offer Button */}
+                    <div className="p-4 bg-muted/30">
+                      <Button 
+                        onClick={handleCreateOfferFromWhatIf}
+                        className="w-full bg-foreground text-background hover:bg-foreground/90"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Create Offer at {formatPrice(hypotheticalPrice[0])}
+                      </Button>
+                    </div>
                   </div>
-                  <div className="p-4 border border-border bg-background">
-                    <p className="text-sm text-muted-foreground mb-1">Estimated Down (20%)</p>
-                    <p className="text-lg font-medium text-foreground">{formatPrice(hypotheticalPrice[0] * 0.2)}</p>
+                )}
+
+                {/* Disclaimer */}
+                <div className="p-4 border border-border bg-muted/30">
+                  <div className="flex items-start gap-3">
+                    <Shield className="h-5 w-5 text-muted-foreground mt-0.5" />
+                    <div>
+                      <p className="font-medium text-foreground">Educational Exploration</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        This tool helps explore different offer strategies. AI analysis is based on available data and should be reviewed with your client. Market conditions may change.
+                      </p>
+                    </div>
                   </div>
                 </div>
-
-                <Button 
-                  onClick={() => onAgentCommand?.(`Analyze offer at ${formatPrice(hypotheticalPrice[0])} for competitiveness and generate recommendations`)}
-                  variant="outline"
-                  className="w-full border-border text-foreground hover:bg-muted"
-                >
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  Analyze This Price with AI
-                </Button>
-              </div>
-            </div>
+              </>
+            )}
           </div>
         )}
       </div>
