@@ -193,7 +193,7 @@ Return ONLY a valid JSON array with these 3 scenario objects. No additional text
     };
 
     const claudeRequestBody = {
-      model: "claude-3-5-haiku-20241022",
+      model: "claude-sonnet-4-20250514",
       max_tokens: 2048,
       messages: [
         {
