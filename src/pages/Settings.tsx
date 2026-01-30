@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -6,7 +7,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -24,41 +24,51 @@ import {
   MapPin,
   Globe,
   Camera,
+  Loader2,
+  LogOut,
 } from "lucide-react";
 import { toast } from "sonner";
-
-// Mock user data - will be replaced with real auth data
-const mockUser = {
-  id: "user-1",
-  name: "John Smith",
-  email: "john.smith@realestate.com",
-  phone: "(555) 123-4567",
-  avatar: null,
-  role: "Agent",
-  licenseNumber: "RE-12345678",
-  createdAt: "2024-01-15",
-};
-
-const mockBrokerage = {
-  id: "brokerage-1",
-  name: "Premier Real Estate Group",
-  address: "123 Main Street, Suite 500",
-  city: "Los Angeles",
-  state: "CA",
-  zip: "90210",
-  phone: "(555) 987-6543",
-  email: "info@premierrealestate.com",
-  website: "https://premierrealestate.com",
-  logo: null,
-};
+import { useAuth } from "@/hooks/useAuth";
 
 export default function Settings() {
+  const navigate = useNavigate();
+  const { 
+    user, 
+    profile, 
+    brokerage, 
+    isLoading: authLoading, 
+    isAuthenticated,
+    updateProfile,
+    updateBrokerage,
+    createBrokerage,
+    signOut,
+  } = useAuth();
+  
   const [sidebarCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState("profile");
+  const [isSaving, setIsSaving] = useState(false);
   
   // Form states
-  const [userForm, setUserForm] = useState(mockUser);
-  const [brokerageForm, setBrokerageForm] = useState(mockBrokerage);
+  const [userForm, setUserForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    license_number: "",
+    avatar_url: "",
+  });
+  
+  const [brokerageForm, setBrokerageForm] = useState({
+    name: "",
+    address: "",
+    city: "",
+    state: "",
+    zip_code: "",
+    phone: "",
+    email: "",
+    website: "",
+    logo_url: "",
+  });
+  
   const [notifications, setNotifications] = useState({
     emailOffers: true,
     emailTasks: true,
@@ -66,16 +76,118 @@ export default function Settings() {
     pushNotifications: true,
   });
 
-  const handleSaveProfile = () => {
-    toast.success("Profile updated successfully");
+  // Redirect if not authenticated
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      navigate("/auth");
+    }
+  }, [authLoading, isAuthenticated, navigate]);
+
+  // Populate forms when profile/brokerage load
+  useEffect(() => {
+    if (profile) {
+      setUserForm({
+        name: profile.name || "",
+        email: profile.email || user?.email || "",
+        phone: profile.phone || "",
+        license_number: profile.license_number || "",
+        avatar_url: profile.avatar_url || "",
+      });
+    }
+  }, [profile, user]);
+
+  useEffect(() => {
+    if (brokerage) {
+      setBrokerageForm({
+        name: brokerage.name || "",
+        address: brokerage.address || "",
+        city: brokerage.city || "",
+        state: brokerage.state || "",
+        zip_code: brokerage.zip_code || "",
+        phone: brokerage.phone || "",
+        email: brokerage.email || "",
+        website: brokerage.website || "",
+        logo_url: brokerage.logo_url || "",
+      });
+    }
+  }, [brokerage]);
+
+  const handleSaveProfile = async () => {
+    setIsSaving(true);
+    const { error } = await updateProfile({
+      name: userForm.name,
+      email: userForm.email,
+      phone: userForm.phone || null,
+      license_number: userForm.license_number || null,
+      avatar_url: userForm.avatar_url || null,
+    });
+    
+    if (error) {
+      toast.error("Failed to update profile");
+    } else {
+      toast.success("Profile updated successfully");
+    }
+    setIsSaving(false);
   };
 
-  const handleSaveBrokerage = () => {
-    toast.success("Brokerage settings updated successfully");
+  const handleSaveBrokerage = async () => {
+    setIsSaving(true);
+    
+    if (brokerage) {
+      // Update existing brokerage
+      const { error } = await updateBrokerage({
+        name: brokerageForm.name,
+        address: brokerageForm.address || null,
+        city: brokerageForm.city || null,
+        state: brokerageForm.state || null,
+        zip_code: brokerageForm.zip_code || null,
+        phone: brokerageForm.phone || null,
+        email: brokerageForm.email || null,
+        website: brokerageForm.website || null,
+        logo_url: brokerageForm.logo_url || null,
+      });
+      
+      if (error) {
+        toast.error("Failed to update brokerage");
+      } else {
+        toast.success("Brokerage settings updated successfully");
+      }
+    } else {
+      // Create new brokerage
+      if (!brokerageForm.name.trim()) {
+        toast.error("Brokerage name is required");
+        setIsSaving(false);
+        return;
+      }
+      
+      const { error } = await createBrokerage({
+        name: brokerageForm.name,
+        address: brokerageForm.address || undefined,
+        city: brokerageForm.city || undefined,
+        state: brokerageForm.state || undefined,
+        zip_code: brokerageForm.zip_code || undefined,
+        phone: brokerageForm.phone || undefined,
+        email: brokerageForm.email || undefined,
+        website: brokerageForm.website || undefined,
+      });
+      
+      if (error) {
+        toast.error("Failed to create brokerage");
+      } else {
+        toast.success("Brokerage created and linked to your profile");
+      }
+    }
+    
+    setIsSaving(false);
   };
 
   const handleSaveNotifications = () => {
     toast.success("Notification preferences saved");
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/auth");
   };
 
   const tabs = [
@@ -86,6 +198,14 @@ export default function Settings() {
     { id: "appearance", label: "Appearance", icon: Palette },
   ];
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex w-full bg-background">
       <Sidebar collapsed={sidebarCollapsed} />
@@ -95,8 +215,12 @@ export default function Settings() {
         sidebarCollapsed ? "ml-[58px]" : "ml-[240px]"
       )}>
         {/* Header */}
-        <header className="h-14 border-b bg-card flex items-center px-6">
+        <header className="h-14 border-b bg-card flex items-center justify-between px-6">
           <h1 className="text-lg font-semibold">Settings</h1>
+          <Button variant="outline" size="sm" onClick={handleSignOut} className="gap-2">
+            <LogOut className="h-4 w-4" />
+            Sign Out
+          </Button>
         </header>
 
         <div className="p-6 max-w-5xl">
@@ -127,9 +251,9 @@ export default function Settings() {
                   {/* Avatar Section */}
                   <div className="flex items-center gap-6">
                     <Avatar className="h-20 w-20">
-                      <AvatarImage src={userForm.avatar || undefined} />
+                      <AvatarImage src={userForm.avatar_url || undefined} />
                       <AvatarFallback className="text-xl bg-primary text-primary-foreground">
-                        {userForm.name.split(" ").map(n => n[0]).join("")}
+                        {userForm.name?.split(" ").map(n => n[0]).join("") || "?"}
                       </AvatarFallback>
                     </Avatar>
                     <div className="space-y-2">
@@ -184,22 +308,22 @@ export default function Settings() {
                       <Label htmlFor="license">License Number</Label>
                       <Input
                         id="license"
-                        value={userForm.licenseNumber}
-                        onChange={(e) => setUserForm({ ...userForm, licenseNumber: e.target.value })}
+                        value={userForm.license_number}
+                        onChange={(e) => setUserForm({ ...userForm, license_number: e.target.value })}
                       />
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2 pt-4">
-                    <Badge variant="secondary">{userForm.role}</Badge>
+                    <Badge variant="secondary">{profile?.role || "Agent"}</Badge>
                     <span className="text-sm text-muted-foreground">
-                      Member since {new Date(userForm.createdAt).toLocaleDateString()}
+                      Member since {profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : "—"}
                     </span>
                   </div>
 
                   <div className="flex justify-end">
-                    <Button onClick={handleSaveProfile} className="gap-2">
-                      <Save className="h-4 w-4" />
+                    <Button onClick={handleSaveProfile} className="gap-2" disabled={isSaving}>
+                      {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                       Save Changes
                     </Button>
                   </div>
@@ -213,15 +337,15 @@ export default function Settings() {
                 <CardHeader>
                   <CardTitle>Brokerage Information</CardTitle>
                   <CardDescription>
-                    Manage your brokerage details and branding
+                    {brokerage ? "Manage your brokerage details and branding" : "Set up your brokerage information"}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   {/* Logo Section */}
                   <div className="flex items-center gap-6">
                     <div className="h-20 w-20 rounded-lg bg-muted flex items-center justify-center">
-                      {brokerageForm.logo ? (
-                        <img src={brokerageForm.logo} alt="Brokerage logo" className="h-full w-full object-contain rounded-lg" />
+                      {brokerageForm.logo_url ? (
+                        <img src={brokerageForm.logo_url} alt="Brokerage logo" className="h-full w-full object-contain rounded-lg" />
                       ) : (
                         <Building2 className="h-8 w-8 text-muted-foreground" />
                       )}
@@ -242,11 +366,12 @@ export default function Settings() {
                   {/* Form Fields */}
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2 md:col-span-2">
-                      <Label htmlFor="brokerageName">Brokerage Name</Label>
+                      <Label htmlFor="brokerageName">Brokerage Name *</Label>
                       <Input
                         id="brokerageName"
                         value={brokerageForm.name}
                         onChange={(e) => setBrokerageForm({ ...brokerageForm, name: e.target.value })}
+                        placeholder="Enter brokerage name"
                       />
                     </div>
                     <div className="space-y-2 md:col-span-2">
@@ -282,8 +407,8 @@ export default function Settings() {
                         <Label htmlFor="zip">ZIP</Label>
                         <Input
                           id="zip"
-                          value={brokerageForm.zip}
-                          onChange={(e) => setBrokerageForm({ ...brokerageForm, zip: e.target.value })}
+                          value={brokerageForm.zip_code}
+                          onChange={(e) => setBrokerageForm({ ...brokerageForm, zip_code: e.target.value })}
                         />
                       </div>
                     </div>
@@ -327,9 +452,9 @@ export default function Settings() {
                   </div>
 
                   <div className="flex justify-end">
-                    <Button onClick={handleSaveBrokerage} className="gap-2">
-                      <Save className="h-4 w-4" />
-                      Save Changes
+                    <Button onClick={handleSaveBrokerage} className="gap-2" disabled={isSaving}>
+                      {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                      {brokerage ? "Save Changes" : "Create Brokerage"}
                     </Button>
                   </div>
                 </CardContent>
