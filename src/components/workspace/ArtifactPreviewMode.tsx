@@ -173,9 +173,9 @@ export function ArtifactPreviewMode({
         </p>
       </div>
 
-      {/* Content Area with Tabs */}
-      <div className="flex-1 min-h-0 mt-4 flex flex-col overflow-hidden">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
+      {/* Content Area with Tabs - fixed height container */}
+      <div className="mt-4 flex flex-col" style={{ height: '55vh', minHeight: '400px' }}>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
           <TabsList className="flex-shrink-0 w-full grid grid-cols-2">
             <TabsTrigger value="buyer" className="gap-2">
               <Eye className="h-4 w-4" />
@@ -187,7 +187,7 @@ export function ArtifactPreviewMode({
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="buyer" className="flex-1 min-h-0 mt-4 flex flex-col">
+          <TabsContent value="buyer" className="flex-1 mt-4 overflow-hidden flex flex-col" style={{ minHeight: 0 }}>
             <div className="flex items-center justify-between mb-2 flex-shrink-0">
               <Badge variant="default" className="gap-1">
                 <Eye className="h-3 w-3" />
@@ -204,27 +204,21 @@ export function ArtifactPreviewMode({
               </Button>
             </div>
             
-            <div 
-              className="rounded-lg border bg-muted/30 p-4 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent"
-              style={{ maxHeight: '60vh' }}
-            >
+            <div className="flex-1 rounded-lg border bg-muted/30 p-4 overflow-y-auto overflow-x-hidden" style={{ minHeight: 0 }}>
               <div className="prose prose-sm max-w-none dark:prose-invert leading-relaxed space-y-1">
                 {renderMarkdownContent(editedContent)}
               </div>
             </div>
           </TabsContent>
 
-          <TabsContent value="full" className="flex-1 min-h-0 mt-4 flex flex-col">
+          <TabsContent value="full" className="flex-1 mt-4 overflow-hidden flex flex-col" style={{ minHeight: 0 }}>
             <div className="mb-2 flex-shrink-0">
               <Badge variant="secondary" className="gap-1">
                 <FileText className="h-3 w-3" />
                 Original (internal only)
               </Badge>
             </div>
-            <div 
-              className="rounded-lg border bg-muted/30 p-4 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent"
-              style={{ maxHeight: '60vh' }}
-            >
+            <div className="flex-1 rounded-lg border bg-muted/30 p-4 overflow-y-auto overflow-x-hidden" style={{ minHeight: 0 }}>
               <div className="prose prose-sm max-w-none dark:prose-invert leading-relaxed space-y-1 opacity-80">
                 {renderMarkdownContent(artifact.content)}
               </div>
