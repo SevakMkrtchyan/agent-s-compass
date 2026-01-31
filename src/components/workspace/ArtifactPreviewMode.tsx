@@ -129,7 +129,7 @@ export function ArtifactPreviewMode({
           <textarea
             value={editedContent}
             onChange={(e) => setEditedContent(e.target.value)}
-            className="flex-1 w-full min-h-[400px] rounded-lg border border-input bg-background p-4 text-sm leading-relaxed resize-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            className="flex-1 w-full min-h-[400px] rounded-lg border border-input bg-background p-4 text-base leading-relaxed resize-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
             placeholder="Edit the buyer version..."
             style={{ fontFamily: 'inherit' }}
           />
