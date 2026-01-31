@@ -245,7 +245,7 @@ export function ArtifactViewerDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className="w-[900px] max-w-[95vw] max-h-[85vh] flex flex-col overflow-hidden">
+        <DialogContent className="w-[1200px] max-w-[95vw] h-[90vh] max-h-[90vh] flex flex-col overflow-hidden">
           {viewMode === "generating" && (
             <div className="flex-1 flex flex-col items-center justify-center gap-4 py-12">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />

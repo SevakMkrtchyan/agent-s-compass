@@ -173,8 +173,8 @@ export function ArtifactPreviewMode({
         </p>
       </div>
 
-      {/* Content Area with Tabs - fixed height container */}
-      <div className="mt-4 flex flex-col" style={{ height: '55vh', minHeight: '400px' }}>
+      {/* Content Area with Tabs - fills most of modal */}
+      <div className="flex-1 mt-4 flex flex-col min-h-0">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
           <TabsList className="flex-shrink-0 w-full grid grid-cols-2">
             <TabsTrigger value="buyer" className="gap-2">
