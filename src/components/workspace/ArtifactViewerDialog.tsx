@@ -151,8 +151,8 @@ export function ArtifactViewerDialog({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
+       <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col overflow-hidden">
           <DialogHeader className="flex-shrink-0">
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1 min-w-0">
@@ -181,11 +181,11 @@ export function ArtifactViewerDialog({
             </div>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 min-h-0 mt-4 -mx-6 px-6">
+          <div className="flex-1 min-h-0 mt-4 -mx-6 px-6 overflow-y-auto">
             <div className="prose prose-sm max-w-none dark:prose-invert leading-relaxed space-y-1 pb-4">
               {renderMarkdownContent(artifact.content)}
             </div>
-          </ScrollArea>
+          </div>
 
           <div className="flex items-center justify-between gap-3 pt-4 border-t flex-shrink-0 mt-4">
             <div className="flex items-center gap-2">
