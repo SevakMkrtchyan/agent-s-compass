@@ -187,7 +187,7 @@ export function ArtifactPreviewMode({
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="buyer" className="flex-1 min-h-0 mt-4 flex flex-col overflow-hidden">
+          <TabsContent value="buyer" className="flex-1 min-h-0 mt-4 flex flex-col">
             <div className="flex items-center justify-between mb-2 flex-shrink-0">
               <Badge variant="default" className="gap-1">
                 <Eye className="h-3 w-3" />
@@ -204,21 +204,27 @@ export function ArtifactPreviewMode({
               </Button>
             </div>
             
-            <div className="flex-1 min-h-0 overflow-y-auto rounded-lg border bg-muted/30 p-4">
+            <div 
+              className="rounded-lg border bg-muted/30 p-4 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent"
+              style={{ maxHeight: '60vh' }}
+            >
               <div className="prose prose-sm max-w-none dark:prose-invert leading-relaxed space-y-1">
                 {renderMarkdownContent(editedContent)}
               </div>
             </div>
           </TabsContent>
 
-          <TabsContent value="full" className="flex-1 min-h-0 mt-4 flex flex-col overflow-hidden">
+          <TabsContent value="full" className="flex-1 min-h-0 mt-4 flex flex-col">
             <div className="mb-2 flex-shrink-0">
               <Badge variant="secondary" className="gap-1">
                 <FileText className="h-3 w-3" />
                 Original (internal only)
               </Badge>
             </div>
-            <div className="flex-1 min-h-0 overflow-y-auto rounded-lg border bg-muted/30 p-4">
+            <div 
+              className="rounded-lg border bg-muted/30 p-4 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent"
+              style={{ maxHeight: '60vh' }}
+            >
               <div className="prose prose-sm max-w-none dark:prose-invert leading-relaxed space-y-1 opacity-80">
                 {renderMarkdownContent(artifact.content)}
               </div>
