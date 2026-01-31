@@ -646,6 +646,7 @@ export const ProgressTab = forwardRef<HTMLDivElement, ProgressTabProps>(function
           onRegenerate={handleRegenerateArtifact}
           isSharing={isSharing}
           isDeleting={isDeleting}
+          buyerName={buyerName}
         />
 
         {/* Activity Log */}

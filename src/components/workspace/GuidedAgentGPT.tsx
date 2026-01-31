@@ -1064,6 +1064,7 @@ export function GuidedAgentGPT({
         onRegenerate={handleRegenerateArtifact}
         isSharing={isSharing}
         isDeleting={isDeleting}
+        buyerName={buyerName}
       />
 
       {/* Existing Artifact Dialog (deduplication) */}
