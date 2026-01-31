@@ -163,8 +163,8 @@ export default function BuyerPortal() {
           sidebarCollapsed ? "ml-[58px]" : "ml-[240px]"
         )}
       >
-        {/* Top Bar - matches agent TopBar */}
-        <header className="h-14 bg-card border-b flex items-center justify-between px-4">
+        {/* Top Bar - matches agent TopBar exactly */}
+        <header className="h-14 bg-[#f9fafb] border-b border-border/30 flex items-center justify-between px-4">
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
@@ -178,17 +178,16 @@ export default function BuyerPortal() {
                 <PanelLeftClose className="h-4 w-4" />
               )}
             </Button>
-            <div className="h-6 w-px bg-border" />
+            <div className="h-6 w-px bg-border/50" />
             <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-primary" />
-              <span className="font-semibold text-foreground">AgentGPT</span>
+              <Sparkles className="h-4 w-4 text-foreground/70" />
+              <span className="font-medium text-sm text-foreground">AgentGPT</span>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground">Buyer Portal</span>
-            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-              <span className="text-xs font-medium text-primary">
-                {buyer.name.charAt(0).toUpperCase()}
+            <div className="w-8 h-8 rounded-full bg-foreground/10 flex items-center justify-center">
+              <span className="text-xs font-medium text-foreground/70">
+                {buyer.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
               </span>
             </div>
           </div>
