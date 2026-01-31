@@ -1,17 +1,18 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Loader2, Sparkles, FileText, Eye, FolderOpen, CheckCircle } from "lucide-react";
+import { Send, Loader2, Sparkles, FileText, ChevronDown, ChevronUp, CheckCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePortalMessages } from "@/hooks/usePortalMessages";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import type { PortalBuyer } from "@/pages/BuyerPortal";
 import ReactMarkdown from "react-markdown";
+import { format } from "date-fns";
 
 interface PortalWorkspaceProps {
   buyer: PortalBuyer;
 }
 
-// Stage guidance for buyers
+// Stage guidance for buyers (shown when no artifacts)
 const STAGE_GUIDANCE: Record<string, { title: string; description: string; tips: string[] }> = {
   "Readiness & Expectations": {
     title: "Getting Started",
@@ -104,6 +105,91 @@ const STAGE_GUIDANCE: Record<string, { title: string; description: string; tips:
     ],
   },
 };
+
+// Artifact card component with expandable content
+interface ArtifactCardProps {
+  artifact: {
+    id: string;
+    title: string;
+    content: string;
+    artifact_type: string;
+    shared_at: string | null;
+    created_at: string;
+  };
+  defaultExpanded?: boolean;
+}
+
+function ArtifactCard({ artifact, defaultExpanded = true }: ArtifactCardProps) {
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
+  const sharedDate = artifact.shared_at || artifact.created_at;
+  
+  // Check if content is long (more than ~500 chars or 10 lines)
+  const isLongContent = artifact.content.length > 500 || artifact.content.split('\n').length > 10;
+
+  return (
+    <div className="mb-8">
+      {/* Header */}
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <FileText className="h-4 w-4 text-primary" />
+            <h2 className="text-xl md:text-2xl font-medium text-foreground">
+              {artifact.title}
+            </h2>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Shared by your agent · {format(new Date(sharedDate), "MMM d, yyyy")}
+          </p>
+        </div>
+        {isLongContent && (
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {isExpanded ? (
+              <>
+                <ChevronUp className="h-4 w-4" />
+                Collapse
+              </>
+            ) : (
+              <>
+                <ChevronDown className="h-4 w-4" />
+                Expand
+              </>
+            )}
+          </button>
+        )}
+      </div>
+
+      {/* Content */}
+      <div 
+        className={cn(
+          "bg-white border border-border/30 rounded-sm p-6 md:p-8",
+          !isExpanded && isLongContent && "max-h-[300px] overflow-hidden relative"
+        )}
+      >
+        <div className="prose prose-lg dark:prose-invert max-w-none prose-p:my-3 prose-p:leading-relaxed prose-ul:my-3 prose-li:my-1 prose-headings:my-4 prose-headings:font-medium prose-h2:text-xl prose-h3:text-lg prose-strong:font-semibold">
+          <ReactMarkdown>{artifact.content}</ReactMarkdown>
+        </div>
+        
+        {/* Fade overlay when collapsed */}
+        {!isExpanded && isLongContent && (
+          <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-white to-transparent" />
+        )}
+      </div>
+
+      {/* Show more button when collapsed */}
+      {!isExpanded && isLongContent && (
+        <button
+          onClick={() => setIsExpanded(true)}
+          className="mt-3 text-sm text-primary hover:text-primary/80 transition-colors"
+        >
+          Show full document →
+        </button>
+      )}
+    </div>
+  );
+}
 
 export function PortalWorkspace({ buyer }: PortalWorkspaceProps) {
   const {
@@ -303,80 +389,73 @@ export function PortalWorkspace({ buyer }: PortalWorkspaceProps) {
           {/* Main Actions View */}
           {showActions && !currentResponse && (
             <div className="mb-16">
-              {/* Main heading - matches agent's "What would you like to do?" */}
-              <div className="flex items-center gap-3 mb-10">
-                <h2 className="text-2xl md:text-3xl font-medium text-foreground">
-                  {stageGuidance.title}
-                </h2>
-              </div>
+              {/* If there are shared artifacts, show them prominently */}
+              {sharedArtifacts && sharedArtifacts.length > 0 ? (
+                <>
+                  {/* Show artifacts as the main content */}
+                  {sharedArtifacts.map((artifact, idx) => (
+                    <ArtifactCard 
+                      key={artifact.id} 
+                      artifact={artifact}
+                      defaultExpanded={idx === 0} // First one expanded, others collapsed
+                    />
+                  ))}
 
-              {/* Guidance description */}
-              <p className="text-lg text-foreground/70 mb-8 max-w-2xl">
-                {stageGuidance.description}
-              </p>
-
-              {/* Tips as action items - matches agent's Next Actions style */}
-              <div className="space-y-0 mb-12">
-                {stageGuidance.tips.map((tip, idx) => (
-                  <div
-                    key={idx}
-                    className={cn(
-                      "flex items-center justify-between py-4",
-                      idx < stageGuidance.tips.length - 1 && "border-b border-border/10"
-                    )}
-                  >
-                    <div className="flex items-center gap-3">
-                      <CheckCircle className="h-4 w-4 text-muted-foreground/40" />
-                      <span className="text-lg text-foreground/70">{tip}</span>
+                  {/* Stage guidance below artifacts */}
+                  <div className="mt-12 pt-8 border-t border-border/20">
+                    <h3 className="text-sm font-medium text-muted-foreground mb-4">
+                      What's Next: {stageGuidance.title}
+                    </h3>
+                    <p className="text-sm text-muted-foreground/70 mb-4">
+                      {stageGuidance.description}
+                    </p>
+                    <div className="space-y-2">
+                      {stageGuidance.tips.map((tip, idx) => (
+                        <div key={idx} className="flex items-center gap-2 text-sm text-muted-foreground/60">
+                          <CheckCircle className="h-3.5 w-3.5" />
+                          <span>{tip}</span>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                ))}
-              </div>
-
-              {/* Shared Artifacts Section - matches agent's Saved Artifacts */}
-              {sharedArtifacts && sharedArtifacts.length > 0 && (
-                <div className="mt-12 pt-8 border-t border-border/20">
-                  <div className="flex items-center gap-2 mb-4">
-                    <FolderOpen className="h-4 w-4 text-muted-foreground" />
-                    <h3 className="text-sm font-medium text-muted-foreground">Shared by Your Agent</h3>
+                </>
+              ) : (
+                <>
+                  {/* No artifacts yet - show stage guidance as main content */}
+                  <div className="flex items-center gap-3 mb-10">
+                    <h2 className="text-2xl md:text-3xl font-medium text-foreground">
+                      {stageGuidance.title}
+                    </h2>
                   </div>
-                  <div className="space-y-0">
-                    {sharedArtifacts.map((artifact, idx) => (
+
+                  <p className="text-lg text-foreground/70 mb-8 max-w-2xl">
+                    {stageGuidance.description}
+                  </p>
+
+                  <div className="space-y-0 mb-12">
+                    {stageGuidance.tips.map((tip, idx) => (
                       <div
-                        key={artifact.id}
+                        key={idx}
                         className={cn(
                           "flex items-center justify-between py-4",
-                          idx < sharedArtifacts.length - 1 && "border-b border-border/10"
+                          idx < stageGuidance.tips.length - 1 && "border-b border-border/10"
                         )}
                       >
                         <div className="flex items-center gap-3">
-                          <FileText className="h-4 w-4 text-muted-foreground/40" />
-                          <span className="text-lg text-foreground/70">{artifact.title}</span>
+                          <CheckCircle className="h-4 w-4 text-muted-foreground/40" />
+                          <span className="text-lg text-foreground/70">{tip}</span>
                         </div>
-                        <button
-                          onClick={() => {/* TODO: Open artifact viewer */}}
-                          className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 hover:underline transition-colors cursor-pointer"
-                        >
-                          <Eye className="h-3.5 w-3.5" />
-                          View →
-                        </button>
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
 
-              {/* Empty state for artifacts */}
-              {(!sharedArtifacts || sharedArtifacts.length === 0) && !artifactsLoading && (
-                <div className="mt-12 pt-8 border-t border-border/20">
-                  <div className="flex items-center gap-2 mb-4">
-                    <FolderOpen className="h-4 w-4 text-muted-foreground" />
-                    <h3 className="text-sm font-medium text-muted-foreground">Shared by Your Agent</h3>
+                  {/* Empty state message */}
+                  <div className="mt-12 pt-8 border-t border-border/20">
+                    <p className="text-sm text-muted-foreground/60">
+                      📄 Documents and guides will appear here when your agent shares them with you.
+                    </p>
                   </div>
-                  <p className="text-sm text-muted-foreground/60">
-                    Documents and guides will appear here when your agent shares them with you.
-                  </p>
-                </div>
+                </>
               )}
             </div>
           )}
