@@ -250,9 +250,9 @@ export function ArtifactViewerDialog({
             <div className="flex-1 flex flex-col items-center justify-center gap-4 py-12">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <div className="text-center">
-                <h3 className="font-semibold text-lg">Generating buyer-friendly version...</h3>
+                <h3 className="font-semibold text-lg">Generating preview...</h3>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Removing internal notes and agent-only content
+                  Creating buyer-friendly version (~5-10 seconds)
                 </p>
               </div>
             </div>

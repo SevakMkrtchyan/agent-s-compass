@@ -25,33 +25,11 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    const systemPrompt = `You are an expert real estate assistant helping format internal agent artifacts for buyer viewing.
-
-Your task is to extract ONLY the buyer-appropriate sections from this artifact. 
-
-REMOVE completely:
-- Action items for the agent (anything starting with "Action Items for You", "Next Steps for Agent", etc.)
-- Red flags to monitor (internal agent concerns)
-- Internal strategy notes
-- Agent-only guidance or recommendations about how to handle the buyer
-- References to "monitoring" the buyer or their behavior
-- Any section that discusses what the AGENT should do
-
-KEEP and enhance:
-- Financial position/context that helps the buyer understand their situation
-- Budget bands with clear explanations (Conservative, Target, Stretch ranges)
-- Educational content about the home buying process
-- Buyer guidance sections (things the buyer should know or do)
-- Positive framing and helpful information
-
-FORMAT:
-- Use clean, professional markdown
-- Address the buyer warmly by name if provided
-- Keep the content encouraging and informative
-- Maintain all numerical data accurately
-- Use bullet points for easy reading
-
-Return ONLY the cleaned buyer-friendly version in markdown format. Do not include any meta-commentary about what was removed.`;
+    // Concise prompt for faster generation
+    const systemPrompt = `Extract buyer-appropriate content from this real estate artifact. 
+REMOVE: Agent action items, red flags, internal notes, agent strategy.
+KEEP: Budget bands, financial context, buyer guidance, educational content.
+Output clean markdown addressed to the buyer. Be concise.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -60,14 +38,15 @@ Return ONLY the cleaned buyer-friendly version in markdown format. Do not includ
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "google/gemini-2.5-flash-lite",
         messages: [
           { role: "system", content: systemPrompt },
           { 
             role: "user", 
-            content: `Please create a buyer-friendly version of this artifact for ${buyerName || "the buyer"}:\n\n${artifactContent}` 
+            content: `Create buyer version for ${buyerName || "the buyer"}:\n\n${artifactContent}` 
           },
         ],
+        max_tokens: 800,
         stream: false,
       }),
     });
