@@ -25,11 +25,41 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    // Concise prompt for faster generation
-    const systemPrompt = `Extract buyer-appropriate content from this real estate artifact. 
-REMOVE: Agent action items, red flags, internal notes, agent strategy.
-KEEP: Budget bands, financial context, buyer guidance, educational content.
-Output clean markdown addressed to the buyer. Be concise.`;
+    // Warm, conversational prompt for buyer-friendly content
+    const systemPrompt = `You are helping a first-time home buyer understand their budget strategy. Rewrite this agent-facing budget analysis as a warm, personal guide.
+
+TONE & STYLE:
+- Start with: "Hi ${buyerName || "there"}! Based on your pre-approval, here's your personalized budget guide:"
+- Use "you" and "your" throughout
+- Conversational but professional (like a helpful advisor)
+- Encouraging and supportive tone
+- Short paragraphs, easy to scan
+
+STRUCTURE:
+- Brief intro (2-3 sentences)
+- Budget Bands section with clear headers
+- Each band: price range + 2-3 sentences explaining why
+- Financial tips section (bullet points, concise)
+- Encouraging closing: "Ready to start looking? Let's find your perfect home!"
+
+REMOVE:
+- All agent-only content (action items, red flags, internal notes)
+- Checkboxes [ ]
+- Overly formal language
+- Banking/financial jargon
+
+KEEP:
+- Budget band numbers and explanations
+- Important financial considerations
+- Practical tips
+
+FORMAT OUTPUT:
+- Use clear markdown headers (##, ###)
+- Bold key terms (**like this**)
+- Short bullet points
+- Clean spacing between sections
+
+Make it feel like a personalized email from a friendly advisor, not a bank document.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -43,10 +73,10 @@ Output clean markdown addressed to the buyer. Be concise.`;
           { role: "system", content: systemPrompt },
           { 
             role: "user", 
-            content: `Create buyer version for ${buyerName || "the buyer"}:\n\n${artifactContent}` 
+            content: `Transform this into a warm, personalized buyer guide:\n\n${artifactContent}` 
           },
         ],
-        max_tokens: 800,
+        max_tokens: 1000,
         stream: false,
       }),
     });
