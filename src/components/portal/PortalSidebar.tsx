@@ -1,5 +1,7 @@
-import { Home, Sparkles } from "lucide-react";
+import { Home, Sparkles, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { whiteLabelConfig } from "@/config/whiteLabel";
+import { Separator } from "@/components/ui/separator";
 
 interface PortalSidebarProps {
   collapsed: boolean;
@@ -7,70 +9,120 @@ interface PortalSidebarProps {
 }
 
 export function PortalSidebar({ collapsed, buyerName }: PortalSidebarProps) {
+  // Get buyer initials
+  const buyerInitials = buyerName
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
   return (
     <aside
       className={cn(
-        "fixed left-0 top-0 z-40 h-screen bg-card border-r flex flex-col transition-all duration-200",
+        "fixed left-0 top-0 h-screen bg-[#f9fafb] text-foreground flex flex-col transition-all duration-200 z-50 border-r border-border/30",
         collapsed ? "w-[58px]" : "w-[240px]"
       )}
     >
-      {/* Logo Section */}
-      <div className="h-14 flex items-center gap-3 px-4 border-b">
-        <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
-          <Sparkles className="h-4 w-4 text-primary-foreground" />
+      {/* Logo Header - matches agent sidebar exactly */}
+      <div className={cn(
+        "flex items-center h-14 border-b border-border/30",
+        collapsed ? "justify-center px-2" : "px-4 gap-3"
+      )}>
+        <div className="w-8 h-8 rounded-lg bg-foreground/10 flex items-center justify-center shrink-0">
+          <span className="text-sm font-semibold text-foreground/70">
+            {whiteLabelConfig.brokerage.shortName}
+          </span>
         </div>
         {!collapsed && (
-          <span className="font-semibold text-foreground">Home Buyer Portal</span>
+          <span className="text-sm font-medium text-foreground truncate">
+            {whiteLabelConfig.brokerage.name}
+          </span>
         )}
       </div>
 
-      {/* Buyer Profile Section */}
-      <div className={cn(
-        "px-3 py-4 border-b",
-        collapsed && "px-2"
-      )}>
-        <div className={cn(
-          "flex items-center gap-3",
-          collapsed && "justify-center"
-        )}>
-          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-            <span className="text-sm font-medium text-primary">
-              {buyerName.charAt(0).toUpperCase()}
-            </span>
+      {/* Divider */}
+      <div className="px-3 py-3">
+        <Separator className="bg-border/50" />
+      </div>
+
+      {/* Navigation - Single workspace item */}
+      <nav className="flex-1 overflow-y-auto">
+        <ul className="space-y-1 px-2">
+          {/* Current Workspace - Active */}
+          <li>
+            <div
+              className={cn(
+                "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150",
+                "bg-muted/50 text-foreground",
+                collapsed && "justify-center px-2"
+              )}
+            >
+              <Sparkles className="h-4 w-4 shrink-0" />
+              {!collapsed && <span>Workspace</span>}
+            </div>
+          </li>
+        </ul>
+
+        {/* Recent section label - matches agent sidebar */}
+        {!collapsed && (
+          <div className="px-2 mt-4">
+            <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">
+              <Clock className="h-3 w-3" />
+              Your Journey
+            </div>
+            
+            {/* Current buyer card - matches agent workspace item style */}
+            <div className="mt-1">
+              <div
+                className={cn(
+                  "w-full text-left p-2.5 rounded-lg transition-all",
+                  "bg-muted/70 text-foreground"
+                )}
+              >
+                <div className="flex items-start gap-2.5">
+                  <div className="h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0 text-xs font-medium bg-foreground/10 text-foreground">
+                    {buyerInitials}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-medium text-sm truncate">{buyerName}</span>
+                      <span className="ml-auto text-xs text-muted-foreground">✓</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="text-xs text-muted-foreground truncate">
+                        Home Buyer
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-          {!collapsed && (
+        )}
+      </nav>
+
+      {/* Footer - Buyer profile section (matches agent footer) */}
+      <div className={cn(
+        "border-t border-border/30 p-3",
+        collapsed ? "flex justify-center" : ""
+      )}>
+        {collapsed ? (
+          <div className="w-8 h-8 rounded-full bg-foreground/10 flex items-center justify-center">
+            <span className="text-xs font-medium text-foreground/70">{buyerInitials}</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3 px-2 py-1.5 rounded-lg">
+            <div className="w-8 h-8 rounded-full bg-foreground/10 flex items-center justify-center shrink-0">
+              <span className="text-xs font-medium text-foreground/70">{buyerInitials}</span>
+            </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-foreground truncate">{buyerName}</p>
-              <p className="text-xs text-muted-foreground">Home Buyer</p>
+              <p className="text-xs text-muted-foreground truncate">Home Buyer</p>
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* Navigation placeholder - keeping it minimal for buyers */}
-      <div className="flex-1 px-3 py-4">
-        {!collapsed && (
-          <div className="text-xs text-muted-foreground uppercase tracking-wider mb-3 px-2">
-            Your Journey
           </div>
         )}
-        <div className={cn(
-          "flex items-center gap-3 px-3 py-2 rounded-lg bg-secondary/50 text-foreground",
-          collapsed && "justify-center px-2"
-        )}>
-          <Home className="h-4 w-4 flex-shrink-0" />
-          {!collapsed && <span className="text-sm">Workspace</span>}
-        </div>
       </div>
-
-      {/* Footer */}
-      {!collapsed && (
-        <div className="p-4 border-t">
-          <p className="text-xs text-muted-foreground text-center">
-            Powered by AgentGPT
-          </p>
-        </div>
-      )}
     </aside>
   );
 }
