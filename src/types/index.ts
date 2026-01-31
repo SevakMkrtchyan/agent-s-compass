@@ -23,6 +23,13 @@ export interface Buyer {
   must_haves?: string | null;
   nice_to_haves?: string | null;
   agent_notes?: string | null;
+  // Budget bands from AI artifact
+  conservative_min?: number | null;
+  conservative_max?: number | null;
+  target_min?: number | null;
+  target_max?: number | null;
+  stretch_min?: number | null;
+  stretch_max?: number | null;
 }
 
 export interface Property {

@@ -26,6 +26,13 @@ export interface Buyer {
   agent_id: string;
   created_at: string;
   updated_at: string;
+  // Budget bands from AI artifact
+  conservative_min: number | null;
+  conservative_max: number | null;
+  target_min: number | null;
+  target_max: number | null;
+  stretch_min: number | null;
+  stretch_max: number | null;
 }
 
 export interface CreateBuyerInput {
@@ -69,6 +76,13 @@ export interface UpdateBuyerInput {
   agent_notes?: string | null;
   portal_link?: string | null;
   current_stage?: string | null;
+  // Budget bands from AI artifact
+  conservative_min?: number | null;
+  conservative_max?: number | null;
+  target_min?: number | null;
+  target_max?: number | null;
+  stretch_min?: number | null;
+  stretch_max?: number | null;
 }
 
 // Placeholder agent ID - in a real app this would come from auth

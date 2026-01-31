@@ -299,6 +299,8 @@ export type Database = {
           budget_max: number | null
           budget_min: number | null
           buyer_type: string | null
+          conservative_max: number | null
+          conservative_min: number | null
           created_at: string
           current_stage: string | null
           email: string | null
@@ -315,6 +317,10 @@ export type Database = {
           pre_approval_status: string | null
           preferred_cities: string[] | null
           property_types: string[] | null
+          stretch_max: number | null
+          stretch_min: number | null
+          target_max: number | null
+          target_min: number | null
           updated_at: string
         }
         Insert: {
@@ -324,6 +330,8 @@ export type Database = {
           budget_max?: number | null
           budget_min?: number | null
           buyer_type?: string | null
+          conservative_max?: number | null
+          conservative_min?: number | null
           created_at?: string
           current_stage?: string | null
           email?: string | null
@@ -340,6 +348,10 @@ export type Database = {
           pre_approval_status?: string | null
           preferred_cities?: string[] | null
           property_types?: string[] | null
+          stretch_max?: number | null
+          stretch_min?: number | null
+          target_max?: number | null
+          target_min?: number | null
           updated_at?: string
         }
         Update: {
@@ -349,6 +361,8 @@ export type Database = {
           budget_max?: number | null
           budget_min?: number | null
           buyer_type?: string | null
+          conservative_max?: number | null
+          conservative_min?: number | null
           created_at?: string
           current_stage?: string | null
           email?: string | null
@@ -365,6 +379,10 @@ export type Database = {
           pre_approval_status?: string | null
           preferred_cities?: string[] | null
           property_types?: string[] | null
+          stretch_max?: number | null
+          stretch_min?: number | null
+          target_max?: number | null
+          target_min?: number | null
           updated_at?: string
         }
         Relationships: []

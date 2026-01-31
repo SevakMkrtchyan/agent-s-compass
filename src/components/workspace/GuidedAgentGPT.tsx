@@ -34,6 +34,7 @@ import { useCreateTaskFromAction, useTasksBySourceActions } from "@/hooks/useTas
 import { useCreateShowingTasks } from "@/hooks/useShowingTasks";
 import { StreamingText, ThinkingDots } from "./StreamingText";
 import { InlineBuyerUpdate, detectMissingField, type MissingField } from "./InlineBuyerUpdate";
+import { parseBudgetBands, isBudgetBandsArtifact } from "@/lib/parseBudgetBands";
 import type { StageGroup } from "@/types/conversation";
 import type { Stage, Buyer } from "@/types";
 import { STAGES } from "@/types";
@@ -684,6 +685,82 @@ export function GuidedAgentGPT({
         content: message.content,
         visibility,
       });
+
+      // Check if this is a budget bands artifact and extract/save the data
+      if (isBudgetBandsArtifact(message.content)) {
+        const budgetBands = parseBudgetBands(message.content);
+        
+        if (budgetBands) {
+          // Save budget bands to buyer profile
+          const { error: updateError } = await supabase
+            .from("buyers")
+            .update({
+              conservative_min: budgetBands.conservative_min,
+              conservative_max: budgetBands.conservative_max,
+              target_min: budgetBands.target_min,
+              target_max: budgetBands.target_max,
+              stretch_min: budgetBands.stretch_min,
+              stretch_max: budgetBands.stretch_max,
+            })
+            .eq("id", buyer.id);
+
+          if (!updateError) {
+            toast({
+              title: "Budget bands saved to buyer profile",
+              description: "The extracted budget bands are now part of the buyer's profile.",
+            });
+            
+            // Notify parent to refresh buyer data
+            if (onBuyerUpdated) {
+              const { data: freshBuyer } = await supabase
+                .from("buyers")
+                .select("*")
+                .eq("id", buyer.id)
+                .single();
+              
+              if (freshBuyer) {
+                const stageMap: Record<string, 0 | 1 | 2 | 3 | 4 | 5> = {
+                  "Readiness & Expectations": 0,
+                  "Home Search": 1,
+                  "Offer Strategy": 2,
+                  "Under Contract": 3,
+                  "Closing Preparation": 4,
+                  "Closing & Post-Close": 5,
+                };
+                
+                onBuyerUpdated({
+                  id: freshBuyer.id,
+                  name: freshBuyer.name,
+                  email: freshBuyer.email || "",
+                  phone: freshBuyer.phone || undefined,
+                  currentStage: stageMap[freshBuyer.current_stage || "Home Search"] ?? 1,
+                  createdAt: new Date(freshBuyer.created_at),
+                  lastActivity: new Date(freshBuyer.updated_at),
+                  financingConfirmed: freshBuyer.pre_approval_status === "Approved",
+                  buyerType: freshBuyer.buyer_type as Buyer["buyerType"],
+                  pre_approval_status: freshBuyer.pre_approval_status,
+                  pre_approval_amount: freshBuyer.pre_approval_amount,
+                  budget_min: freshBuyer.budget_min,
+                  budget_max: freshBuyer.budget_max,
+                  preferred_cities: freshBuyer.preferred_cities,
+                  property_types: freshBuyer.property_types,
+                  min_beds: freshBuyer.min_beds,
+                  min_baths: freshBuyer.min_baths,
+                  must_haves: freshBuyer.must_haves,
+                  nice_to_haves: freshBuyer.nice_to_haves,
+                  agent_notes: freshBuyer.agent_notes,
+                  conservative_min: freshBuyer.conservative_min,
+                  conservative_max: freshBuyer.conservative_max,
+                  target_min: freshBuyer.target_min,
+                  target_max: freshBuyer.target_max,
+                  stretch_min: freshBuyer.stretch_min,
+                  stretch_max: freshBuyer.stretch_max,
+                });
+              }
+            }
+          }
+        }
+      }
 
       setMessages(prev =>
         prev.map(msg =>
