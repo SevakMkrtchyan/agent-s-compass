@@ -176,23 +176,19 @@ export function ArtifactPreviewMode({
       {/* Content Area with Tabs - fills most of modal */}
       <div className="flex-1 mt-4 flex flex-col min-h-0">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
-          <TabsList className="flex-shrink-0 w-full grid grid-cols-2">
-            <TabsTrigger value="buyer" className="gap-2">
-              <Eye className="h-4 w-4" />
-              Buyer Version
-            </TabsTrigger>
-            <TabsTrigger value="full" className="gap-2">
-              <FileText className="h-4 w-4" />
-              Full Artifact
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="buyer" className="flex-1 mt-4 overflow-hidden flex flex-col" style={{ minHeight: 0 }}>
-            <div className="flex items-center justify-between mb-2 flex-shrink-0">
-              <Badge variant="default" className="gap-1">
-                <Eye className="h-3 w-3" />
-                What {buyerName} will see
-              </Badge>
+          <div className="flex-shrink-0 flex items-center justify-between">
+            <TabsList className="grid grid-cols-2 w-auto">
+              <TabsTrigger value="buyer" className="gap-2 px-6">
+                <Eye className="h-4 w-4" />
+                Buyer Version
+              </TabsTrigger>
+              <TabsTrigger value="full" className="gap-2 px-6">
+                <FileText className="h-4 w-4" />
+                Full Artifact
+              </TabsTrigger>
+            </TabsList>
+            
+            {activeTab === "buyer" && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -202,26 +198,18 @@ export function ArtifactPreviewMode({
                 <Edit2 className="h-4 w-4" />
                 Edit
               </Button>
-            </div>
-            
-            <div className="flex-1 rounded-lg border bg-muted/30 p-4 overflow-y-auto overflow-x-hidden" style={{ minHeight: 0 }}>
-              <div className="prose prose-sm max-w-none dark:prose-invert leading-relaxed space-y-1">
-                {renderMarkdownContent(editedContent)}
-              </div>
+            )}
+          </div>
+
+          <TabsContent value="buyer" className="flex-1 mt-4 overflow-y-auto overflow-x-hidden" style={{ minHeight: 0 }}>
+            <div className="prose prose-sm max-w-none dark:prose-invert leading-relaxed space-y-1 pr-2">
+              {renderMarkdownContent(editedContent)}
             </div>
           </TabsContent>
 
-          <TabsContent value="full" className="flex-1 mt-4 overflow-hidden flex flex-col" style={{ minHeight: 0 }}>
-            <div className="mb-2 flex-shrink-0">
-              <Badge variant="secondary" className="gap-1">
-                <FileText className="h-3 w-3" />
-                Original (internal only)
-              </Badge>
-            </div>
-            <div className="flex-1 rounded-lg border bg-muted/30 p-4 overflow-y-auto overflow-x-hidden" style={{ minHeight: 0 }}>
-              <div className="prose prose-sm max-w-none dark:prose-invert leading-relaxed space-y-1 opacity-80">
-                {renderMarkdownContent(artifact.content)}
-              </div>
+          <TabsContent value="full" className="flex-1 mt-4 overflow-y-auto overflow-x-hidden" style={{ minHeight: 0 }}>
+            <div className="prose prose-sm max-w-none dark:prose-invert leading-relaxed space-y-1 opacity-80 pr-2">
+              {renderMarkdownContent(artifact.content)}
             </div>
           </TabsContent>
         </Tabs>
