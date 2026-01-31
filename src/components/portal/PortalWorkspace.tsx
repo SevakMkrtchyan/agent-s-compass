@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Loader2, Sparkles, FileText, ChevronDown, ChevronUp, User } from "lucide-react";
+import { Send, Loader2, Sparkles, FileText, ChevronDown, ChevronUp, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { usePortalMessages } from "@/hooks/usePortalMessages";
@@ -13,58 +13,146 @@ interface PortalWorkspaceProps {
   buyer: PortalBuyer;
 }
 
-// Thread message component - matches agent workspace card styling
-interface ThreadMessageProps {
-  sender: "agent" | "ai" | "user";
-  senderName?: string;
-  timestamp: Date | string;
-  children: React.ReactNode;
-  className?: string;
+// Stage guidance with conversational content
+const STAGE_GUIDANCE: Record<string, { 
+  title: string; 
+  greeting: string;
+  description: string;
+  nextSteps: string[];
+  whatsNext: string;
+}> = {
+  "Readiness & Expectations": {
+    title: "Getting Started",
+    greeting: "Welcome to your home buying journey! 🏡",
+    description: "We're going to make this process as smooth as possible. First, let's make sure you're set up for success.",
+    nextSteps: [
+      "Review your finances and timeline",
+      "Think about what matters most in your new home",
+      "Get ready to discuss your goals with your agent",
+    ],
+    whatsNext: "Once we understand your situation, we'll move on to securing your financing and buying power.",
+  },
+  "Financing & Capability": {
+    title: "Understanding Your Buying Power",
+    greeting: "Let's figure out exactly what you can afford! 💪",
+    description: "This is one of the most important steps. Understanding your budget will help us find homes that fit perfectly within your range.",
+    nextSteps: [
+      "Review your personalized budget guide below",
+      "Understand your Conservative, Target, and Stretch ranges",
+      "Get pre-approved with a lender if you haven't already",
+    ],
+    whatsNext: "With your budget locked in, we'll start searching for properties that match your criteria.",
+  },
+  "Market Intelligence & Search Setup": {
+    title: "Setting Up Your Search",
+    greeting: "Time to define what you're looking for! 🔍",
+    description: "We're setting up your personalized property search based on your preferences and budget.",
+    nextSteps: [
+      "Confirm your must-haves and nice-to-haves",
+      "Review the neighborhoods we've identified",
+      "Set up alerts for new listings",
+    ],
+    whatsNext: "Once your search is dialed in, we'll start touring properties that match your criteria.",
+  },
+  "Touring, Filtering & Convergence": {
+    title: "Finding Your Home",
+    greeting: "The fun part begins - let's go see some homes! 🏠",
+    description: "We'll tour properties together and narrow down to your favorites. Take notes and trust your instincts!",
+    nextSteps: [
+      "Review scheduled showings in the Properties tab",
+      "Take photos and notes at each property",
+      "Share your thoughts after each tour",
+    ],
+    whatsNext: "When you find 'the one', we'll move quickly to craft a winning offer strategy.",
+  },
+  "Offer Strategy & Submission": {
+    title: "Making Your Move",
+    greeting: "You found a home you love! Let's make it yours. 📝",
+    description: "We're crafting a competitive offer strategy to give you the best chance of success.",
+    nextSteps: [
+      "Review the offer strategy we've prepared",
+      "Understand the terms and contingencies",
+      "Be ready to move fast if needed",
+    ],
+    whatsNext: "Once we submit your offer, we'll negotiate to get you the best possible deal.",
+  },
+  "Negotiation & Contract": {
+    title: "Negotiating Your Deal",
+    greeting: "Your offer is in - now we negotiate! 🤝",
+    description: "We're working to get you the best possible terms. Stay patient and trust the process.",
+    nextSteps: [
+      "Review any counter-offers carefully",
+      "Know your priorities and limits",
+      "Stay responsive to move quickly",
+    ],
+    whatsNext: "Once we reach an agreement, we'll move into due diligence and inspections.",
+  },
+  "Due Diligence & Inspections": {
+    title: "Verifying Everything",
+    greeting: "Time to look under the hood! 🔧",
+    description: "We're conducting thorough inspections to make sure the property meets your expectations.",
+    nextSteps: [
+      "Attend the home inspection if possible",
+      "Review inspection reports carefully",
+      "Discuss any concerns with your agent",
+    ],
+    whatsNext: "After inspections clear, we'll finalize your loan and prepare for closing.",
+  },
+  "Appraisal & Lending": {
+    title: "Finalizing Your Loan",
+    greeting: "Almost there - the numbers are coming together! 📊",
+    description: "Your lender is finalizing your mortgage. Respond quickly to any requests to keep things moving.",
+    nextSteps: [
+      "Respond promptly to lender requests",
+      "Avoid major purchases or credit changes",
+      "Review your final loan terms",
+    ],
+    whatsNext: "Once your loan is approved, we'll do a final walkthrough and prepare for closing day!",
+  },
+  "Final Walkthrough & Preparation": {
+    title: "The Home Stretch",
+    greeting: "We're in the final stretch! 🎯",
+    description: "We're doing final preparations and making sure everything is perfect for closing day.",
+    nextSteps: [
+      "Schedule your final walkthrough",
+      "Prepare your closing funds",
+      "Set up utilities and moving plans",
+    ],
+    whatsNext: "Next stop: closing day! You're about to become a homeowner.",
+  },
+  "Closing & Post-Close": {
+    title: "Congratulations, Homeowner!",
+    greeting: "You did it! 🎉🏠🔑",
+    description: "Welcome to homeownership! Here's what to know as you settle into your new home.",
+    nextSteps: [
+      "Keep your closing documents safe",
+      "Change your locks and update your address",
+      "Enjoy your new home!",
+    ],
+    whatsNext: "You're all set! Your agent is always here if you need anything in the future.",
+  },
+};
+
+// Helper to get stage number
+function getStageNumber(stageName: string | null | undefined): number {
+  const stageOrder = [
+    "Readiness & Expectations",
+    "Financing & Capability", 
+    "Market Intelligence & Search Setup",
+    "Touring, Filtering & Convergence",
+    "Offer Strategy & Submission",
+    "Negotiation & Contract",
+    "Due Diligence & Inspections",
+    "Appraisal & Lending",
+    "Final Walkthrough & Preparation",
+    "Closing & Post-Close",
+  ];
+  const index = stageOrder.indexOf(stageName || "");
+  return index >= 0 ? index + 1 : 1;
 }
 
-function ThreadMessage({ sender, senderName, timestamp, children, className }: ThreadMessageProps) {
-  const formattedTime = typeof timestamp === "string" 
-    ? format(new Date(timestamp), "MMM d, h:mm a")
-    : format(timestamp, "MMM d, h:mm a");
-
-  const isUser = sender === "user";
-
-  return (
-    <div className={cn("group", className)}>
-      {/* Header with sender info */}
-      <div className="flex items-center gap-2 mb-2">
-        <div className={cn(
-          "h-7 w-7 rounded-full flex items-center justify-center text-white text-xs font-medium",
-          sender === "agent" ? "bg-primary" : sender === "ai" ? "bg-violet-500" : "bg-muted-foreground"
-        )}>
-          {sender === "agent" ? "A" : sender === "ai" ? <Sparkles className="h-3.5 w-3.5" /> : <User className="h-3.5 w-3.5" />}
-        </div>
-        <span className="text-sm font-medium text-foreground">
-          {senderName || (sender === "agent" ? "Your Agent" : sender === "ai" ? "AgentGPT" : "You")}
-        </span>
-        <span className="text-xs text-muted-foreground">
-          {formattedTime}
-        </span>
-      </div>
-
-      {/* Message content - card styling matching agent workspace */}
-      <div className={cn(
-        "ml-9",
-        isUser && "max-w-[85%]"
-      )}>
-        <div className={cn(
-          "rounded-lg border border-border/30 bg-card p-4",
-          isUser && "bg-muted/50"
-        )}>
-          {children}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Shared artifact in thread - matches agent workspace saved artifacts styling
-interface ArtifactMessageProps {
+// Shared artifact card - matches agent workspace styling
+interface ArtifactSectionProps {
   artifact: {
     id: string;
     title: string;
@@ -73,114 +161,112 @@ interface ArtifactMessageProps {
     shared_at: string | null;
     created_at: string;
   };
+  intro?: string;
 }
 
-function ArtifactMessage({ artifact }: ArtifactMessageProps) {
+function ArtifactSection({ artifact, intro }: ArtifactSectionProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const sharedDate = artifact.shared_at || artifact.created_at;
   
   // Check if content is long
-  const isLongContent = artifact.content.length > 800 || artifact.content.split('\n').length > 15;
+  const isLongContent = artifact.content.length > 1200 || artifact.content.split('\n').length > 20;
 
   return (
-    <div className="group">
-      {/* Agent header */}
-      <div className="flex items-center gap-2 mb-2">
-        <div className="h-7 w-7 rounded-full bg-primary flex items-center justify-center text-white text-xs font-medium">
-          A
+    <div className="space-y-4">
+      {/* Intro message card */}
+      {intro && (
+        <div className="bg-card border border-border/30 rounded-lg p-4">
+          <p className="text-foreground/80 text-sm leading-relaxed">{intro}</p>
+          <p className="text-xs text-muted-foreground mt-2">
+            Shared {format(new Date(sharedDate), "MMMM d, yyyy")}
+          </p>
         </div>
-        <span className="text-sm font-medium text-foreground">Your Agent</span>
-        <span className="text-xs text-muted-foreground">
-          {format(new Date(sharedDate), "MMM d, h:mm a")}
-        </span>
-      </div>
+      )}
 
-      {/* Message intro */}
-      <div className="ml-9 mb-3">
-        <p className="text-sm text-foreground/80">
-          📄 I've shared a document with you:
-        </p>
-      </div>
-
-      {/* Artifact card - same styling as agent workspace saved artifacts */}
-      <div className="ml-9">
-        <div className="rounded-lg border border-border/30 bg-card overflow-hidden">
-          {/* Artifact header */}
-          <div className="flex items-center justify-between px-4 py-3 bg-muted/30 border-b border-border/20">
-            <div className="flex items-center gap-2">
+      {/* Artifact content card - same styling as agent workspace */}
+      <div className="bg-card border border-border/30 rounded-lg overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 bg-muted/30 border-b border-border/20">
+          <div className="flex items-center gap-3">
+            <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
               <FileText className="h-4 w-4 text-primary" />
-              <h3 className="font-medium text-foreground">{artifact.title}</h3>
             </div>
-            {isLongContent && (
-              <button
-                onClick={() => setIsExpanded(!isExpanded)}
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
-                {isExpanded ? (
-                  <>
-                    <ChevronUp className="h-3.5 w-3.5" />
-                    Collapse
-                  </>
-                ) : (
-                  <>
-                    <ChevronDown className="h-3.5 w-3.5" />
-                    Expand
-                  </>
-                )}
-              </button>
-            )}
+            <h3 className="font-medium text-foreground">{artifact.title}</h3>
           </div>
-
-          {/* Artifact content */}
-          <div 
-            className={cn(
-              "p-4 md:p-5",
-              !isExpanded && isLongContent && "max-h-[250px] overflow-hidden relative"
-            )}
-          >
-            <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-2 prose-p:leading-relaxed prose-ul:my-2 prose-li:my-0.5 prose-headings:my-3 prose-headings:font-medium prose-h2:text-base prose-h3:text-sm">
-              <ReactMarkdown>{artifact.content}</ReactMarkdown>
-            </div>
-            
-            {/* Fade overlay when collapsed */}
-            {!isExpanded && isLongContent && (
-              <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-card to-transparent" />
-            )}
-          </div>
-
-          {/* Show more button when collapsed */}
-          {!isExpanded && isLongContent && (
-            <div className="px-4 pb-3">
-              <button
-                onClick={() => setIsExpanded(true)}
-                className="text-xs text-primary hover:text-primary/80 transition-colors"
-              >
-                Show full document →
-              </button>
-            </div>
+          {isLongContent && (
+            <button
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-muted"
+            >
+              {isExpanded ? (
+                <>
+                  <ChevronUp className="h-3.5 w-3.5" />
+                  Collapse
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="h-3.5 w-3.5" />
+                  Expand
+                </>
+              )}
+            </button>
           )}
         </div>
+
+        {/* Content */}
+        <div 
+          className={cn(
+            "p-5 md:p-6",
+            !isExpanded && isLongContent && "max-h-[300px] overflow-hidden relative"
+          )}
+        >
+          <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-2.5 prose-p:leading-relaxed prose-ul:my-2.5 prose-li:my-1 prose-headings:my-3 prose-headings:font-medium prose-h2:text-base prose-h3:text-sm prose-strong:font-semibold">
+            <ReactMarkdown>{artifact.content}</ReactMarkdown>
+          </div>
+          
+          {/* Fade overlay when collapsed */}
+          {!isExpanded && isLongContent && (
+            <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-card to-transparent" />
+          )}
+        </div>
+
+        {/* Show more button when collapsed */}
+        {!isExpanded && isLongContent && (
+          <div className="px-5 pb-4">
+            <button
+              onClick={() => setIsExpanded(true)}
+              className="text-sm text-primary hover:text-primary/80 transition-colors font-medium"
+            >
+              Show full document →
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-// Welcome message component
-function WelcomeMessage({ buyerName }: { buyerName: string }) {
-  const firstName = buyerName.split(" ")[0];
-  
+// Next steps list - matches agent workspace action items
+function NextStepsList({ steps }: { steps: string[] }) {
   return (
-    <ThreadMessage sender="ai" timestamp={new Date()}>
-      <div className="space-y-3">
-        <p className="text-foreground">
-          Hi {firstName}! 👋 Welcome to your home buying workspace.
-        </p>
-        <p className="text-foreground/80 text-sm">
-          This is where you'll see updates from your agent, important documents, 
-          and guidance throughout your journey. Ask me anything about the home buying process!
-        </p>
-      </div>
-    </ThreadMessage>
+    <div className="space-y-0">
+      {steps.map((step, idx) => (
+        <div
+          key={idx}
+          className={cn(
+            "flex items-center justify-between py-3.5",
+            idx < steps.length - 1 && "border-b border-border/10"
+          )}
+        >
+          <div className="flex items-center gap-3">
+            <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <span className="text-xs font-medium text-primary">{idx + 1}</span>
+            </div>
+            <span className="text-foreground/80">{step}</span>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -196,7 +282,8 @@ export function PortalWorkspace({ buyer }: PortalWorkspaceProps) {
 
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
-  const [streamingContent, setStreamingContent] = useState("");
+  const [showResponse, setShowResponse] = useState(false);
+  const [currentResponse, setCurrentResponse] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -209,7 +296,7 @@ export function PortalWorkspace({ buyer }: PortalWorkspaceProps) {
         .select("*")
         .eq("buyer_id", buyer.id)
         .eq("visibility", "shared")
-        .order("shared_at", { ascending: true }); // Chronological order for thread
+        .order("shared_at", { ascending: false });
       
       if (error) throw error;
       return data || [];
@@ -217,12 +304,15 @@ export function PortalWorkspace({ buyer }: PortalWorkspaceProps) {
     enabled: !!buyer.id,
   });
 
-  // Scroll to bottom when new content arrives
+  const stageGuidance = STAGE_GUIDANCE[buyer.current_stage || ""] || STAGE_GUIDANCE["Financing & Capability"];
+  const firstName = buyer.name.split(" ")[0];
+
+  // Scroll to bottom when response updates
   useEffect(() => {
-    if (scrollRef.current) {
+    if (showResponse && scrollRef.current) {
       scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
     }
-  }, [messages, streamingContent, sharedArtifacts]);
+  }, [currentResponse, showResponse]);
 
   // Auto-resize textarea
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -237,19 +327,16 @@ export function PortalWorkspace({ buyer }: PortalWorkspaceProps) {
     if (!trimmedInput || isStreaming) return;
 
     setInput("");
-    setStreamingContent("");
+    setShowResponse(true);
+    setCurrentResponse("");
     
-    // Reset textarea height
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
     
-    // Add user message
     await addMessage("user", trimmedInput);
-    
     setIsStreaming(true);
 
-    // Create placeholder for assistant response
     const tempAssistantId = `temp-assistant-${Date.now()}`;
     setMessages(prev => [...prev, {
       id: tempAssistantId,
@@ -291,13 +378,8 @@ export function PortalWorkspace({ buyer }: PortalWorkspaceProps) {
         }
       );
 
-      if (!response.ok) {
-        throw new Error("Failed to get response");
-      }
-
-      if (!response.body) {
-        throw new Error("No response body");
-      }
+      if (!response.ok) throw new Error("Failed to get response");
+      if (!response.body) throw new Error("No response body");
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -318,7 +400,7 @@ export function PortalWorkspace({ buyer }: PortalWorkspaceProps) {
               const parsed = JSON.parse(data);
               if (parsed.type === "content_block_delta" && parsed.delta?.text) {
                 accumulatedContent += parsed.delta.text;
-                setStreamingContent(accumulatedContent);
+                setCurrentResponse(accumulatedContent);
                 updateLastAssistantMessage(accumulatedContent);
               }
             } catch {
@@ -328,16 +410,14 @@ export function PortalWorkspace({ buyer }: PortalWorkspaceProps) {
         }
       }
 
-      // Save the complete assistant message to DB
       if (accumulatedContent) {
         await finalizeLastAssistantMessage(accumulatedContent);
       }
     } catch (error) {
       console.error("Chat error:", error);
-      updateLastAssistantMessage("Sorry, I'm having trouble connecting right now. Please try again in a moment.");
+      setCurrentResponse("Sorry, I'm having trouble connecting right now. Please try again in a moment.");
     } finally {
       setIsStreaming(false);
-      setStreamingContent("");
     }
   };
 
@@ -348,9 +428,14 @@ export function PortalWorkspace({ buyer }: PortalWorkspaceProps) {
     }
   };
 
+  const handleBackToWorkspace = () => {
+    setShowResponse(false);
+    setCurrentResponse("");
+  };
+
   if (isLoadingHistory || artifactsLoading) {
     return (
-      <div className="flex items-center justify-center h-full bg-background">
+      <div className="flex items-center justify-center h-full bg-[#f9fafb]">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           <p className="text-sm text-muted-foreground">Loading your workspace...</p>
@@ -359,105 +444,136 @@ export function PortalWorkspace({ buyer }: PortalWorkspaceProps) {
     );
   }
 
-  // Build thread items chronologically
-  const threadItems: Array<{
-    type: "welcome" | "artifact" | "user" | "assistant";
-    data: unknown;
-    timestamp: Date;
-  }> = [];
-
-  // Add welcome message first (use current time as fallback)
-  threadItems.push({
-    type: "welcome",
-    data: null,
-    timestamp: new Date(Date.now() - 86400000), // Show as "yesterday" to appear first
-  });
-
-  // Merge artifacts and messages chronologically
-  sharedArtifacts?.forEach(artifact => {
-    threadItems.push({
-      type: "artifact",
-      data: artifact,
-      timestamp: new Date(artifact.shared_at || artifact.created_at),
-    });
-  });
-
-  messages.forEach(msg => {
-    threadItems.push({
-      type: msg.role as "user" | "assistant",
-      data: msg,
-      timestamp: new Date(msg.created_at),
-    });
-  });
-
-  // Sort by timestamp
-  threadItems.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-
   return (
-    <div className="flex flex-col h-full w-full bg-background">
-      {/* Thread Content */}
+    <div className="flex flex-col h-full w-full bg-[#f9fafb]">
+      {/* Scrollable Content */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-          {threadItems.map((item, idx) => {
-            if (item.type === "welcome") {
-              return <WelcomeMessage key="welcome" buyerName={buyer.name} />;
-            }
+        <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 md:px-8 py-8 md:py-12">
+          
+          {/* Stage Context - matches agent workspace exactly */}
+          <p className="text-xs text-muted-foreground/50 mb-8">
+            Stage {getStageNumber(buyer.current_stage)}: {buyer.current_stage || "Getting Started"}
+          </p>
 
-            if (item.type === "artifact") {
-              const artifact = item.data as {
-                id: string;
-                title: string;
-                content: string;
-                artifact_type: string;
-                shared_at: string | null;
-                created_at: string;
-              };
-              return <ArtifactMessage key={artifact.id} artifact={artifact} />;
-            }
+          {/* Response View - when user asks a question */}
+          {showResponse ? (
+            <div className="mb-16">
+              {/* Back button */}
+              <button
+                onClick={handleBackToWorkspace}
+                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-8"
+              >
+                ← Back to workspace
+              </button>
 
-            if (item.type === "user") {
-              const msg = item.data as { id: string; content: string; created_at: string };
-              return (
-                <ThreadMessage key={msg.id} sender="user" timestamp={msg.created_at}>
-                  <p className="text-sm text-foreground whitespace-pre-wrap">{msg.content}</p>
-                </ThreadMessage>
-              );
-            }
+              {/* Response header */}
+              <div className="flex items-center gap-2 mb-4">
+                <div className="h-7 w-7 rounded-full bg-violet-500 flex items-center justify-center">
+                  <Sparkles className="h-3.5 w-3.5 text-white" />
+                </div>
+                <span className="text-sm font-medium text-foreground">AgentGPT</span>
+              </div>
 
-            if (item.type === "assistant") {
-              const msg = item.data as { id: string; content: string; created_at: string };
-              const isLastAndStreaming = idx === threadItems.length - 1 && isStreaming;
-              const displayContent = isLastAndStreaming ? streamingContent : msg.content;
+              {/* Response content card - matches agent workspace */}
+              <div className="bg-card border border-border/30 rounded-lg p-5 md:p-6">
+                {isStreaming && !currentResponse ? (
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <div className="flex gap-1">
+                      <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                      <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                      <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-2.5 prose-p:leading-relaxed prose-ul:my-2.5 prose-li:my-1">
+                    <ReactMarkdown>{currentResponse || "..."}</ReactMarkdown>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* Main Workspace View */
+            <div className="space-y-12">
               
-              if (!displayContent && !isLastAndStreaming) return null;
+              {/* Section 1: Agent Guidance */}
+              <section>
+                <h2 className="text-2xl md:text-3xl font-medium text-foreground mb-6">
+                  {stageGuidance.title}
+                </h2>
 
-              return (
-                <ThreadMessage key={msg.id} sender="ai" timestamp={msg.created_at}>
-                  {isLastAndStreaming && !displayContent ? (
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <div className="flex gap-1">
-                        <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                        <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                        <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-2 prose-p:leading-relaxed prose-ul:my-2 prose-li:my-0.5">
-                      <ReactMarkdown>{displayContent || "..."}</ReactMarkdown>
-                    </div>
-                  )}
-                </ThreadMessage>
-              );
-            }
+                {/* Greeting card */}
+                <div className="bg-card border border-border/30 rounded-lg p-5 mb-6">
+                  <p className="text-lg text-foreground mb-2">
+                    Hi {firstName}! {stageGuidance.greeting}
+                  </p>
+                  <p className="text-foreground/70">
+                    {stageGuidance.description}
+                  </p>
+                </div>
 
-            return null;
-          })}
+                {/* Next steps */}
+                <div className="bg-card border border-border/30 rounded-lg p-5">
+                  <h3 className="text-sm font-medium text-muted-foreground mb-4">Your Next Steps</h3>
+                  <NextStepsList steps={stageGuidance.nextSteps} />
+                </div>
+              </section>
+
+              {/* Section 2: Shared Documents from Agent */}
+              {sharedArtifacts && sharedArtifacts.length > 0 && (
+                <section>
+                  <h2 className="text-lg font-medium text-foreground mb-4 flex items-center gap-2">
+                    <FileText className="h-5 w-5 text-primary" />
+                    From Your Agent
+                  </h2>
+
+                  <div className="space-y-6">
+                    {sharedArtifacts.map((artifact, idx) => (
+                      <ArtifactSection 
+                        key={artifact.id}
+                        artifact={artifact}
+                        intro={idx === 0 ? `I've created this ${artifact.title.toLowerCase()} to help guide your home buying journey. Take a look and let me know if you have any questions!` : undefined}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Section 3: What's Next */}
+              <section>
+                <div className="bg-muted/30 border border-border/20 rounded-lg p-5">
+                  <div className="flex items-start gap-3">
+                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <ArrowRight className="h-4 w-4 text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="font-medium text-foreground mb-1">What's Next?</h3>
+                      <p className="text-foreground/70 text-sm">
+                        {stageGuidance.whatsNext}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* Empty state for no artifacts */}
+              {(!sharedArtifacts || sharedArtifacts.length === 0) && (
+                <section>
+                  <div className="bg-card border border-dashed border-border/40 rounded-lg p-6 text-center">
+                    <FileText className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
+                    <p className="text-sm text-muted-foreground">
+                      Documents and guides from your agent will appear here
+                    </p>
+                  </div>
+                </section>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
       {/* Chat Input - matches agent workspace styling */}
       <div className="border-t border-border bg-background p-4">
-        <div className="max-w-3xl mx-auto">
+        <div className="max-w-4xl mx-auto">
           <div className="relative flex items-end gap-2 bg-muted/50 rounded-lg border border-border p-2">
             <textarea
               ref={textareaRef}
