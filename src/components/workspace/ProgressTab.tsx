@@ -26,6 +26,7 @@ import { useStageCompletion } from "@/hooks/useStageCompletion";
 import { useBuyers } from "@/hooks/useBuyers";
 import { useToast } from "@/hooks/use-toast";
 import { AgentBudgetStrategyCard } from "./AgentBudgetStrategyCard";
+import { ArtifactViewerDialog } from "./ArtifactViewerDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -54,12 +55,20 @@ export const ProgressTab = forwardRef<HTMLDivElement, ProgressTabProps>(function
   onPrefillAgentGPT,
 }, ref) {
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(null);
+  const [artifactDialogOpen, setArtifactDialogOpen] = useState(false);
   const [showAllArtifacts, setShowAllArtifacts] = useState(false);
   const [stageJumpTarget, setStageJumpTarget] = useState<DbStage | null>(null);
   const { toast } = useToast();
 
   // Fetch artifacts from database
-  const { artifacts, isLoading: artifactsLoading } = useArtifacts(buyerId);
+  const { 
+    artifacts, 
+    isLoading: artifactsLoading, 
+    shareArtifact, 
+    deleteArtifact,
+    isSharing,
+    isDeleting 
+  } = useArtifacts(buyerId);
   
   // Fetch ALL stages from database ordered by stage_number
   const { data: allDbStages, isLoading: stagesLoading } = useStages();
@@ -208,6 +217,24 @@ export const ProgressTab = forwardRef<HTMLDivElement, ProgressTabProps>(function
 
   const handleArtifactClick = (artifact: Artifact) => {
     setSelectedArtifact(artifact);
+    setArtifactDialogOpen(true);
+  };
+
+  const handleShareArtifact = async (artifact: Artifact) => {
+    await shareArtifact(artifact.id);
+  };
+
+  const handleDeleteArtifact = async (artifact: Artifact) => {
+    await deleteArtifact(artifact.id);
+    setArtifactDialogOpen(false);
+    setSelectedArtifact(null);
+  };
+
+  const handleRegenerateArtifact = (artifact: Artifact) => {
+    const command = `Regenerate and improve this artifact: "${artifact.title}" - create an updated version with fresh analysis`;
+    onPrefillAgentGPT(command);
+    setArtifactDialogOpen(false);
+    setSelectedArtifact(null);
   };
 
   const handleActivityClick = (event: SystemEvent) => {
@@ -606,69 +633,20 @@ export const ProgressTab = forwardRef<HTMLDivElement, ProgressTabProps>(function
           )}
         </div>
 
-        {/* Artifact Preview Modal */}
-        {selectedArtifact && (
-          <div 
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
-            onClick={() => setSelectedArtifact(null)}
-          >
-            <div 
-              className="bg-white max-w-2xl w-full max-h-[80vh] overflow-auto p-8"
-              style={{ borderRadius: '2px' }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-2">
-                  {selectedArtifact.visibility === "shared" ? (
-                    <Eye className="h-4 w-4" style={{ color: '#10b981' }} />
-                  ) : (
-                    <Lock className="h-4 w-4" style={{ color: '#9ca3af' }} />
-                  )}
-                  <p className="text-xs uppercase tracking-wider" style={{ color: '#9ca3af' }}>
-                    {selectedArtifact.visibility === "shared" ? "Shared with buyer" : "Internal only"}
-                  </p>
-                </div>
-                <button
-                  onClick={() => setSelectedArtifact(null)}
-                  className="text-sm hover:underline"
-                  style={{ color: '#6b7280' }}
-                >
-                  Close
-                </button>
-              </div>
-              <h3 className="text-lg font-medium mb-4" style={{ color: '#111827' }}>
-                {selectedArtifact.title}
-              </h3>
-              <div className="prose prose-sm max-w-none" style={{ color: '#374151' }}>
-                <p className="whitespace-pre-wrap leading-relaxed">{selectedArtifact.content}</p>
-              </div>
-              <p className="text-sm mt-6" style={{ color: '#9ca3af' }}>
-                Created {formatTime(new Date(selectedArtifact.created_at))}
-                {selectedArtifact.shared_at && ` · Shared ${formatTime(new Date(selectedArtifact.shared_at))}`}
-              </p>
-              <div className="mt-8 pt-6 flex gap-4" style={{ borderTop: '1px solid #e5e7eb' }}>
-                <button
-                  onClick={() => {
-                    onPrefillAgentGPT(`Edit and update this artifact: "${selectedArtifact.title}"`);
-                    setSelectedArtifact(null);
-                  }}
-                  className="text-sm hover:underline underline-offset-4"
-                  style={{ color: '#374151' }}
-                >
-                  Edit with AgentGPT
-                </button>
-                <button
-                  onClick={() => setSelectedArtifact(null)}
-                  className="text-sm"
-                  style={{ color: '#9ca3af' }}
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Artifact Viewer Dialog - Shared component with full actions */}
+        <ArtifactViewerDialog
+          artifact={selectedArtifact}
+          open={artifactDialogOpen}
+          onOpenChange={(open) => {
+            setArtifactDialogOpen(open);
+            if (!open) setSelectedArtifact(null);
+          }}
+          onShare={handleShareArtifact}
+          onDelete={handleDeleteArtifact}
+          onRegenerate={handleRegenerateArtifact}
+          isSharing={isSharing}
+          isDeleting={isDeleting}
+        />
 
         {/* Activity Log */}
         {systemEvents.length > 0 && (
