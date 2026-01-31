@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Edit2, Send, X, Eye, FileText } from "lucide-react";
 import type { Artifact } from "@/hooks/useArtifacts";
@@ -101,6 +100,66 @@ export function ArtifactPreviewMode({
     await onSend(editedContent);
   };
 
+  const handleDoneEditing = () => {
+    setIsEditing(false);
+  };
+
+  const handleCancelEdit = () => {
+    setEditedContent(buyerVersion);
+    setIsEditing(false);
+  };
+
+  // Edit mode - full-width textarea
+  if (isEditing) {
+    return (
+      <div className="flex flex-col h-full">
+        {/* Header */}
+        <div className="flex-shrink-0 pb-4 border-b">
+          <div className="flex items-center gap-2 mb-2">
+            <Edit2 className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-semibold">Edit Buyer Version</h2>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Make changes to what <span className="font-medium">{buyerName}</span> will see
+          </p>
+        </div>
+
+        {/* Large Edit Area */}
+        <div className="flex-1 min-h-0 mt-4 flex flex-col">
+          <textarea
+            value={editedContent}
+            onChange={(e) => setEditedContent(e.target.value)}
+            className="flex-1 w-full min-h-[400px] rounded-lg border border-input bg-background p-4 text-sm leading-relaxed resize-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            placeholder="Edit the buyer version..."
+            style={{ fontFamily: 'inherit' }}
+          />
+        </div>
+
+        {/* Bottom Actions */}
+        <div className="flex items-center justify-between gap-3 pt-4 border-t flex-shrink-0 mt-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleCancelEdit}
+            className="gap-2"
+          >
+            <X className="h-4 w-4" />
+            Cancel Edit
+          </Button>
+          
+          <Button
+            size="sm"
+            onClick={handleDoneEditing}
+            className="gap-2"
+          >
+            Done Editing
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Preview mode with tabs
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -110,13 +169,13 @@ export function ArtifactPreviewMode({
           <h2 className="text-lg font-semibold">Preview Buyer Version</h2>
         </div>
         <p className="text-sm text-muted-foreground">
-          Review and edit what <span className="font-medium">{buyerName}</span> will see before sharing
+          Review what <span className="font-medium">{buyerName}</span> will see before sharing
         </p>
       </div>
 
       {/* Content Area with Tabs */}
-      <div className="flex-1 min-h-0 mt-4 overflow-hidden">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
+      <div className="flex-1 min-h-0 mt-4 flex flex-col overflow-hidden">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
           <TabsList className="flex-shrink-0 w-full grid grid-cols-2">
             <TabsTrigger value="buyer" className="gap-2">
               <Eye className="h-4 w-4" />
@@ -128,84 +187,47 @@ export function ArtifactPreviewMode({
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="buyer" className="flex-1 min-h-0 mt-4 overflow-hidden">
-            <div className="h-full flex flex-col">
-              <div className="flex items-center justify-between mb-2">
-                <Badge variant="default" className="gap-1">
-                  <Eye className="h-3 w-3" />
-                  What {buyerName} will see
-                </Badge>
-                {!isEditing && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setIsEditing(true)}
-                    className="gap-2"
-                  >
-                    <Edit2 className="h-4 w-4" />
-                    Edit
-                  </Button>
-                )}
+          <TabsContent value="buyer" className="flex-1 min-h-0 mt-4 flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between mb-2 flex-shrink-0">
+              <Badge variant="default" className="gap-1">
+                <Eye className="h-3 w-3" />
+                What {buyerName} will see
+              </Badge>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsEditing(true)}
+                className="gap-2"
+              >
+                <Edit2 className="h-4 w-4" />
+                Edit
+              </Button>
+            </div>
+            
+            <div className="flex-1 min-h-0 overflow-y-auto rounded-lg border bg-muted/30 p-4">
+              <div className="prose prose-sm max-w-none dark:prose-invert leading-relaxed space-y-1">
+                {renderMarkdownContent(editedContent)}
               </div>
-              
-              <div className="flex-1 min-h-0 overflow-y-auto rounded-lg border bg-muted/30 p-4">
-                {isEditing ? (
-                  <Textarea
-                    value={editedContent}
-                    onChange={(e) => setEditedContent(e.target.value)}
-                    className="w-full h-full min-h-[300px] font-mono text-sm resize-none border-0 bg-transparent focus-visible:ring-0"
-                    placeholder="Edit the buyer version..."
-                  />
-                ) : (
-                  <div className="prose prose-sm max-w-none dark:prose-invert leading-relaxed space-y-1">
-                    {renderMarkdownContent(editedContent)}
-                  </div>
-                )}
-              </div>
-              
-              {isEditing && (
-                <div className="flex justify-end gap-2 mt-2 flex-shrink-0">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setEditedContent(buyerVersion);
-                      setIsEditing(false);
-                    }}
-                  >
-                    Cancel Edit
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setIsEditing(false)}
-                  >
-                    Done Editing
-                  </Button>
-                </div>
-              )}
             </div>
           </TabsContent>
 
-          <TabsContent value="full" className="flex-1 min-h-0 mt-4 overflow-hidden">
-            <div className="h-full flex flex-col">
-              <div className="mb-2">
-                <Badge variant="secondary" className="gap-1">
-                  <FileText className="h-3 w-3" />
-                  Original (internal only)
-                </Badge>
-              </div>
-              <div className="flex-1 min-h-0 overflow-y-auto rounded-lg border bg-muted/30 p-4">
-                <div className="prose prose-sm max-w-none dark:prose-invert leading-relaxed space-y-1 opacity-80">
-                  {renderMarkdownContent(artifact.content)}
-                </div>
+          <TabsContent value="full" className="flex-1 min-h-0 mt-4 flex flex-col overflow-hidden">
+            <div className="mb-2 flex-shrink-0">
+              <Badge variant="secondary" className="gap-1">
+                <FileText className="h-3 w-3" />
+                Original (internal only)
+              </Badge>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto rounded-lg border bg-muted/30 p-4">
+              <div className="prose prose-sm max-w-none dark:prose-invert leading-relaxed space-y-1 opacity-80">
+                {renderMarkdownContent(artifact.content)}
               </div>
             </div>
           </TabsContent>
         </Tabs>
       </div>
 
-      {/* Bottom Actions */}
+      {/* Bottom Actions - Always visible with Send button */}
       <div className="flex items-center justify-between gap-3 pt-4 border-t flex-shrink-0 mt-4">
         <Button
           variant="ghost"
@@ -215,7 +237,7 @@ export function ArtifactPreviewMode({
           disabled={isSending}
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to View
+          Back
         </Button>
         
         <div className="flex items-center gap-2">
@@ -232,7 +254,7 @@ export function ArtifactPreviewMode({
           <Button
             size="sm"
             onClick={handleSend}
-            disabled={isSending || isEditing}
+            disabled={isSending}
             className="gap-2"
           >
             <Send className="h-4 w-4" />
