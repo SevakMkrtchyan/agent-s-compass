@@ -6,6 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { Home, FileText, CheckCircle, Clock, DollarSign, MapPin } from "lucide-react";
 import type { PortalBuyer } from "@/pages/BuyerPortal";
 import { STAGES } from "@/types";
+import { BudgetStrategyCard } from "./BudgetStrategyCard";
 
 interface PortalDashboardProps {
   buyer: PortalBuyer;
@@ -62,6 +63,20 @@ export function PortalDashboard({ buyer }: PortalDashboardProps) {
         <h1 className="text-2xl font-bold">Welcome back, {buyer.name.split(" ")[0]}!</h1>
         <p className="text-muted-foreground">Here's an overview of your home buying journey</p>
       </div>
+
+      {/* Budget Strategy Section - Only show if budget bands exist */}
+      <BudgetStrategyCard
+        buyerId={buyer.id}
+        budgetBands={{
+          conservative_min: buyer.conservative_min,
+          conservative_max: buyer.conservative_max,
+          target_min: buyer.target_min,
+          target_max: buyer.target_max,
+          stretch_min: buyer.stretch_min,
+          stretch_max: buyer.stretch_max,
+          pre_approval_amount: buyer.pre_approval_amount,
+        }}
+      />
 
       {/* Progress Card */}
       <Card>

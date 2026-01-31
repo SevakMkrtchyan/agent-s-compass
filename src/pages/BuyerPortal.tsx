@@ -41,6 +41,12 @@ export interface PortalBuyer {
   must_haves: string | null;
   nice_to_haves: string | null;
   portal_token: string | null;
+  conservative_min: number | null;
+  conservative_max: number | null;
+  target_min: number | null;
+  target_max: number | null;
+  stretch_min: number | null;
+  stretch_max: number | null;
 }
 
 type PortalTab = "chat" | "dashboard" | "properties" | "offers" | "documents";
@@ -93,7 +99,7 @@ export default function BuyerPortal() {
       try {
         const { data, error } = await supabase
           .from("buyers")
-          .select("id, name, email, current_stage, budget_min, budget_max, pre_approval_status, pre_approval_amount, preferred_cities, property_types, min_beds, min_baths, must_haves, nice_to_haves, portal_token")
+          .select("id, name, email, current_stage, budget_min, budget_max, pre_approval_status, pre_approval_amount, preferred_cities, property_types, min_beds, min_baths, must_haves, nice_to_haves, portal_token, conservative_min, conservative_max, target_min, target_max, stretch_min, stretch_max")
           .eq("id", buyerId)
           .eq("portal_token", token)
           .single();
