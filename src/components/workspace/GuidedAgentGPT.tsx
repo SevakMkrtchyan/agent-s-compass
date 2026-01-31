@@ -19,6 +19,7 @@ import {
   Lock,
   Share2,
   ListTodo,
+  FolderOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,13 +29,15 @@ import { useAgentGPTStream } from "@/hooks/useAgentGPTStream";
 import { useRecommendationCache } from "@/hooks/useRecommendationCache";
 import { useStage, type NextAction, type NextActionShowIf } from "@/hooks/useStages";
 import { useQuery } from "@tanstack/react-query";
-import { useArtifacts } from "@/hooks/useArtifacts";
+import { useArtifacts, type Artifact } from "@/hooks/useArtifacts";
 import { useToast } from "@/hooks/use-toast";
 import { useCreateTaskFromAction, useTasksBySourceActions } from "@/hooks/useTasks";
 import { useCreateShowingTasks } from "@/hooks/useShowingTasks";
 import { StreamingText, ThinkingDots } from "./StreamingText";
 import { InlineBuyerUpdate, detectMissingField, type MissingField } from "./InlineBuyerUpdate";
 import { parseBudgetBands, isBudgetBandsArtifact } from "@/lib/parseBudgetBands";
+import { ArtifactViewerDialog, ExistingArtifactDialog } from "./ArtifactViewerDialog";
+import { SavedArtifactsList } from "./SavedArtifactsList";
 import type { StageGroup } from "@/types/conversation";
 import type { Stage, Buyer } from "@/types";
 import { STAGES } from "@/types";
@@ -115,10 +118,14 @@ export function GuidedAgentGPT({
   const { isLoading, fetchRecommendedActions } = useAgentGPT();
   const { isStreaming, streamedContent, streamArtifact, streamThinking, clearStream, error: streamError } = useAgentGPTStream();
   const { getCachedActions, setCachedActions, lastRefreshed, isCacheHit } = useRecommendationCache();
-  const { createArtifact, isCreating } = useArtifacts(buyer.id);
+  const { artifacts, createArtifact, shareArtifact, deleteArtifact, isCreating, isSharing, isDeleting, isLoading: artifactsLoading } = useArtifacts(buyer.id);
   const { toast } = useToast();
   const createTaskFromAction = useCreateTaskFromAction();
   const createShowingTasks = useCreateShowingTasks();
+  
+  // Artifact viewer state
+  const [viewingArtifact, setViewingArtifact] = useState<Artifact | null>(null);
+  const [existingArtifactForAction, setExistingArtifactForAction] = useState<{artifact: Artifact; action: RecommendedAction} | null>(null);
   
   // Fetch stage data from database
   const { data: dbStage, isLoading: stageLoading } = useStage(currentStage);
@@ -522,6 +529,26 @@ export function GuidedAgentGPT({
     }
   };
 
+  // Helper to find existing artifact for an action
+  const findExistingArtifactForAction = useCallback((action: RecommendedAction): Artifact | null => {
+    if (!artifacts || action.dbType === "task") return null;
+    
+    // Check if any artifact title contains keywords from the action label
+    const actionKeywords = action.label.toLowerCase().split(' ').filter(w => 
+      !['the', 'a', 'an', 'for', 'and', 'or', 'to', 'with'].includes(w)
+    );
+    
+    return artifacts.find(artifact => {
+      const titleLower = artifact.title.toLowerCase();
+      // Match if at least 2 keywords match or contains core action words
+      const matchCount = actionKeywords.filter(kw => titleLower.includes(kw)).length;
+      return matchCount >= 2 || 
+        (action.label.toLowerCase().includes('budget') && titleLower.includes('budget')) ||
+        (action.label.toLowerCase().includes('financing') && titleLower.includes('financing')) ||
+        (action.label.toLowerCase().includes('offer') && titleLower.includes('offer'));
+    }) || null;
+  }, [artifacts]);
+
   const handleRecommendationClick = useCallback(async (action: RecommendedAction) => {
     // Special handling for "schedule-showings" action: create one task per property
     if (action.id === "schedule-showings") {
@@ -630,9 +657,32 @@ export function GuidedAgentGPT({
       return;
     }
     
+    // Check for existing artifact (deduplication)
+    const existingArtifact = findExistingArtifactForAction(action);
+    if (existingArtifact) {
+      // Show dialog to view existing or generate new
+      setExistingArtifactForAction({ artifact: existingArtifact, action });
+      return;
+    }
+    
     // Non-task actions: proceed with normal streaming
     await triggerCommand(action.command, action.type, action.visibility);
-  }, [triggerCommand, createTaskFromAction, createShowingTasks, buyer.id, dbStage?.id, toast, refetchExistingTasks, refetchShowingTasks, navigateToTasksTab, onNavigateToTab]);
+  }, [triggerCommand, createTaskFromAction, createShowingTasks, buyer.id, dbStage?.id, toast, refetchExistingTasks, refetchShowingTasks, navigateToTasksTab, onNavigateToTab, findExistingArtifactForAction]);
+
+  // Handle artifact actions from viewer dialog
+  const handleShareArtifact = useCallback(async (artifact: Artifact) => {
+    await shareArtifact(artifact.id);
+  }, [shareArtifact]);
+
+  const handleDeleteArtifact = useCallback(async (artifact: Artifact) => {
+    await deleteArtifact(artifact.id);
+  }, [deleteArtifact]);
+
+  const handleRegenerateArtifact = useCallback((artifact: Artifact) => {
+    // Find the original command or generate a new one
+    const command = `Regenerate: ${artifact.title} for ${buyerName}`;
+    triggerCommand(command, "artifact", "internal");
+  }, [buyerName, triggerCommand]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -852,6 +902,9 @@ export function GuidedAgentGPT({
                     const isScheduleShowings = action.id === "schedule-showings";
                     const hasShowingTasks = isScheduleShowings && showingTasksCount && showingTasksCount > 0;
                     
+                    // Check for existing artifact (for non-task actions)
+                    const existingArtifact = !isTaskAction ? findExistingArtifactForAction(action) : null;
+                    
                     return (
                       <div
                         key={action.id}
@@ -866,11 +919,22 @@ export function GuidedAgentGPT({
                           className={cn(
                             "text-left text-lg text-foreground/70 hover:text-foreground transition-colors",
                             "disabled:opacity-50 disabled:cursor-not-allowed",
-                            (existingTask || hasShowingTasks) && "text-foreground/50"
+                            (existingTask || hasShowingTasks || existingArtifact) && "text-foreground/50"
                           )}
                         >
                           {action.label}
                         </button>
+                        
+                        {/* Artifact completion indicator */}
+                        {!isTaskAction && existingArtifact && (
+                          <button
+                            onClick={() => setViewingArtifact(existingArtifact)}
+                            className="flex items-center gap-1.5 text-xs text-success hover:text-success/80 hover:underline transition-colors cursor-pointer group"
+                          >
+                            <CheckCircle className="h-3.5 w-3.5 group-hover:scale-110 transition-transform" />
+                            ✓ Generated →
+                          </button>
+                        )}
                         
                         {/* Special badge for schedule-showings action */}
                         {isScheduleShowings && hasShowingTasks && (
@@ -911,6 +975,21 @@ export function GuidedAgentGPT({
                       </div>
                     );
                   })}
+                </div>
+              )}
+              
+              {/* Saved Artifacts Section */}
+              {artifacts && artifacts.length > 0 && (
+                <div className="mt-12 pt-8 border-t border-border/20">
+                  <div className="flex items-center gap-2 mb-4">
+                    <FolderOpen className="h-4 w-4 text-muted-foreground" />
+                    <h3 className="text-sm font-medium text-muted-foreground">Saved Artifacts</h3>
+                  </div>
+                  <SavedArtifactsList
+                    artifacts={artifacts}
+                    isLoading={artifactsLoading}
+                    onViewArtifact={setViewingArtifact}
+                  />
                 </div>
               )}
             </div>
@@ -974,6 +1053,39 @@ export function GuidedAgentGPT({
           </div>
         </div>
       </div>
+
+      {/* Artifact Viewer Dialog */}
+      <ArtifactViewerDialog
+        artifact={viewingArtifact}
+        open={!!viewingArtifact}
+        onOpenChange={(open) => !open && setViewingArtifact(null)}
+        onShare={handleShareArtifact}
+        onDelete={handleDeleteArtifact}
+        onRegenerate={handleRegenerateArtifact}
+        isSharing={isSharing}
+        isDeleting={isDeleting}
+      />
+
+      {/* Existing Artifact Dialog (deduplication) */}
+      <ExistingArtifactDialog
+        artifact={existingArtifactForAction?.artifact || null}
+        open={!!existingArtifactForAction}
+        onOpenChange={(open) => !open && setExistingArtifactForAction(null)}
+        onViewExisting={() => {
+          if (existingArtifactForAction) {
+            setViewingArtifact(existingArtifactForAction.artifact);
+          }
+        }}
+        onGenerateNew={() => {
+          if (existingArtifactForAction) {
+            triggerCommand(
+              existingArtifactForAction.action.command,
+              existingArtifactForAction.action.type,
+              existingArtifactForAction.action.visibility
+            );
+          }
+        }}
+      />
     </div>
   );
 }
