@@ -107,13 +107,38 @@ export function useArtifacts(buyerId?: string) {
     },
   });
 
+  const deleteArtifact = useMutation({
+    mutationFn: async (artifactId: string) => {
+      const { error } = await supabase
+        .from("artifacts")
+        .delete()
+        .eq("id", artifactId);
+
+      if (error) throw error;
+      return artifactId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["artifacts", buyerId] });
+      toast({ title: "Artifact deleted" });
+    },
+    onError: (error) => {
+      toast({
+        title: "Failed to delete artifact",
+        description: error instanceof Error ? error.message : "Unknown error",
+        variant: "destructive",
+      });
+    },
+  });
+
   return {
     artifacts,
     isLoading,
     error,
     createArtifact: createArtifact.mutateAsync,
     shareArtifact: shareArtifact.mutateAsync,
+    deleteArtifact: deleteArtifact.mutateAsync,
     isCreating: createArtifact.isPending,
     isSharing: shareArtifact.isPending,
+    isDeleting: deleteArtifact.isPending,
   };
 }
