@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 
 // Portal Components
-import { PortalChat } from "@/components/portal/PortalChat";
+import { PortalWorkspace } from "@/components/portal/PortalWorkspace";
 import { PortalDashboard } from "@/components/portal/PortalDashboard";
 import { PortalProperties } from "@/components/portal/PortalProperties";
 import { PortalOffers } from "@/components/portal/PortalOffers";
@@ -241,9 +241,9 @@ export default function BuyerPortal() {
               </TabsList>
             </div>
 
-            {/* Chat Tab */}
+            {/* Chat Tab - Now a structured workspace */}
             <TabsContent value="chat" className="flex-1 m-0 p-0 overflow-hidden">
-              <PortalChat buyer={buyer} />
+              <PortalWorkspace buyer={buyer} />
             </TabsContent>
 
             {/* Dashboard/Progress Tab */}
