@@ -171,28 +171,34 @@ export function ArtifactViewerDialog({
     }
   };
 
-  const handleSendToBuyer = async (content: string) => {
+  const handleSendToBuyer = async (buyerVersionContent: string) => {
     setIsSending(true);
     try {
-      // Create a new artifact with the buyer version
+      // Create a NEW artifact with the buyer-friendly version
+      // Keep the original artifact as internal
       const { error } = await supabase
         .from("artifacts")
-        .update({
+        .insert({
+          buyer_id: artifact.buyer_id,
+          stage_id: artifact.stage_id,
+          artifact_type: artifact.artifact_type,
+          title: artifact.title,
+          content: buyerVersionContent, // Use the buyer-friendly content, not original
           visibility: "shared",
           shared_at: new Date().toISOString(),
-        })
-        .eq("id", artifact.id);
+        });
 
       if (error) throw error;
 
       toast({
         title: `Shared with ${buyerName}`,
-        description: "The artifact is now visible in their portal",
+        description: "The buyer-friendly version is now visible in their portal",
       });
       
       setViewMode("view");
+      onOpenChange(false);
       
-      // Refresh the artifact data by closing and re-opening or calling onShare
+      // Refresh the artifact data
       if (onShare) {
         await onShare(artifact);
       }
