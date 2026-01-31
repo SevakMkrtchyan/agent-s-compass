@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Edit2, Send, X, Eye, FileText } from "lucide-react";
+import { ArrowLeft, Edit2, Send, X, Eye, FileText, Bold, Italic, Heading1, Heading2, List, Minus } from "lucide-react";
 import type { Artifact } from "@/hooks/useArtifacts";
 
 // Simple markdown renderer for preview
@@ -95,9 +95,45 @@ export function ArtifactPreviewMode({
   const [editedContent, setEditedContent] = useState(buyerVersion);
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("buyer");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSend = async () => {
     await onSend(editedContent);
+  };
+
+  const insertFormatting = (before: string, after: string = "") => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = editedContent.substring(start, end);
+    const newText = editedContent.substring(0, start) + before + selectedText + after + editedContent.substring(end);
+    
+    setEditedContent(newText);
+    
+    // Restore cursor position after the inserted text
+    setTimeout(() => {
+      textarea.focus();
+      const newCursorPos = start + before.length + selectedText.length + after.length;
+      textarea.setSelectionRange(newCursorPos, newCursorPos);
+    }, 0);
+  };
+
+  const insertAtLineStart = (prefix: string) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const lineStart = editedContent.lastIndexOf('\n', start - 1) + 1;
+    const newText = editedContent.substring(0, lineStart) + prefix + editedContent.substring(lineStart);
+    
+    setEditedContent(newText);
+    
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + prefix.length, start + prefix.length);
+    }, 0);
   };
 
   const handleDoneEditing = () => {
@@ -124,9 +160,70 @@ export function ArtifactPreviewMode({
           </p>
         </div>
 
+        {/* Formatting Toolbar */}
+        <div className="flex items-center gap-1 py-3 border-b flex-shrink-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => insertFormatting("**", "**")}
+            className="h-8 w-8 p-0"
+            title="Bold"
+          >
+            <Bold className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => insertFormatting("*", "*")}
+            className="h-8 w-8 p-0"
+            title="Italic"
+          >
+            <Italic className="h-4 w-4" />
+          </Button>
+          <div className="w-px h-5 bg-border mx-1" />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => insertAtLineStart("# ")}
+            className="h-8 w-8 p-0"
+            title="Heading 1"
+          >
+            <Heading1 className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => insertAtLineStart("## ")}
+            className="h-8 w-8 p-0"
+            title="Heading 2"
+          >
+            <Heading2 className="h-4 w-4" />
+          </Button>
+          <div className="w-px h-5 bg-border mx-1" />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => insertAtLineStart("- ")}
+            className="h-8 w-8 p-0"
+            title="Bullet List"
+          >
+            <List className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => insertFormatting("\n\n---\n\n")}
+            className="h-8 w-8 p-0"
+            title="Horizontal Rule"
+          >
+            <Minus className="h-4 w-4" />
+          </Button>
+        </div>
+
         {/* Large Edit Area */}
-        <div className="flex-1 min-h-0 mt-4 flex flex-col">
+        <div className="flex-1 min-h-0 mt-3 flex flex-col">
           <textarea
+            ref={textareaRef}
             value={editedContent}
             onChange={(e) => setEditedContent(e.target.value)}
             className="flex-1 w-full min-h-[400px] rounded-lg border border-input bg-background p-4 text-base leading-relaxed resize-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
