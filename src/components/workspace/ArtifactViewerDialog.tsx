@@ -19,9 +19,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Eye, Lock, Share2, Trash2, RefreshCw, FileText } from "lucide-react";
+import { Eye, Lock, Share2, Trash2, RefreshCw, FileText, Loader2, Check } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 import type { Artifact } from "@/hooks/useArtifacts";
+import { ArtifactPreviewMode } from "./ArtifactPreviewMode";
 
 // Simple markdown renderer for saved artifacts (no animation)
 function renderMarkdownContent(text: string) {
@@ -100,6 +102,8 @@ function parseInlineMarkdown(text: string): (string | JSX.Element)[] {
   return parts;
 }
 
+type ViewMode = "view" | "generating" | "preview";
+
 interface ArtifactViewerDialogProps {
   artifact: Artifact | null;
   open: boolean;
@@ -109,6 +113,7 @@ interface ArtifactViewerDialogProps {
   onRegenerate?: (artifact: Artifact) => void;
   isSharing?: boolean;
   isDeleting?: boolean;
+  buyerName?: string;
 }
 
 export function ArtifactViewerDialog({
@@ -120,18 +125,97 @@ export function ArtifactViewerDialog({
   onRegenerate,
   isSharing,
   isDeleting,
+  buyerName = "the buyer",
 }: ArtifactViewerDialogProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("view");
+  const [buyerVersion, setBuyerVersion] = useState<string>("");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  const { toast } = useToast();
 
   if (!artifact) return null;
 
   const isShared = artifact.visibility === "shared";
   const createdDate = new Date(artifact.created_at);
 
-  const handleShare = async () => {
-    if (onShare && !isShared) {
-      await onShare(artifact);
+  const handleShareClick = async () => {
+    if (isShared) return;
+    
+    // Start generating buyer version
+    setViewMode("generating");
+    setIsGenerating(true);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-buyer-artifact", {
+        body: {
+          artifactContent: artifact.content,
+          buyerName: buyerName,
+        },
+      });
+
+      if (error) throw error;
+      
+      setBuyerVersion(data.buyerVersion || artifact.content);
+      setViewMode("preview");
+    } catch (error) {
+      console.error("Error generating buyer version:", error);
+      toast({
+        title: "Failed to generate buyer version",
+        description: error instanceof Error ? error.message : "Please try again",
+        variant: "destructive",
+      });
+      setViewMode("view");
+    } finally {
+      setIsGenerating(false);
     }
+  };
+
+  const handleSendToBuyer = async (content: string) => {
+    setIsSending(true);
+    try {
+      // Create a new artifact with the buyer version
+      const { error } = await supabase
+        .from("artifacts")
+        .update({
+          visibility: "shared",
+          shared_at: new Date().toISOString(),
+        })
+        .eq("id", artifact.id);
+
+      if (error) throw error;
+
+      toast({
+        title: `Shared with ${buyerName}`,
+        description: "The artifact is now visible in their portal",
+      });
+      
+      setViewMode("view");
+      
+      // Refresh the artifact data by closing and re-opening or calling onShare
+      if (onShare) {
+        await onShare(artifact);
+      }
+    } catch (error) {
+      console.error("Error sharing artifact:", error);
+      toast({
+        title: "Failed to share artifact",
+        description: error instanceof Error ? error.message : "Please try again",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleBackToView = () => {
+    setViewMode("view");
+    setBuyerVersion("");
+  };
+
+  const handleCancel = () => {
+    setViewMode("view");
+    setBuyerVersion("");
   };
 
   const handleDelete = async () => {
@@ -149,79 +233,122 @@ export function ArtifactViewerDialog({
     }
   };
 
+  // Reset state when dialog closes
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen) {
+      setViewMode("view");
+      setBuyerVersion("");
+    }
+    onOpenChange(newOpen);
+  };
+
   return (
     <>
-       <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col overflow-hidden">
-          <DialogHeader className="flex-shrink-0">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1 min-w-0">
-                <DialogTitle className="text-xl font-semibold leading-tight pr-8">
-                  {artifact.title}
-                </DialogTitle>
-                <DialogDescription className="mt-2 flex items-center gap-3 flex-wrap">
-                  <Badge variant={isShared ? "default" : "secondary"} className="gap-1">
-                    {isShared ? (
-                      <>
-                        <Eye className="h-3 w-3" />
-                        Shared with buyer
-                      </>
-                    ) : (
-                      <>
-                        <Lock className="h-3 w-3" />
-                        Internal only
-                      </>
-                    )}
-                  </Badge>
-                  <span className="text-muted-foreground text-sm">
-                    Created {format(createdDate, "MMM d, yyyy 'at' h:mm a")}
-                  </span>
-                </DialogDescription>
+          {viewMode === "generating" && (
+            <div className="flex-1 flex flex-col items-center justify-center gap-4 py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <div className="text-center">
+                <h3 className="font-semibold text-lg">Generating buyer-friendly version...</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Removing internal notes and agent-only content
+                </p>
               </div>
             </div>
-          </DialogHeader>
+          )}
 
-          <div className="flex-1 min-h-0 mt-4 -mx-6 px-6 overflow-y-auto">
-            <div className="prose prose-sm max-w-none dark:prose-invert leading-relaxed space-y-1 pb-4">
-              {renderMarkdownContent(artifact.content)}
-            </div>
-          </div>
+          {viewMode === "preview" && (
+            <ArtifactPreviewMode
+              artifact={artifact}
+              buyerVersion={buyerVersion}
+              buyerName={buyerName}
+              onBack={handleBackToView}
+              onSend={handleSendToBuyer}
+              onCancel={handleCancel}
+              isSending={isSending}
+            />
+          )}
 
-          <div className="flex items-center justify-between gap-3 pt-4 border-t flex-shrink-0 mt-4">
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleRegenerate}
-                className="gap-2"
-              >
-                <RefreshCw className="h-4 w-4" />
-                Regenerate
-              </Button>
-              {!isShared && onShare && (
+          {viewMode === "view" && (
+            <>
+              <DialogHeader className="flex-shrink-0">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <DialogTitle className="text-xl font-semibold leading-tight pr-8">
+                      {artifact.title}
+                    </DialogTitle>
+                    <DialogDescription className="mt-2 flex items-center gap-3 flex-wrap">
+                      <Badge variant={isShared ? "default" : "secondary"} className="gap-1">
+                        {isShared ? (
+                          <>
+                            <Check className="h-3 w-3" />
+                            Shared with {buyerName}
+                          </>
+                        ) : (
+                          <>
+                            <Lock className="h-3 w-3" />
+                            Internal only
+                          </>
+                        )}
+                      </Badge>
+                      <span className="text-muted-foreground text-sm">
+                        Created {format(createdDate, "MMM d, yyyy 'at' h:mm a")}
+                      </span>
+                    </DialogDescription>
+                  </div>
+                </div>
+              </DialogHeader>
+
+              <div className="flex-1 min-h-0 mt-4 -mx-6 px-6 overflow-y-auto">
+                <div className="prose prose-sm max-w-none dark:prose-invert leading-relaxed space-y-1 pb-4">
+                  {renderMarkdownContent(artifact.content)}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-3 pt-4 border-t flex-shrink-0 mt-4">
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRegenerate}
+                    className="gap-2"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    Regenerate
+                  </Button>
+                  {!isShared && onShare && (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={handleShareClick}
+                      disabled={isSharing || isGenerating}
+                      className="gap-2"
+                    >
+                      <Share2 className="h-4 w-4" />
+                      Share with Buyer
+                    </Button>
+                  )}
+                  {isShared && (
+                    <Badge variant="outline" className="gap-1 text-green-600 border-green-600">
+                      <Check className="h-3 w-3" />
+                      Shared
+                    </Badge>
+                  )}
+                </div>
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
-                  onClick={handleShare}
-                  disabled={isSharing}
-                  className="gap-2"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  disabled={isDeleting}
+                  className="text-destructive hover:text-destructive hover:bg-destructive/10 gap-2"
                 >
-                  <Share2 className="h-4 w-4" />
-                  {isSharing ? "Sharing..." : "Share with Buyer"}
+                  <Trash2 className="h-4 w-4" />
+                  Delete
                 </Button>
-              )}
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowDeleteConfirm(true)}
-              disabled={isDeleting}
-              className="text-destructive hover:text-destructive hover:bg-destructive/10 gap-2"
-            >
-              <Trash2 className="h-4 w-4" />
-              Delete
-            </Button>
-          </div>
+              </div>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 
