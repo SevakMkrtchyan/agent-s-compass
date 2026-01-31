@@ -181,8 +181,8 @@ export function ArtifactViewerDialog({
             </div>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 mt-4 -mx-6 px-6">
-            <div className="prose prose-sm max-w-none dark:prose-invert leading-relaxed space-y-1">
+          <ScrollArea className="flex-1 min-h-0 mt-4 -mx-6 px-6">
+            <div className="prose prose-sm max-w-none dark:prose-invert leading-relaxed space-y-1 pb-4">
               {renderMarkdownContent(artifact.content)}
             </div>
           </ScrollArea>
