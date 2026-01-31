@@ -21,8 +21,84 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Eye, Lock, Share2, Trash2, RefreshCw, FileText } from "lucide-react";
-import { StreamingText } from "./StreamingText";
 import type { Artifact } from "@/hooks/useArtifacts";
+
+// Simple markdown renderer for saved artifacts (no animation)
+function renderMarkdownContent(text: string) {
+  const lines = text.split("\n");
+  
+  return lines.map((line, i) => {
+    // Headers
+    if (line.startsWith("## ")) {
+      return (
+        <h3 key={i} className="font-semibold text-foreground mt-3 mb-1.5 first:mt-0">
+          {parseInlineMarkdown(line.slice(3))}
+        </h3>
+      );
+    } else if (line.startsWith("# ")) {
+      return (
+        <h2 key={i} className="font-bold text-lg text-foreground mt-4 mb-2 first:mt-0">
+          {parseInlineMarkdown(line.slice(2))}
+        </h2>
+      );
+    }
+    // Bullet points
+    else if (line.startsWith("- ") || line.startsWith("• ")) {
+      return (
+        <li key={i} className="ml-4 text-foreground/90">
+          {parseInlineMarkdown(line.slice(2))}
+        </li>
+      );
+    }
+    // Numbered lists
+    else if (/^\d+\.\s/.test(line)) {
+      const content = line.replace(/^\d+\.\s/, "");
+      return (
+        <li key={i} className="ml-4 text-foreground/90 list-decimal">
+          {parseInlineMarkdown(content)}
+        </li>
+      );
+    }
+    // Empty lines
+    else if (line.trim() === "") {
+      return <br key={i} />;
+    }
+    // Regular paragraphs
+    else {
+      return (
+        <p key={i} className="text-foreground/90">
+          {parseInlineMarkdown(line)}
+        </p>
+      );
+    }
+  });
+}
+
+function parseInlineMarkdown(text: string): (string | JSX.Element)[] {
+  const parts: (string | JSX.Element)[] = [];
+  let remaining = text;
+  let keyCounter = 0;
+
+  while (remaining.length > 0) {
+    const boldMatch = remaining.match(/\*\*(.+?)\*\*/);
+    if (boldMatch && boldMatch.index !== undefined) {
+      if (boldMatch.index > 0) {
+        parts.push(remaining.slice(0, boldMatch.index));
+      }
+      parts.push(
+        <strong key={keyCounter++} className="font-semibold text-foreground">
+          {boldMatch[1]}
+        </strong>
+      );
+      remaining = remaining.slice(boldMatch.index + boldMatch[0].length);
+      continue;
+    }
+    parts.push(remaining);
+    break;
+  }
+
+  return parts;
+}
 
 interface ArtifactViewerDialogProps {
   artifact: Artifact | null;
@@ -106,12 +182,8 @@ export function ArtifactViewerDialog({
           </DialogHeader>
 
           <ScrollArea className="flex-1 mt-4 -mx-6 px-6">
-            <div className="prose prose-sm max-w-none dark:prose-invert">
-              <StreamingText
-                content={artifact.content}
-                isComplete={true}
-                className="text-sm leading-relaxed"
-              />
+            <div className="prose prose-sm max-w-none dark:prose-invert leading-relaxed space-y-1">
+              {renderMarkdownContent(artifact.content)}
             </div>
           </ScrollArea>
 
