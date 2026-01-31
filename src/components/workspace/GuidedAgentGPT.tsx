@@ -672,6 +672,11 @@ export function GuidedAgentGPT({
     const message = messages.find(m => m.id === messageId);
     if (!message || !message.content) return;
 
+    console.log(`[handleSaveArtifact] ========== SAVING ARTIFACT ==========`);
+    console.log(`[handleSaveArtifact] Message ID: ${messageId}`);
+    console.log(`[handleSaveArtifact] Content length: ${message.content.length} chars`);
+    console.log(`[handleSaveArtifact] Visibility: ${visibility}`);
+
     try {
       // Generate a title from the first line or first 50 chars
       const firstLine = message.content.split('\n')[0];
@@ -686,13 +691,32 @@ export function GuidedAgentGPT({
         visibility,
       });
 
+      console.log(`[handleSaveArtifact] Artifact saved to database`);
+
       // Check if this is a budget bands artifact and extract/save the data
-      if (isBudgetBandsArtifact(message.content)) {
+      console.log(`[handleSaveArtifact] Checking if this is a budget bands artifact...`);
+      const isBudgetArtifact = isBudgetBandsArtifact(message.content);
+      console.log(`[handleSaveArtifact] Is budget bands artifact: ${isBudgetArtifact}`);
+      
+      if (isBudgetArtifact) {
+        console.log(`[handleSaveArtifact] Parsing budget bands from content...`);
         const budgetBands = parseBudgetBands(message.content);
+        console.log(`[handleSaveArtifact] Parsed bands:`, budgetBands);
         
         if (budgetBands) {
+          console.log(`[handleSaveArtifact] Saving to buyer profile...`);
+          console.log(`[handleSaveArtifact] Buyer ID: ${buyer.id}`);
+          console.log(`[handleSaveArtifact] Update payload:`, {
+            conservative_min: budgetBands.conservative_min,
+            conservative_max: budgetBands.conservative_max,
+            target_min: budgetBands.target_min,
+            target_max: budgetBands.target_max,
+            stretch_min: budgetBands.stretch_min,
+            stretch_max: budgetBands.stretch_max,
+          });
+          
           // Save budget bands to buyer profile
-          const { error: updateError } = await supabase
+          const { data: updateData, error: updateError } = await supabase
             .from("buyers")
             .update({
               conservative_min: budgetBands.conservative_min,
@@ -702,9 +726,20 @@ export function GuidedAgentGPT({
               stretch_min: budgetBands.stretch_min,
               stretch_max: budgetBands.stretch_max,
             })
-            .eq("id", buyer.id);
+            .eq("id", buyer.id)
+            .select();
 
-          if (!updateError) {
+          console.log(`[handleSaveArtifact] Update result:`, { data: updateData, error: updateError });
+
+          if (updateError) {
+            console.error(`[handleSaveArtifact] ✗ Database update FAILED:`, updateError);
+            toast({
+              title: "Failed to save budget bands",
+              description: updateError.message,
+              variant: "destructive",
+            });
+          } else {
+            console.log(`[handleSaveArtifact] ✓ Budget bands saved successfully!`);
             toast({
               title: "Budget bands saved to buyer profile",
               description: "The extracted budget bands are now part of the buyer's profile.",
@@ -712,11 +747,13 @@ export function GuidedAgentGPT({
             
             // Notify parent to refresh buyer data
             if (onBuyerUpdated) {
-              const { data: freshBuyer } = await supabase
+              const { data: freshBuyer, error: fetchError } = await supabase
                 .from("buyers")
                 .select("*")
                 .eq("id", buyer.id)
                 .single();
+              
+              console.log(`[handleSaveArtifact] Fresh buyer fetch:`, { data: freshBuyer, error: fetchError });
               
               if (freshBuyer) {
                 const stageMap: Record<string, 0 | 1 | 2 | 3 | 4 | 5> = {
@@ -759,8 +796,12 @@ export function GuidedAgentGPT({
               }
             }
           }
+        } else {
+          console.log(`[handleSaveArtifact] ✗ No budget bands parsed from content`);
         }
       }
+
+      console.log(`[handleSaveArtifact] ====================================`);
 
       setMessages(prev =>
         prev.map(msg =>
