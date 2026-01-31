@@ -172,98 +172,84 @@ function ArtifactSection({ artifact, intro }: ArtifactSectionProps) {
   const isLongContent = artifact.content.length > 1200 || artifact.content.split('\n').length > 20;
 
   return (
-    <div className="space-y-4">
-      {/* Intro message card */}
+    <div className="space-y-3">
+      {/* Intro message - no box, just text */}
       {intro && (
-        <div className="bg-card border border-border/30 rounded-lg p-4">
-          <p className="text-foreground/80 text-sm leading-relaxed">{intro}</p>
-          <p className="text-xs text-muted-foreground mt-2">
+        <div>
+          <p className="text-foreground/70 leading-relaxed">{intro}</p>
+          <p className="text-xs text-muted-foreground/60 mt-1.5">
             Shared {format(new Date(sharedDate), "MMMM d, yyyy")}
           </p>
         </div>
       )}
 
-      {/* Artifact content card - same styling as agent workspace */}
-      <div className="bg-card border border-border/30 rounded-lg overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 bg-muted/30 border-b border-border/20">
-          <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
-              <FileText className="h-4 w-4 text-primary" />
-            </div>
-            <h3 className="font-medium text-foreground">{artifact.title}</h3>
+      {/* Artifact content - light styling */}
+      <div className="mt-4">
+        {/* Header - minimal */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <FileText className="h-4 w-4 text-primary/70" />
+            <h3 className="font-medium text-foreground text-sm">{artifact.title}</h3>
           </div>
           {isLongContent && (
             <button
               onClick={() => setIsExpanded(!isExpanded)}
-              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-muted"
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
               {isExpanded ? (
                 <>
                   <ChevronUp className="h-3.5 w-3.5" />
-                  Collapse
+                  Less
                 </>
               ) : (
                 <>
                   <ChevronDown className="h-3.5 w-3.5" />
-                  Expand
+                  More
                 </>
               )}
             </button>
           )}
         </div>
 
-        {/* Content */}
+        {/* Content - subtle background */}
         <div 
           className={cn(
-            "p-5 md:p-6",
-            !isExpanded && isLongContent && "max-h-[300px] overflow-hidden relative"
+            "bg-muted/30 rounded-lg px-4 py-4",
+            !isExpanded && isLongContent && "max-h-[280px] overflow-hidden relative"
           )}
         >
-          <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-2.5 prose-p:leading-relaxed prose-ul:my-2.5 prose-li:my-1 prose-headings:my-3 prose-headings:font-medium prose-h2:text-base prose-h3:text-sm prose-strong:font-semibold">
+          <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-2 prose-p:leading-relaxed prose-p:text-foreground/80 prose-ul:my-2 prose-li:my-0.5 prose-li:text-foreground/80 prose-headings:my-2.5 prose-headings:font-medium prose-headings:text-foreground prose-h2:text-sm prose-h3:text-sm prose-strong:font-medium prose-strong:text-foreground">
             <ReactMarkdown>{artifact.content}</ReactMarkdown>
           </div>
           
           {/* Fade overlay when collapsed */}
           {!isExpanded && isLongContent && (
-            <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-card to-transparent" />
+            <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-muted/30 to-transparent" />
           )}
         </div>
 
         {/* Show more button when collapsed */}
         {!isExpanded && isLongContent && (
-          <div className="px-5 pb-4">
-            <button
-              onClick={() => setIsExpanded(true)}
-              className="text-sm text-primary hover:text-primary/80 transition-colors font-medium"
-            >
-              Show full document →
-            </button>
-          </div>
+          <button
+            onClick={() => setIsExpanded(true)}
+            className="text-xs text-primary hover:text-primary/80 transition-colors mt-2"
+          >
+            Show more →
+          </button>
         )}
       </div>
     </div>
   );
 }
 
-// Next steps list - matches agent workspace action items
+// Next steps list - lighter styling
 function NextStepsList({ steps }: { steps: string[] }) {
   return (
-    <div className="space-y-0">
+    <div className="space-y-2.5">
       {steps.map((step, idx) => (
-        <div
-          key={idx}
-          className={cn(
-            "flex items-center justify-between py-3.5",
-            idx < steps.length - 1 && "border-b border-border/10"
-          )}
-        >
-          <div className="flex items-center gap-3">
-            <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-              <span className="text-xs font-medium text-primary">{idx + 1}</span>
-            </div>
-            <span className="text-foreground/80">{step}</span>
-          </div>
+        <div key={idx} className="flex items-start gap-3">
+          <span className="text-xs font-medium text-primary/70 mt-0.5 w-4">{idx + 1}.</span>
+          <span className="text-foreground/70 text-sm leading-relaxed">{step}</span>
         </div>
       ))}
     </div>
@@ -493,40 +479,37 @@ export function PortalWorkspace({ buyer }: PortalWorkspaceProps) {
             </div>
           ) : (
             /* Main Workspace View */
-            <div className="space-y-12">
+            <div className="space-y-10">
               
               {/* Section 1: Agent Guidance */}
               <section>
-                <h2 className="text-2xl md:text-3xl font-medium text-foreground mb-6">
+                <h2 className="text-xl md:text-2xl font-medium text-foreground mb-4">
                   {stageGuidance.title}
                 </h2>
 
-                {/* Greeting card */}
-                <div className="bg-card border border-border/30 rounded-lg p-5 mb-6">
-                  <p className="text-lg text-foreground mb-2">
+                {/* Greeting - no box, just text */}
+                <div className="mb-6">
+                  <p className="text-foreground mb-1.5">
                     Hi {firstName}! {stageGuidance.greeting}
                   </p>
-                  <p className="text-foreground/70">
+                  <p className="text-foreground/60 text-sm leading-relaxed">
                     {stageGuidance.description}
                   </p>
                 </div>
 
-                {/* Next steps */}
-                <div className="bg-card border border-border/30 rounded-lg p-5">
-                  <h3 className="text-sm font-medium text-muted-foreground mb-4">Your Next Steps</h3>
+                {/* Subtle divider */}
+                <div className="border-t border-border/20 pt-5">
+                  <h3 className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wide mb-3">Your Next Steps</h3>
                   <NextStepsList steps={stageGuidance.nextSteps} />
                 </div>
               </section>
 
               {/* Section 2: Shared Documents from Agent */}
               {sharedArtifacts && sharedArtifacts.length > 0 && (
-                <section>
-                  <h2 className="text-lg font-medium text-foreground mb-4 flex items-center gap-2">
-                    <FileText className="h-5 w-5 text-primary" />
-                    From Your Agent
-                  </h2>
+                <section className="border-t border-border/20 pt-8">
+                  <h3 className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wide mb-4">From Your Agent</h3>
 
-                  <div className="space-y-6">
+                  <div className="space-y-8">
                     {sharedArtifacts.map((artifact, idx) => (
                       <ArtifactSection 
                         key={artifact.id}
@@ -539,28 +522,24 @@ export function PortalWorkspace({ buyer }: PortalWorkspaceProps) {
               )}
 
               {/* Section 3: What's Next */}
-              <section>
-                <div className="bg-muted/30 border border-border/20 rounded-lg p-5">
-                  <div className="flex items-start gap-3">
-                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <ArrowRight className="h-4 w-4 text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="font-medium text-foreground mb-1">What's Next?</h3>
-                      <p className="text-foreground/70 text-sm">
-                        {stageGuidance.whatsNext}
-                      </p>
-                    </div>
+              <section className="border-t border-border/20 pt-8">
+                <div className="flex items-start gap-3">
+                  <ArrowRight className="h-4 w-4 text-primary/60 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <h3 className="text-sm font-medium text-foreground mb-1">What's Next?</h3>
+                    <p className="text-foreground/60 text-sm leading-relaxed">
+                      {stageGuidance.whatsNext}
+                    </p>
                   </div>
                 </div>
               </section>
 
               {/* Empty state for no artifacts */}
               {(!sharedArtifacts || sharedArtifacts.length === 0) && (
-                <section>
-                  <div className="bg-card border border-dashed border-border/40 rounded-lg p-6 text-center">
-                    <FileText className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
-                    <p className="text-sm text-muted-foreground">
+                <section className="border-t border-border/20 pt-8">
+                  <div className="text-center py-6">
+                    <FileText className="h-6 w-6 text-muted-foreground/30 mx-auto mb-2" />
+                    <p className="text-sm text-muted-foreground/60">
                       Documents and guides from your agent will appear here
                     </p>
                   </div>
