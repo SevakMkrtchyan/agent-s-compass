@@ -25,6 +25,7 @@ import { useStages, type DbStage } from "@/hooks/useStages";
 import { useStageCompletion } from "@/hooks/useStageCompletion";
 import { useBuyers } from "@/hooks/useBuyers";
 import { useToast } from "@/hooks/use-toast";
+import { AgentBudgetStrategyCard } from "./AgentBudgetStrategyCard";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -249,6 +250,11 @@ export const ProgressTab = forwardRef<HTMLDivElement, ProgressTabProps>(function
     <ScrollArea className="h-full">
       <div className="w-full px-4 sm:px-6 md:px-8 lg:px-12 py-8 md:py-12 bg-[#f9fafb]">
         
+        {/* Budget Strategy Section - Top of Progress tab */}
+        <AgentBudgetStrategyCard buyerId={buyerId} />
+
+        <hr className="max-w-3xl mb-10" style={{ borderColor: '#e5e7eb' }} />
+
         {/* Current Stage Header */}
         <div className="max-w-3xl mb-12">
           <p className="text-xs uppercase tracking-wider mb-4" style={{ color: '#9ca3af' }}>
