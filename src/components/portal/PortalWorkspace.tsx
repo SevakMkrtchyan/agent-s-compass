@@ -1,8 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Loader2, Sparkles, FileText, Home, DollarSign, CheckCircle2, MessageSquare, RefreshCw } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Send, Loader2, Sparkles, FileText, Eye, FolderOpen, CheckCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePortalMessages } from "@/hooks/usePortalMessages";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,32 +11,99 @@ interface PortalWorkspaceProps {
   buyer: PortalBuyer;
 }
 
-// Get stage info for display
-const getStageInfo = (stageName: string | null): { number: number; emoji: string; objective: string } => {
-  const stageMap: Record<string, { number: number; emoji: string; objective: string }> = {
-    "Readiness & Expectations": { number: 0, emoji: "🎯", objective: "Understand your goals and timeline" },
-    "Financing & Capability": { number: 1, emoji: "💰", objective: "Secure your buying power" },
-    "Market Intelligence & Search Setup": { number: 2, emoji: "🔍", objective: "Define your ideal home criteria" },
-    "Touring, Filtering & Convergence": { number: 3, emoji: "🏠", objective: "Find properties you love" },
-    "Offer Strategy & Submission": { number: 4, emoji: "📝", objective: "Submit competitive offers" },
-    "Negotiation & Contract": { number: 5, emoji: "🤝", objective: "Negotiate the best terms" },
-    "Due Diligence & Inspections": { number: 6, emoji: "🔬", objective: "Verify the property condition" },
-    "Appraisal & Lending": { number: 7, emoji: "📊", objective: "Finalize your financing" },
-    "Final Walkthrough & Preparation": { number: 8, emoji: "✅", objective: "Prepare for closing day" },
-    "Closing & Post-Close": { number: 9, emoji: "🎉", objective: "Complete your purchase" },
-  };
-  
-  const info = stageMap[stageName || ""] || { number: 1, emoji: "📋", objective: "Getting started" };
-  return info;
+// Stage guidance for buyers
+const STAGE_GUIDANCE: Record<string, { title: string; description: string; tips: string[] }> = {
+  "Readiness & Expectations": {
+    title: "Getting Started",
+    description: "You're at the beginning of your home buying journey. We'll help you understand the process and set realistic expectations.",
+    tips: [
+      "Review your finances and savings",
+      "Think about your timeline and must-haves",
+      "Prepare questions for your agent",
+    ],
+  },
+  "Financing & Capability": {
+    title: "Securing Your Buying Power",
+    description: "This stage is about understanding what you can afford and getting pre-approved for a mortgage.",
+    tips: [
+      "Gather financial documents for pre-approval",
+      "Review your credit score",
+      "Understand your budget bands",
+    ],
+  },
+  "Market Intelligence & Search Setup": {
+    title: "Defining Your Search",
+    description: "We're refining your criteria and setting up your property search based on your preferences.",
+    tips: [
+      "Be clear about must-haves vs nice-to-haves",
+      "Consider commute times and neighborhoods",
+      "Stay flexible on some criteria",
+    ],
+  },
+  "Touring, Filtering & Convergence": {
+    title: "Finding Your Home",
+    description: "Time to tour properties and narrow down your favorites. Take notes and trust your instincts!",
+    tips: [
+      "Schedule showings promptly for new listings",
+      "Take photos and notes at each property",
+      "Rank properties after each viewing",
+    ],
+  },
+  "Offer Strategy & Submission": {
+    title: "Making an Offer",
+    description: "You've found a property you love. Now we'll craft a competitive offer strategy.",
+    tips: [
+      "Review comparable sales data",
+      "Understand contingencies and terms",
+      "Be prepared to negotiate",
+    ],
+  },
+  "Negotiation & Contract": {
+    title: "Negotiating Terms",
+    description: "Your offer is in! We're working to get you the best possible terms.",
+    tips: [
+      "Stay patient during negotiations",
+      "Know your walk-away price",
+      "Review all contract terms carefully",
+    ],
+  },
+  "Due Diligence & Inspections": {
+    title: "Verifying the Property",
+    description: "Time for inspections and due diligence to ensure the property meets expectations.",
+    tips: [
+      "Attend the home inspection",
+      "Ask questions about any concerns",
+      "Review inspection reports carefully",
+    ],
+  },
+  "Appraisal & Lending": {
+    title: "Finalizing Your Loan",
+    description: "The appraisal is being scheduled and your lender is finalizing your mortgage.",
+    tips: [
+      "Respond quickly to lender requests",
+      "Don't make major purchases or credit changes",
+      "Review your loan terms carefully",
+    ],
+  },
+  "Final Walkthrough & Preparation": {
+    title: "Preparing to Close",
+    description: "Almost there! We're doing final checks and preparing for closing day.",
+    tips: [
+      "Schedule your final walkthrough",
+      "Prepare funds for closing",
+      "Set up utilities and services",
+    ],
+  },
+  "Closing & Post-Close": {
+    title: "Congratulations!",
+    description: "You're closing on your new home. Welcome to homeownership!",
+    tips: [
+      "Review all closing documents",
+      "Get your keys and celebrate!",
+      "Keep important documents safe",
+    ],
+  },
 };
-
-// Quick actions for buyers
-const BUYER_QUICK_ACTIONS = [
-  { id: "status", label: "What's my current status?", icon: CheckCircle2 },
-  { id: "next-steps", label: "What should I do next?", icon: Sparkles },
-  { id: "properties", label: "Tell me about my saved properties", icon: Home },
-  { id: "offers", label: "What's happening with my offers?", icon: DollarSign },
-];
 
 export function PortalWorkspace({ buyer }: PortalWorkspaceProps) {
   const {
@@ -53,12 +117,13 @@ export function PortalWorkspace({ buyer }: PortalWorkspaceProps) {
 
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
-  const [showQuickActions, setShowQuickActions] = useState(true);
+  const [showActions, setShowActions] = useState(true);
+  const [currentResponse, setCurrentResponse] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Fetch shared artifacts for this buyer
-  const { data: sharedArtifacts } = useQuery({
+  const { data: sharedArtifacts, isLoading: artifactsLoading } = useQuery({
     queryKey: ["portal-artifacts", buyer.id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -74,48 +139,14 @@ export function PortalWorkspace({ buyer }: PortalWorkspaceProps) {
     enabled: !!buyer.id,
   });
 
-  // Fetch property counts
-  const { data: propertyCounts } = useQuery({
-    queryKey: ["portal-property-counts", buyer.id],
-    queryFn: async () => {
-      const { count: savedCount } = await supabase
-        .from("buyer_properties")
-        .select("*", { count: "exact", head: true })
-        .eq("buyer_id", buyer.id)
-        .eq("favorited", true);
+  const stageGuidance = STAGE_GUIDANCE[buyer.current_stage || ""] || STAGE_GUIDANCE["Readiness & Expectations"];
 
-      const { count: viewedCount } = await supabase
-        .from("buyer_properties")
-        .select("*", { count: "exact", head: true })
-        .eq("buyer_id", buyer.id)
-        .eq("viewed", true);
-
-      return { saved: savedCount || 0, viewed: viewedCount || 0 };
-    },
-    enabled: !!buyer.id,
-  });
-
-  // Fetch active offers count
-  const { data: offerCount } = useQuery({
-    queryKey: ["portal-offer-count", buyer.id],
-    queryFn: async () => {
-      const { count } = await supabase
-        .from("offers")
-        .select("*", { count: "exact", head: true })
-        .eq("buyer_id", buyer.id)
-        .in("status", ["draft", "pending", "submitted"]);
-
-      return count || 0;
-    },
-    enabled: !!buyer.id,
-  });
-
-  const stageInfo = getStageInfo(buyer.current_stage);
-
-  // Scroll to bottom on new messages
+  // Scroll to bottom when response updates
   useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    if (currentResponse) {
+      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    }
+  }, [currentResponse]);
 
   // Auto-resize textarea
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -129,12 +160,10 @@ export function PortalWorkspace({ buyer }: PortalWorkspaceProps) {
     const trimmedInput = (message || input).trim();
     if (!trimmedInput || isStreaming) return;
 
-    // Hide quick actions after first message
-    setShowQuickActions(false);
-
-    // Add user message
-    await addMessage("user", trimmedInput);
+    // Hide actions, show response area
+    setShowActions(false);
     setInput("");
+    setCurrentResponse("");
     
     // Reset textarea height
     if (textareaRef.current) {
@@ -142,6 +171,9 @@ export function PortalWorkspace({ buyer }: PortalWorkspaceProps) {
     }
     
     setIsStreaming(true);
+
+    // Add user message to history (but we won't display it as bubbles)
+    await addMessage("user", trimmedInput);
 
     // Create placeholder for assistant response
     const tempAssistantId = `temp-assistant-${Date.now()}`;
@@ -212,6 +244,7 @@ export function PortalWorkspace({ buyer }: PortalWorkspaceProps) {
               const parsed = JSON.parse(data);
               if (parsed.type === "content_block_delta" && parsed.delta?.text) {
                 accumulatedContent += parsed.delta.text;
+                setCurrentResponse(accumulatedContent);
                 updateLastAssistantMessage(accumulatedContent);
               }
             } catch {
@@ -227,18 +260,9 @@ export function PortalWorkspace({ buyer }: PortalWorkspaceProps) {
       }
     } catch (error) {
       console.error("Chat error:", error);
-      updateLastAssistantMessage(
-        "Sorry, I'm having trouble connecting right now. Please try again in a moment."
-      );
+      setCurrentResponse("Sorry, I'm having trouble connecting right now. Please try again in a moment.");
     } finally {
       setIsStreaming(false);
-    }
-  };
-
-  const handleQuickAction = (actionId: string) => {
-    const action = BUYER_QUICK_ACTIONS.find(a => a.id === actionId);
-    if (action) {
-      handleSend(action.label);
     }
   };
 
@@ -249,9 +273,14 @@ export function PortalWorkspace({ buyer }: PortalWorkspaceProps) {
     }
   };
 
+  const handleBackToActions = () => {
+    setShowActions(true);
+    setCurrentResponse(null);
+  };
+
   if (isLoadingHistory) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="flex items-center justify-center h-full bg-[#f9fafb]">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           <p className="text-sm text-muted-foreground">Loading your workspace...</p>
@@ -260,197 +289,141 @@ export function PortalWorkspace({ buyer }: PortalWorkspaceProps) {
     );
   }
 
-  const hasMessages = messages.length > 0;
-
   return (
-    <div className="flex flex-col h-full bg-[#f9fafb]">
-      {/* Scrollable Content Area */}
-      <div className="flex-1 overflow-y-auto">
+    <div className="flex flex-col h-full w-full bg-[#f9fafb]">
+      {/* Scrollable Content */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto">
         <div className="w-full px-4 sm:px-6 md:px-8 lg:px-12 py-8 md:py-12">
-          {/* Welcome Section - Only show when no messages */}
-          {!hasMessages && showQuickActions && (
-            <div className="max-w-3xl">
-              {/* Stage Header */}
-              <div className="mb-8">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-                  <Sparkles className="h-4 w-4" />
-                  <span>Your Home Buying Journey</span>
-                </div>
-                <h1 className="text-2xl md:text-3xl font-light text-foreground mb-2">
-                  Hi {buyer.name.split(" ")[0]}! 👋
-                </h1>
-                <p className="text-muted-foreground">
-                  You're currently in <strong>Stage {stageInfo.number}: {buyer.current_stage || "Getting Started"}</strong>
-                  <span className="ml-2 text-lg">{stageInfo.emoji}</span>
-                </p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  {stageInfo.objective}
-                </p>
+          
+          {/* Stage Context - matches agent exactly */}
+          <p className="text-xs text-muted-foreground/40 mb-8">
+            Stage {getStageNumber(buyer.current_stage)}: {buyer.current_stage || "Getting Started"}
+          </p>
+
+          {/* Main Actions View */}
+          {showActions && !currentResponse && (
+            <div className="mb-16">
+              {/* Main heading - matches agent's "What would you like to do?" */}
+              <div className="flex items-center gap-3 mb-10">
+                <h2 className="text-2xl md:text-3xl font-medium text-foreground">
+                  {stageGuidance.title}
+                </h2>
               </div>
 
-              {/* Quick Stats Cards */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-                <Card className="bg-white">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-2xl font-bold">{propertyCounts?.saved || 0}</p>
-                        <p className="text-xs text-muted-foreground">Saved Properties</p>
-                      </div>
-                      <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
-                        <Home className="h-5 w-5 text-muted-foreground" />
-                      </div>
+              {/* Guidance description */}
+              <p className="text-lg text-foreground/70 mb-8 max-w-2xl">
+                {stageGuidance.description}
+              </p>
+
+              {/* Tips as action items - matches agent's Next Actions style */}
+              <div className="space-y-0 mb-12">
+                {stageGuidance.tips.map((tip, idx) => (
+                  <div
+                    key={idx}
+                    className={cn(
+                      "flex items-center justify-between py-4",
+                      idx < stageGuidance.tips.length - 1 && "border-b border-border/10"
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
+                      <CheckCircle className="h-4 w-4 text-muted-foreground/40" />
+                      <span className="text-lg text-foreground/70">{tip}</span>
                     </div>
-                  </CardContent>
-                </Card>
-                <Card className="bg-white">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-2xl font-bold">{propertyCounts?.viewed || 0}</p>
-                        <p className="text-xs text-muted-foreground">Properties Viewed</p>
-                      </div>
-                      <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
-                        <CheckCircle2 className="h-5 w-5 text-muted-foreground" />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card className="bg-white">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-2xl font-bold">{offerCount || 0}</p>
-                        <p className="text-xs text-muted-foreground">Active Offers</p>
-                      </div>
-                      <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
-                        <DollarSign className="h-5 w-5 text-muted-foreground" />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card className="bg-white">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-2xl font-bold">{sharedArtifacts?.length || 0}</p>
-                        <p className="text-xs text-muted-foreground">Documents</p>
-                      </div>
-                      <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
-                        <FileText className="h-5 w-5 text-muted-foreground" />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                ))}
               </div>
 
-              {/* Quick Actions */}
-              <div className="mb-8">
-                <h3 className="text-sm font-medium text-muted-foreground mb-4">Quick Questions</h3>
-                <div className="space-y-2">
-                  {BUYER_QUICK_ACTIONS.map((action) => {
-                    const Icon = action.icon;
-                    return (
-                      <button
-                        key={action.id}
-                        onClick={() => handleQuickAction(action.id)}
-                        disabled={isStreaming}
+              {/* Shared Artifacts Section - matches agent's Saved Artifacts */}
+              {sharedArtifacts && sharedArtifacts.length > 0 && (
+                <div className="mt-12 pt-8 border-t border-border/20">
+                  <div className="flex items-center gap-2 mb-4">
+                    <FolderOpen className="h-4 w-4 text-muted-foreground" />
+                    <h3 className="text-sm font-medium text-muted-foreground">Shared by Your Agent</h3>
+                  </div>
+                  <div className="space-y-0">
+                    {sharedArtifacts.map((artifact, idx) => (
+                      <div
+                        key={artifact.id}
                         className={cn(
-                          "w-full text-left px-4 py-3 rounded-lg border bg-white",
-                          "text-foreground/80 hover:text-foreground hover:border-foreground/20",
-                          "transition-colors flex items-center gap-3",
-                          "disabled:opacity-50 disabled:cursor-not-allowed"
+                          "flex items-center justify-between py-4",
+                          idx < sharedArtifacts.length - 1 && "border-b border-border/10"
                         )}
                       >
-                        <Icon className="h-4 w-4 text-muted-foreground" />
-                        {action.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Shared Documents Section */}
-              {sharedArtifacts && sharedArtifacts.length > 0 && (
-                <div className="mb-8">
-                  <h3 className="text-sm font-medium text-muted-foreground mb-4 flex items-center gap-2">
-                    <FileText className="h-4 w-4" />
-                    Documents From Your Agent
-                  </h3>
-                  <div className="space-y-2">
-                    {sharedArtifacts.slice(0, 3).map((artifact) => (
-                      <Card key={artifact.id} className="bg-white">
-                        <CardContent className="p-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <FileText className="h-4 w-4 text-muted-foreground" />
-                              <div>
-                                <p className="font-medium text-sm">{artifact.title}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  Shared {new Date(artifact.shared_at || artifact.created_at).toLocaleDateString()}
-                                </p>
-                              </div>
-                            </div>
-                            <Badge variant="secondary" className="text-xs">
-                              {artifact.artifact_type}
-                            </Badge>
-                          </div>
-                        </CardContent>
-                      </Card>
+                        <div className="flex items-center gap-3">
+                          <FileText className="h-4 w-4 text-muted-foreground/40" />
+                          <span className="text-lg text-foreground/70">{artifact.title}</span>
+                        </div>
+                        <button
+                          onClick={() => {/* TODO: Open artifact viewer */}}
+                          className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 hover:underline transition-colors cursor-pointer"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                          View →
+                        </button>
+                      </div>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* Empty state for artifacts */}
+              {(!sharedArtifacts || sharedArtifacts.length === 0) && !artifactsLoading && (
+                <div className="mt-12 pt-8 border-t border-border/20">
+                  <div className="flex items-center gap-2 mb-4">
+                    <FolderOpen className="h-4 w-4 text-muted-foreground" />
+                    <h3 className="text-sm font-medium text-muted-foreground">Shared by Your Agent</h3>
+                  </div>
+                  <p className="text-sm text-muted-foreground/60">
+                    Documents and guides will appear here when your agent shares them with you.
+                  </p>
                 </div>
               )}
             </div>
           )}
 
-          {/* Conversation Stream */}
-          {hasMessages && (
-            <div className="max-w-3xl space-y-6">
-              {/* Show Back to Actions button */}
-              {!showQuickActions && (
-                <button
-                  onClick={() => setShowQuickActions(true)}
-                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
-                >
-                  <RefreshCw className="h-3.5 w-3.5" />
-                  Back to quick actions
-                </button>
-              )}
+          {/* Response View - shown when user asks a question */}
+          {currentResponse !== null && (
+            <div className="mb-16">
+              {/* Back button */}
+              <button
+                onClick={handleBackToActions}
+                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-8"
+              >
+                ← Back to overview
+              </button>
 
-              {messages.map((message) => (
-                <MessageCard
-                  key={message.id}
-                  role={message.role}
-                  content={message.content}
-                  isStreaming={isStreaming && message.content === ""}
-                />
-              ))}
+              {/* Response header */}
+              <div className="flex items-center gap-2 mb-6">
+                <Sparkles className="h-4 w-4 text-primary" />
+                <span className="text-sm font-medium text-primary">AgentGPT</span>
+              </div>
 
-              {/* Streaming indicator */}
-              {isStreaming && messages[messages.length - 1]?.content === "" && (
-                <div className="flex items-center gap-2 text-muted-foreground py-4">
-                  <div className="flex gap-1">
-                    <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                    <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                    <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+              {/* Response content - same styling as agent artifacts */}
+              <div className="prose prose-lg dark:prose-invert max-w-none prose-p:my-4 prose-p:leading-relaxed prose-ul:my-4 prose-li:my-1 prose-headings:my-6 prose-headings:font-medium">
+                {isStreaming && !currentResponse ? (
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <div className="flex gap-1">
+                      <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                      <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                      <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                    </div>
                   </div>
-                </div>
-              )}
-              
-              <div ref={scrollRef} />
+                ) : (
+                  <ReactMarkdown>{currentResponse || ""}</ReactMarkdown>
+                )}
+              </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* Fixed Input */}
+      {/* Fixed Input - matches agent exactly */}
       <div className="border-t border-border/20 bg-[#f9fafb]">
         <div className="w-full px-4 sm:px-6 md:px-8 lg:px-12 py-4 md:py-6">
           <div className="relative max-w-3xl">
             <textarea
               ref={textareaRef}
-              placeholder={`Ask AgentGPT anything about your home search...`}
+              placeholder="Ask AgentGPT anything about your home search..."
               value={input}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
@@ -477,7 +450,7 @@ export function PortalWorkspace({ buyer }: PortalWorkspaceProps) {
               <Send className="h-5 w-5" />
             </button>
           </div>
-          <p className="text-xs text-muted-foreground mt-2 max-w-3xl">
+          <p className="text-xs text-muted-foreground/40 mt-2 max-w-3xl">
             I can answer questions but can't take actions. Contact your agent for changes.
           </p>
         </div>
@@ -486,49 +459,19 @@ export function PortalWorkspace({ buyer }: PortalWorkspaceProps) {
   );
 }
 
-// Message Card Component - structured like agent workspace
-interface MessageCardProps {
-  role: "user" | "assistant";
-  content: string;
-  isStreaming?: boolean;
-}
-
-function MessageCard({ role, content, isStreaming }: MessageCardProps) {
-  const isUser = role === "user";
-
-  if (isUser) {
-    return (
-      <Card className="bg-white border-border/30">
-        <CardContent className="p-4">
-          <div className="flex items-start gap-3">
-            <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
-              <MessageSquare className="h-4 w-4 text-muted-foreground" />
-            </div>
-            <div className="flex-1 pt-1">
-              <p className="text-sm font-medium text-muted-foreground mb-1">You asked:</p>
-              <p className="text-foreground">{content}</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card className="bg-white border-primary/20">
-      <CardContent className="p-4">
-        <div className="flex items-start gap-3">
-          <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-            <Sparkles className="h-4 w-4 text-primary" />
-          </div>
-          <div className="flex-1 pt-1">
-            <p className="text-sm font-medium text-primary mb-2">AgentGPT</p>
-            <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-2 prose-p:leading-relaxed prose-ul:my-2 prose-li:my-0.5">
-              <ReactMarkdown>{content || (isStreaming ? "Thinking..." : "...")}</ReactMarkdown>
-            </div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
+// Helper to get stage number from name
+function getStageNumber(stageName: string | null): number {
+  const stageMap: Record<string, number> = {
+    "Readiness & Expectations": 0,
+    "Financing & Capability": 1,
+    "Market Intelligence & Search Setup": 2,
+    "Touring, Filtering & Convergence": 3,
+    "Offer Strategy & Submission": 4,
+    "Negotiation & Contract": 5,
+    "Due Diligence & Inspections": 6,
+    "Appraisal & Lending": 7,
+    "Final Walkthrough & Preparation": 8,
+    "Closing & Post-Close": 9,
+  };
+  return stageMap[stageName || ""] ?? 1;
 }
